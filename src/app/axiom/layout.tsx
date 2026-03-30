@@ -9,8 +9,8 @@ function AxiomShell({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
   const pathname = usePathname();
 
-  // Portal routes are public — no auth required
-  if (pathname.startsWith("/axiom/portal/")) {
+  // Public routes — no auth required
+  if (pathname.startsWith("/axiom/portal/") || pathname === "/axiom/timeclock") {
     return <>{children}</>;
   }
 
