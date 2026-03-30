@@ -316,7 +316,23 @@ export interface TeamMember {
   email: string;
   role: "admin" | "manager" | "staff";
   hourly_rate: number;
+  pin?: string;
   color?: string;
+}
+
+// ── Time Entries ────────────────────────────────────────────
+
+export interface TimeEntry {
+  id: string;
+  member_name: string;
+  custom_work_id?: string;
+  project_name?: string;
+  clock_in: string;
+  clock_out?: string;
+  hours?: number;
+  hourly_rate: number;
+  notes?: string;
+  created_at: string;
 }
 
 // ── Axiom Navigation ────────────────────────────────────────

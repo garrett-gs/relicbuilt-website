@@ -11,6 +11,7 @@ import {
   CheckSquare,
   ListTodo,
   Hammer,
+  Clock,
   CalendarDays,
   Users,
   Building2,
@@ -38,6 +39,7 @@ const navSections = [
     label: "Projects",
     items: [
       { href: "/axiom/projects", icon: Hammer, label: "Custom Work" },
+      { href: "/axiom/timeclock", icon: Clock, label: "Time Clock" },
       { href: "/axiom/calendar", icon: CalendarDays, label: "Build Calendar" },
     ],
   },

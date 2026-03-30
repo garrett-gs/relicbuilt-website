@@ -78,42 +78,67 @@ export default function SettingsPage() {
 
       {tab === "Team" && (
         <div>
+          <p className="text-sm text-muted mb-4">Each team member needs a 4-digit PIN to use the Time Clock.</p>
           <div className="space-y-3 mb-4">
             {(settings.team_members || []).map((m: TeamMember, i: number) => (
-              <div key={i} className="bg-card border border-border p-4 grid grid-cols-[1fr_1fr_100px_80px_32px] gap-3 items-center">
-                <input value={m.name} onChange={(e) => {
-                  const members = [...(settings.team_members || [])];
-                  members[i] = { ...members[i], name: e.target.value };
-                  updateField("team_members", members);
-                }} placeholder="Name" className="bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
-                <input value={m.email} onChange={(e) => {
-                  const members = [...(settings.team_members || [])];
-                  members[i] = { ...members[i], email: e.target.value };
-                  updateField("team_members", members);
-                }} placeholder="Email" className="bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
-                <select value={m.role} onChange={(e) => {
-                  const members = [...(settings.team_members || [])];
-                  members[i] = { ...members[i], role: e.target.value as TeamMember["role"] };
-                  updateField("team_members", members);
-                }} className="bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent">
-                  <option value="admin">Admin</option>
-                  <option value="manager">Manager</option>
-                  <option value="staff">Staff</option>
-                </select>
-                <input type="number" value={m.hourly_rate} onChange={(e) => {
-                  const members = [...(settings.team_members || [])];
-                  members[i] = { ...members[i], hourly_rate: Number(e.target.value) };
-                  updateField("team_members", members);
-                }} className="bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
-                <button onClick={() => {
-                  const members = (settings.team_members || []).filter((_: TeamMember, idx: number) => idx !== i);
-                  updateField("team_members", members);
-                }} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
+              <div key={i} className="bg-card border border-border p-4 space-y-3">
+                <div className="grid grid-cols-[1fr_1fr_100px_32px] gap-3 items-center">
+                  <input value={m.name} onChange={(e) => {
+                    const members = [...(settings.team_members || [])];
+                    members[i] = { ...members[i], name: e.target.value };
+                    updateField("team_members", members);
+                  }} placeholder="Name" className="bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
+                  <input value={m.email} onChange={(e) => {
+                    const members = [...(settings.team_members || [])];
+                    members[i] = { ...members[i], email: e.target.value };
+                    updateField("team_members", members);
+                  }} placeholder="Email" className="bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
+                  <select value={m.role} onChange={(e) => {
+                    const members = [...(settings.team_members || [])];
+                    members[i] = { ...members[i], role: e.target.value as TeamMember["role"] };
+                    updateField("team_members", members);
+                  }} className="bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent">
+                    <option value="admin">Admin</option>
+                    <option value="manager">Manager</option>
+                    <option value="staff">Staff</option>
+                  </select>
+                  <button onClick={() => {
+                    const members = (settings.team_members || []).filter((_: TeamMember, idx: number) => idx !== i);
+                    updateField("team_members", members);
+                  }} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider text-muted block mb-1">Hourly Rate ($)</label>
+                    <input type="number" value={m.hourly_rate} onChange={(e) => {
+                      const members = [...(settings.team_members || [])];
+                      members[i] = { ...members[i], hourly_rate: Number(e.target.value) };
+                      updateField("team_members", members);
+                    }} className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider text-muted block mb-1">4-Digit Time Clock PIN</label>
+                    <input
+                      type="password"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={m.pin || ""}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, "").slice(0, 4);
+                        const members = [...(settings.team_members || [])];
+                        members[i] = { ...members[i], pin: val };
+                        updateField("team_members", members);
+                      }}
+                      placeholder="••••"
+                      className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent font-mono tracking-widest"
+                    />
+                  </div>
+                </div>
               </div>
             ))}
           </div>
           <button onClick={() => {
-            const members = [...(settings.team_members || []), { name: "", email: "", role: "staff" as const, hourly_rate: 60 }];
+            const members = [...(settings.team_members || []), { name: "", email: "", role: "staff" as const, hourly_rate: 60, pin: "" }];
             updateField("team_members", members);
           }} className="text-accent text-sm flex items-center gap-1"><Plus size={14} /> Add Team Member</button>
         </div>
