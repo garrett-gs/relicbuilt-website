@@ -78,20 +78,15 @@ export default function TimeClockPage() {
         setTimeout(() => { setPin(""); setPinError(false); }, 1000);
         return;
       }
-      // Check if already clocked in
+      // Load any open entries for this member so project list can show clock-out
       const { data } = await axiom.from("time_entries")
         .select("*")
         .eq("member_name", selectedMember!.name)
         .is("clock_out", null)
-        .order("clock_in", { ascending: false })
-        .limit(1)
-        .single();
-      if (data) {
-        setActiveEntry(data);
-        setStep("clocked_in");
-      } else {
-        setStep("select_project");
-      }
+        .order("clock_in", { ascending: false });
+      if (data && data.length > 0) setActiveEntry(data[0]);
+      // Always go to project selection
+      setStep("select_project");
     }
   }
 
@@ -249,27 +244,40 @@ export default function TimeClockPage() {
       {/* ── Step: Select project ── */}
       {step === "select_project" && (
         <div className="w-full max-w-lg">
-          <h2 className="text-center text-xs uppercase tracking-widest text-muted mb-4">
-            <LogIn size={14} className="inline mr-1" />
-            Clock in to which project?
+          <h2 className="text-center text-xs uppercase tracking-widest text-muted mb-1">
+            {selectedMember?.name}
           </h2>
+          <p className="text-center text-sm text-muted mb-4">Select a project</p>
           {projects.length === 0 ? (
             <p className="text-center text-muted text-sm">No active projects.</p>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {projects.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => handleClockIn(p)}
-                  className="w-full bg-card border border-border p-4 text-left hover:border-accent transition-colors flex items-center justify-between"
-                >
-                  <div>
-                    <p className="font-medium text-sm">{p.project_name}</p>
-                    {p.client_name && <p className="text-xs text-muted">{p.client_name}</p>}
-                  </div>
-                  <span className="text-xs text-muted capitalize px-2 py-1 border border-border">{p.status.replace("_", " ")}</span>
-                </button>
-              ))}
+              {projects.map((p) => {
+                const isClockedIn = activeEntry?.custom_work_id === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => isClockedIn ? setStep("clocked_in") : handleClockIn(p)}
+                    className={cn(
+                      "w-full border p-4 text-left transition-colors flex items-center justify-between",
+                      isClockedIn
+                        ? "bg-green-500/10 border-green-500/50 hover:border-green-500"
+                        : "bg-card border-border hover:border-accent"
+                    )}
+                  >
+                    <div>
+                      <p className="font-medium text-sm">{p.project_name}</p>
+                      {p.client_name && <p className="text-xs text-muted">{p.client_name}</p>}
+                    </div>
+                    <span className={cn(
+                      "text-xs px-2 py-1 border flex items-center gap-1",
+                      isClockedIn ? "border-green-500 text-green-500" : "border-border text-muted capitalize"
+                    )}>
+                      {isClockedIn ? <><Clock size={10} /> Clocked In</> : p.status.replace("_", " ")}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
           <button onClick={reset} className="mt-4 text-xs text-muted hover:text-foreground flex items-center gap-1 mx-auto">
