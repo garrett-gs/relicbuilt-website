@@ -1,4 +1,4 @@
-import { CustomWork } from "@/types/axiom";
+import { CustomWork, ProposalHighlight } from "@/types/axiom";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -45,6 +45,8 @@ export function generateProposalHtml(
 
   const materials = project.materials || [];
   const laborLog = project.labor_log || [];
+  const highlights: ProposalHighlight[] = project.proposal_highlights || [];
+  const images: string[] = project.proposal_images || [];
   const stripeColor = "#8b6914";
   const logoUrl = "https://relicbuilt.com/logo-full.png";
 
@@ -113,6 +115,34 @@ export function generateProposalHtml(
     ${project.timeline ? `<p style="margin:10px 0 0;font-size:12px;color:#888;">Timeline: ${esc(project.timeline)}</p>` : ""}
   </div>
 
+  <!-- Project Highlights -->
+  ${highlights.length > 0 ? `
+  <div style="background:${stripeColor};padding:10px 20px;margin-top:0;">
+    <p style="margin:0;font-size:11px;font-weight:bold;color:#fff;text-transform:uppercase;letter-spacing:0.14em;">Project Highlights</p>
+  </div>
+  <div style="padding:20px;border-bottom:1px solid #f0f0f0;">
+    <table style="width:100%;border-collapse:collapse;">
+      <tr>
+        ${highlights.map((h) => `
+        <td style="width:50%;vertical-align:top;padding:0 10px 0 0;">
+          <div style="border-left:3px solid #c4a24d;padding-left:12px;margin-bottom:16px;">
+            <p style="margin:0 0 4px;font-size:13px;font-weight:bold;color:#111;">${esc(h.title)}</p>
+            <p style="margin:0;font-size:12px;color:#555;line-height:1.6;white-space:pre-wrap;">${esc(h.body)}</p>
+          </div>
+        </td>`).slice(0, 2).join("")}
+      </tr>
+      ${highlights.length > 2 ? `<tr>
+        ${highlights.slice(2).map((h) => `
+        <td style="width:50%;vertical-align:top;padding:10px 10px 0 0;">
+          <div style="border-left:3px solid #c4a24d;padding-left:12px;margin-bottom:16px;">
+            <p style="margin:0 0 4px;font-size:13px;font-weight:bold;color:#111;">${esc(h.title)}</p>
+            <p style="margin:0;font-size:12px;color:#555;line-height:1.6;white-space:pre-wrap;">${esc(h.body)}</p>
+          </div>
+        </td>`).slice(0, 2).join("")}
+      </tr>` : ""}
+    </table>
+  </div>` : ""}
+
   <!-- Scope of Work (materials) -->
   ${includeMaterials && materials.length > 0 ? `
   <div style="background:${stripeColor};padding:10px 20px;margin-top:0;">
@@ -154,6 +184,28 @@ export function generateProposalHtml(
       </tr>
     </table>
   </div>
+
+  <!-- Gallery -->
+  ${images.length > 0 ? `
+  <div style="background:${stripeColor};padding:10px 20px;margin-top:0;">
+    <p style="margin:0;font-size:11px;font-weight:bold;color:#fff;text-transform:uppercase;letter-spacing:0.14em;">Gallery</p>
+  </div>
+  <div style="padding:16px 20px 20px;border-bottom:1px solid #f0f0f0;">
+    <table style="width:100%;border-collapse:collapse;">
+      ${images.reduce<string[][]>((rows, img, i) => {
+        if (i % 3 === 0) rows.push([]);
+        rows[rows.length - 1].push(img);
+        return rows;
+      }, []).map((row) => `
+      <tr>
+        ${row.map((url) => `
+        <td style="width:33.33%;padding:4px;vertical-align:top;">
+          <img src="${url}" alt="" style="width:100%;display:block;object-fit:cover;" />
+        </td>`).join("")}
+        ${row.length < 3 ? Array(3 - row.length).fill('<td style="width:33.33%;"></td>').join("") : ""}
+      </tr>`).join("")}
+    </table>
+  </div>` : ""}
 
   <!-- Terms -->
   ${biz.terms_text ? `

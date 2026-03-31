@@ -1,5 +1,10 @@
 // ── Projects / Custom Work ──────────────────────────────────
 
+export interface ProposalHighlight {
+  title: string;
+  body: string;
+}
+
 export interface CustomWork {
   id: string;
   project_name: string;
@@ -22,6 +27,8 @@ export interface CustomWork {
   due_date?: string;
   image_url?: string;
   inspiration_images: string[];
+  proposal_highlights?: ProposalHighlight[];
+  proposal_images?: string[];
   portal_enabled: boolean;
   portal_token?: string;
   portal_stage: PortalStage;

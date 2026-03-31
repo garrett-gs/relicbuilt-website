@@ -4,11 +4,11 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
-import { CustomWork, Material, LaborEntry, Customer, Company } from "@/types/axiom";
+import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
-import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList } from "lucide-react";
+import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { generateProposalHtml } from "@/lib/proposal-html";
 import { Settings } from "@/types/axiom";
@@ -431,6 +431,9 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [startDate, setStartDate] = useState(project.start_date || "");
   const [dueDate, setDueDate] = useState(project.due_date || "");
   const [portalStage, setPortalStage] = useState(project.portal_stage || "consultation");
+  const [proposalHighlights, setProposalHighlights] = useState<ProposalHighlight[]>(project.proposal_highlights || []);
+  const [proposalImages, setProposalImages] = useState<string[]>(project.proposal_images || []);
+  const [newImageUrl, setNewImageUrl] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -470,6 +473,31 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   }
   function removeLabor(i: number) { setLabor(labor.filter((_, idx) => idx !== i)); markDirty(); }
 
+  function addHighlight() { setProposalHighlights([...proposalHighlights, { title: "", body: "" }]); markDirty(); }
+  function updateHighlight(i: number, field: keyof ProposalHighlight, value: string) {
+    const updated = [...proposalHighlights];
+    updated[i] = { ...updated[i], [field]: value };
+    setProposalHighlights(updated); markDirty();
+  }
+  function removeHighlight(i: number) { setProposalHighlights(proposalHighlights.filter((_, idx) => idx !== i)); markDirty(); }
+
+  function toggleProposalImage(url: string) {
+    setProposalImages(proposalImages.includes(url)
+      ? proposalImages.filter((u) => u !== url)
+      : [...proposalImages, url]
+    );
+    markDirty();
+  }
+  function addProposalImageUrl() {
+    const url = newImageUrl.trim();
+    if (url && !proposalImages.includes(url)) {
+      setProposalImages([...proposalImages, url]);
+      setNewImageUrl("");
+      markDirty();
+    }
+  }
+  function removeProposalImage(i: number) { setProposalImages(proposalImages.filter((_, idx) => idx !== i)); markDirty(); }
+
   function handleCustomerSelect(c: Customer) {
     if (!c.id) {
       setCustomerId("");
@@ -502,6 +530,8 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       start_date: startDate || undefined,
       due_date: dueDate || undefined,
       portal_stage: portalStage as CustomWork["portal_stage"],
+      proposal_highlights: proposalHighlights,
+      proposal_images: proposalImages,
     });
     setDirty(false);
     setSaved(true);
@@ -632,6 +662,127 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       <div>
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Internal Notes</label>
         <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
+      </div>
+
+      {/* Proposal Content */}
+      <div className="border border-border">
+        <div className="bg-card px-4 py-3 flex items-center justify-between border-b border-border">
+          <div>
+            <h3 className="text-xs uppercase tracking-wider text-muted font-medium">Proposal Content</h3>
+            <p className="text-xs text-muted mt-0.5 opacity-60">Highlights and visuals shown in the generated proposal</p>
+          </div>
+          <ClipboardList size={14} className="text-muted" />
+        </div>
+
+        {/* Highlights */}
+        <div className="p-4 border-b border-border">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs uppercase tracking-wider text-muted">Highlights</p>
+            <button onClick={addHighlight} className="text-accent text-xs flex items-center gap-1"><Plus size={12} /> Add Highlight</button>
+          </div>
+          {proposalHighlights.length === 0 ? (
+            <p className="text-muted text-sm">No highlights added — use these to call out key features or selling points of the project.</p>
+          ) : (
+            <div className="space-y-3">
+              {proposalHighlights.map((h, i) => (
+                <div key={i} className="bg-background border border-border p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      value={h.title}
+                      onChange={(e) => updateHighlight(i, "title", e.target.value)}
+                      placeholder="Highlight title..."
+                      className="flex-1 bg-transparent border-b border-border px-0 py-1 text-sm font-semibold text-foreground focus:outline-none focus:border-accent"
+                    />
+                    <button onClick={() => removeHighlight(i)} className="text-muted hover:text-red-500 shrink-0"><Trash2 size={12} /></button>
+                  </div>
+                  <textarea
+                    value={h.body}
+                    onChange={(e) => updateHighlight(i, "body", e.target.value)}
+                    placeholder="Describe this highlight..."
+                    rows={2}
+                    className="w-full bg-transparent text-sm text-muted focus:outline-none resize-none border border-transparent focus:border-border px-1 py-0.5"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Images */}
+        <div className="p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <ImageIcon size={12} className="text-muted" />
+            <p className="text-xs uppercase tracking-wider text-muted">Proposal Images</p>
+          </div>
+
+          {/* Pick from inspiration images */}
+          {(project.inspiration_images || []).length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs text-muted mb-2">Select from project images:</p>
+              <div className="grid grid-cols-5 gap-2">
+                {(project.inspiration_images || []).map((url, i) => {
+                  const isSelected = proposalImages.includes(url);
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => toggleProposalImage(url)}
+                      className={cn(
+                        "relative aspect-square overflow-hidden border-2 transition-all",
+                        isSelected ? "border-accent" : "border-border hover:border-accent/50"
+                      )}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                      {isSelected && (
+                        <div className="absolute inset-0 bg-accent/20 flex items-end justify-end p-0.5">
+                          <div className="bg-accent rounded-full w-4 h-4 flex items-center justify-center">
+                            <CheckCircle size={10} className="text-white" />
+                          </div>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Add by URL */}
+          <div className="flex gap-2 mb-3">
+            <input
+              type="url"
+              value={newImageUrl}
+              onChange={(e) => setNewImageUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") addProposalImageUrl(); }}
+              placeholder="Paste image URL..."
+              className="flex-1 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+            />
+            <button
+              onClick={addProposalImageUrl}
+              disabled={!newImageUrl.trim()}
+              className="border border-accent text-accent px-3 py-2 text-xs hover:bg-accent/10 disabled:opacity-40"
+            >Add</button>
+          </div>
+
+          {/* Selected images row */}
+          {proposalImages.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              {proposalImages.map((url, i) => (
+                <div key={i} className="relative w-16 h-16 border border-border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={url} alt="" className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => removeProposalImage(i)}
+                    className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center hover:bg-red-600"
+                  ><X size={9} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          {proposalImages.length === 0 && (project.inspiration_images || []).length === 0 && (
+            <p className="text-sm text-muted">Paste image URLs above to add visuals to the proposal.</p>
+          )}
+        </div>
       </div>
 
       {/* Portal */}
@@ -891,6 +1042,25 @@ function ProposalPreview({ project, onClose, userEmail }: {
           {project.timeline && <p className="text-xs text-gray-400 mt-3">Timeline: {project.timeline}</p>}
         </div>
 
+        {/* Highlights */}
+        {(project.proposal_highlights || []).length > 0 && (
+          <>
+            <div className="px-10 py-3 print:px-8" style={{ background: stripeColor }}>
+              <p className="text-sm font-bold text-white uppercase tracking-widest">Project Highlights</p>
+            </div>
+            <div className="px-10 py-6 border-b border-gray-100 print:px-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
+                {(project.proposal_highlights || []).map((h, i) => (
+                  <div key={i} className="border-l-4 pl-4 py-1" style={{ borderColor: "#c4a24d" }}>
+                    <p className="font-semibold text-gray-900 text-sm mb-1">{h.title}</p>
+                    <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{h.body}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
         {/* Scope of Work */}
         {((includeMaterials && materials.length > 0) || (includeLabor && laborLog.length > 0)) && (
           <>
@@ -935,6 +1105,28 @@ function ProposalPreview({ project, onClose, userEmail }: {
             </div>
           </div>
         </div>
+
+        {/* Gallery */}
+        {(project.proposal_images || []).length > 0 && (
+          <>
+            <div className="px-10 py-3 print:px-8" style={{ background: stripeColor }}>
+              <p className="text-sm font-bold text-white uppercase tracking-widest">Gallery</p>
+            </div>
+            <div className="px-10 py-6 border-b border-gray-100 print:px-8">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 print:grid-cols-3">
+                {(project.proposal_images || []).map((url, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    key={i}
+                    src={url}
+                    alt=""
+                    className="w-full aspect-video object-cover"
+                  />
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
         {/* Terms */}
         {biz.terms_text && (
