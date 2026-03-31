@@ -8,8 +8,10 @@ import { CustomWork, Material, LaborEntry, Customer, Company } from "@/types/axi
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
-import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search } from "lucide-react";
+import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { generateProposalHtml } from "@/lib/proposal-html";
+import { Settings } from "@/types/axiom";
 
 const STATUS_COLUMNS = [
   { key: "new", label: "New", color: "#4d9fff" },
@@ -43,6 +45,7 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<CustomWork[]>([]);
   const [selected, setSelected] = useState<CustomWork | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [showProposal, setShowProposal] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
 
@@ -198,7 +201,7 @@ export default function ProjectsPage() {
       )}
 
       {/* Detail modal */}
-      {selected && (
+      {selected && !showProposal && (
         <Modal title={selected.project_name} onClose={() => { setSelected(null); load(); }} wide>
           <ProjectDetail
             project={selected}
@@ -206,8 +209,18 @@ export default function ProjectsPage() {
             onDelete={() => deleteProject(selected.id)}
             onTogglePortal={() => togglePortal(selected)}
             onGenerateInvoice={() => generateInvoice(selected)}
+            onGenerateProposal={() => setShowProposal(true)}
           />
         </Modal>
+      )}
+
+      {/* Proposal preview */}
+      {showProposal && selected && (
+        <ProposalPreview
+          project={selected}
+          onClose={() => setShowProposal(false)}
+          userEmail={userEmail}
+        />
       )}
     </div>
   );
@@ -394,12 +407,13 @@ function CreateProjectForm({ onSubmit, onCancel }: { onSubmit: (form: Record<str
 
 // ── Detail view ──────────────────────────────────────────────
 
-function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerateInvoice }: {
+function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerateInvoice, onGenerateProposal }: {
   project: CustomWork;
   onUpdate: (u: Partial<CustomWork>) => void;
   onDelete: () => void;
   onTogglePortal: () => void;
   onGenerateInvoice: () => void;
+  onGenerateProposal: () => void;
 }) {
   const [customerId, setCustomerId] = useState(project.customer_id || "");
   const [customerName, setCustomerName] = useState("");
@@ -648,6 +662,9 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t border-border flex-wrap">
         <SaveButton dirty={dirty} saved={saved} onClick={save} />
+        <Button variant="outline" onClick={onGenerateProposal}>
+          <ClipboardList size={14} className="mr-1" /> Generate Proposal
+        </Button>
         <Button variant="outline" onClick={onGenerateInvoice}>
           <FileText size={14} className="mr-1" /> Generate Invoice
         </Button>
@@ -678,6 +695,263 @@ function Field({ label, value, onChange, type = "text", required }: {
         {label}{required && <span className="text-accent ml-1">*</span>}
       </label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
+    </div>
+  );
+}
+
+// ── Proposal Preview ─────────────────────────────────────────────────────────
+
+function ProposalPreview({ project, onClose, userEmail }: {
+  project: CustomWork;
+  onClose: () => void;
+  userEmail: string;
+}) {
+  const [biz, setBiz] = useState<Partial<Settings> | null>(null);
+  const [validUntil, setValidUntil] = useState("");
+  const [includeMaterials, setIncludeMaterials] = useState(true);
+  const [includeLabor, setIncludeLabor] = useState(true);
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [sendTo, setSendTo] = useState(project.client_email || "");
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<"success" | "error" | null>(null);
+
+  const proposalNum = `PROP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+  useEffect(() => {
+    axiom.from("settings")
+      .select("biz_name,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text")
+      .limit(1).single()
+      .then(({ data }) => setBiz(data || {}));
+  }, []);
+
+  const materials = project.materials || [];
+  const laborLog = project.labor_log || [];
+  const materialTotal = materials.reduce((s, m) => s + (m.cost || 0), 0);
+  const laborTotal = laborLog.reduce((s, l) => s + (l.cost || 0), 0);
+  const totalHours = laborLog.reduce((s, l) => s + (l.hours || 0), 0);
+  const quotedAmount = project.quoted_amount || 0;
+
+  const fmtDate = (d?: string) => d
+    ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+    : "";
+
+  function money(n: number) {
+    return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+  }
+
+  async function handleSend() {
+    if (!sendTo || !biz) return;
+    setSending(true); setSendResult(null);
+    try {
+      const html = generateProposalHtml(project, biz, {
+        proposalNum, validUntil, includeMaterials, includeLabor, forEmail: true,
+      });
+      const res = await fetch("/api/send-po", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: sendTo,
+          subject: `Proposal from RELIC Custom Fabrications — ${project.project_name}`,
+          html,
+          from_name: "RELIC Custom Fabrications",
+        }),
+      });
+      setSendResult(res.ok ? "success" : "error");
+      if (res.ok) setShowEmailForm(false);
+    } catch { setSendResult("error"); }
+    setSending(false);
+  }
+
+  if (!biz) {
+    return <div className="fixed inset-0 bg-gray-100 z-[100] flex items-center justify-center text-gray-500 text-sm">Loading…</div>;
+  }
+
+  const addressLine2 = [biz.biz_city, biz.biz_state, biz.biz_zip].filter(Boolean).join(", ");
+  const stripeColor = "#8b6914";
+
+  return (
+    <div className="fixed inset-0 bg-gray-100 z-[100] overflow-auto">
+
+      {/* Toolbar */}
+      <div className="print:hidden sticky top-0 z-10 bg-white border-b border-gray-200 px-4 py-2.5 flex items-center gap-3 flex-wrap">
+        <button onClick={onClose} className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900 font-medium">
+          <X size={16} /> Close Preview
+        </button>
+
+        {/* Options */}
+        <div className="flex items-center gap-4 text-sm text-gray-600 border-l border-gray-200 pl-3">
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" checked={includeMaterials} onChange={(e) => setIncludeMaterials(e.target.checked)} className="accent-[#c4a24d]" />
+            Materials
+          </label>
+          <label className="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" checked={includeLabor} onChange={(e) => setIncludeLabor(e.target.checked)} className="accent-[#c4a24d]" />
+            Labor
+          </label>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-400 uppercase tracking-wider">Valid Until</span>
+            <input
+              type="date"
+              value={validUntil}
+              onChange={(e) => setValidUntil(e.target.value)}
+              className="border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:border-[#c4a24d]"
+            />
+          </div>
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Email form inline */}
+        {showEmailForm && (
+          <div className="flex items-center gap-2">
+            <input
+              type="email" value={sendTo} onChange={(e) => setSendTo(e.target.value)}
+              placeholder="client@email.com"
+              className="border border-gray-300 px-3 py-1.5 text-sm rounded focus:outline-none focus:border-[#c4a24d] w-52"
+            />
+            <button
+              onClick={handleSend} disabled={!sendTo || sending}
+              className="bg-[#c4a24d] text-white px-3 py-1.5 text-sm rounded disabled:opacity-50 hover:bg-[#b3913c]"
+            >{sending ? "Sending…" : "Send"}</button>
+            <button onClick={() => { setShowEmailForm(false); setSendResult(null); }} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
+          </div>
+        )}
+        {sendResult === "success" && !showEmailForm && (
+          <span className="flex items-center gap-1 text-green-600 text-sm"><CheckCircle size={14} /> Sent!</span>
+        )}
+        {!showEmailForm && (
+          <button
+            onClick={() => { setShowEmailForm(true); setSendResult(null); setSendTo(project.client_email || ""); }}
+            className="flex items-center gap-1.5 border border-gray-300 px-3 py-1.5 text-sm rounded hover:bg-gray-50"
+          >
+            <Send size={14} /> Email
+          </button>
+        )}
+        <button
+          onClick={() => window.print()}
+          className="flex items-center gap-1.5 bg-gray-900 text-white px-4 py-1.5 text-sm rounded hover:bg-gray-700"
+        >
+          <Printer size={14} /> Print / Save as PDF
+        </button>
+      </div>
+
+      {/* Proposal document */}
+      <div className="max-w-4xl mx-auto my-8 bg-white print:my-0 print:max-w-none print:shadow-none shadow-sm">
+
+        {/* Header */}
+        <div className="flex justify-between items-start px-10 pt-10 pb-8 print:px-8 print:pt-8">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-full.png" alt="RELIC Custom Fabrications" className="h-20 object-contain object-left print:h-16" />
+          <div className="text-right">
+            <h1 className="text-4xl font-bold text-gray-900 mb-3 tracking-wide">PROPOSAL</h1>
+            {biz.biz_name && <p className="text-sm font-semibold text-gray-800">{biz.biz_name}</p>}
+            {biz.biz_address && <p className="text-xs text-gray-500 mt-0.5">{biz.biz_address}</p>}
+            {addressLine2 && <p className="text-xs text-gray-500">{addressLine2}</p>}
+            {(biz.biz_state || biz.biz_city) && <p className="text-xs text-gray-500">United States</p>}
+            {biz.biz_phone && <p className="text-xs text-gray-500 mt-1">{biz.biz_phone}</p>}
+            <p className="text-xs text-gray-500">relicbuilt.com</p>
+          </div>
+        </div>
+
+        <div className="mx-10 border-t border-gray-200 print:mx-8" />
+
+        {/* Prepared For / Proposal meta */}
+        <div className="grid grid-cols-2 gap-10 px-10 py-8 print:px-8">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "#c4a24d" }}>Prepared For</p>
+            <p className="font-bold text-gray-900 text-base">{project.client_name}</p>
+            {project.company_name && <p className="text-sm text-gray-600 mt-0.5">{project.company_name}</p>}
+            {project.client_phone && <p className="text-sm text-gray-600 mt-1">{project.client_phone}</p>}
+            {project.client_email && <p className="text-sm text-gray-600 mt-0.5">{project.client_email}</p>}
+          </div>
+          <div>
+            <div className="space-y-2 text-sm mb-5">
+              <div className="flex justify-between"><span className="font-semibold text-gray-500">Proposal #:</span><span className="font-bold">{proposalNum}</span></div>
+              <div className="flex justify-between"><span className="font-semibold text-gray-500">Prepared:</span><span>{fmtDate(new Date().toISOString().split("T")[0])}</span></div>
+              {validUntil && <div className="flex justify-between"><span className="font-semibold text-gray-500">Valid Until:</span><span>{fmtDate(validUntil)}</span></div>}
+              {project.start_date && <div className="flex justify-between"><span className="font-semibold text-gray-500">Est. Start:</span><span>{fmtDate(project.start_date)}</span></div>}
+              {project.due_date && <div className="flex justify-between"><span className="font-semibold text-gray-500">Est. Completion:</span><span>{fmtDate(project.due_date)}</span></div>}
+            </div>
+            <div className="bg-gray-100 px-4 py-3 flex justify-between font-bold text-sm">
+              <span>Quoted Amount:</span>
+              <span className="font-mono">{money(quotedAmount)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Project stripe */}
+        <div className="px-10 py-3 print:px-8" style={{ background: stripeColor }}>
+          <p className="text-sm font-bold text-white uppercase tracking-widest">Project</p>
+        </div>
+        <div className="px-10 py-6 border-b border-gray-100 print:px-8">
+          <p className="font-bold text-gray-900 text-base">{project.project_name}</p>
+          {project.project_description && (
+            <p className="text-sm text-gray-600 mt-2 leading-relaxed whitespace-pre-wrap">{project.project_description}</p>
+          )}
+          {project.timeline && <p className="text-xs text-gray-400 mt-3">Timeline: {project.timeline}</p>}
+        </div>
+
+        {/* Scope of Work */}
+        {((includeMaterials && materials.length > 0) || (includeLabor && laborLog.length > 0)) && (
+          <>
+            <div className="px-10 py-3 print:px-8" style={{ background: stripeColor }}>
+              <p className="text-sm font-bold text-white uppercase tracking-widest">Scope of Work</p>
+            </div>
+            {includeMaterials && materials.map((m, i) => (
+              <div key={i} className="flex items-center justify-between px-10 py-4 border-b border-gray-100 print:px-8">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-gray-800">{m.description}</span>
+                  {m.vendor && <span className="text-xs text-gray-400">{m.vendor}</span>}
+                </div>
+                <span className="font-bold font-mono text-gray-900 ml-8 shrink-0">{money(m.cost)}</span>
+              </div>
+            ))}
+            {includeLabor && laborLog.length > 0 && (
+              <div className="flex items-center justify-between px-10 py-4 border-b border-gray-100 print:px-8">
+                <div className="flex items-center gap-3">
+                  <span className="text-gray-800">Labor</span>
+                  <span className="text-xs text-gray-400">{totalHours.toFixed(1)} hrs</span>
+                </div>
+                <span className="font-bold font-mono text-gray-900 ml-8">{money(laborTotal)}</span>
+              </div>
+            )}
+          </>
+        )}
+
+        <div className="mx-10 border-t border-gray-200 mt-2 print:mx-8" />
+
+        {/* Totals */}
+        <div className="flex justify-end px-10 py-8 print:px-8">
+          <div className="w-80 text-sm space-y-2">
+            {includeMaterials && materials.length > 0 && (
+              <div className="flex justify-between text-gray-500"><span>Materials:</span><span className="font-mono">{money(materialTotal)}</span></div>
+            )}
+            {includeLabor && laborLog.length > 0 && (
+              <div className="flex justify-between text-gray-500"><span>Labor:</span><span className="font-mono">{money(laborTotal)}</span></div>
+            )}
+            <div className="bg-gray-100 px-4 py-3 flex justify-between font-bold mt-1">
+              <span>Total Quoted Amount:</span>
+              <span className="font-mono">{money(quotedAmount)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Terms */}
+        {biz.terms_text && (
+          <div className="px-10 pb-8 border-t border-gray-100 print:px-8">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 mt-6">Terms</p>
+            <p className="text-xs text-gray-500 whitespace-pre-wrap leading-relaxed">{biz.terms_text}</p>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="px-10 pb-10 print:px-8 print:pb-8">
+          <p className="text-xs text-gray-300 text-center">
+            RELIC &middot; Custom Fabrications &middot; (402) 235-8179 &middot; relicbuilt.com
+          </p>
+        </div>
+
+      </div>
     </div>
   );
 }
