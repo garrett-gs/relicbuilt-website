@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { CustomWork, Material, LaborEntry, Customer, Company } from "@/types/axiom";
 import Button from "@/components/ui/Button";
+import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
 import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -417,6 +418,8 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [dueDate, setDueDate] = useState(project.due_date || "");
   const [portalStage, setPortalStage] = useState(project.portal_stage || "consultation");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   // Resolve customer name for display if we have a customer_id
   useEffect(() => {
@@ -432,24 +435,26 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const actualCost = materialTotal + laborTotal;
   const margin = quoted > 0 ? ((quoted - actualCost) / quoted) * 100 : 0;
 
-  function addMaterial() { setMaterials([...materials, { description: "", vendor: "", cost: 0 }]); }
+  function markDirty() { setDirty(true); setSaved(false); }
+
+  function addMaterial() { setMaterials([...materials, { description: "", vendor: "", cost: 0 }]); markDirty(); }
   function updateMaterial(i: number, field: keyof Material, value: string | number) {
     const updated = [...materials];
     (updated[i] as unknown as Record<string, string | number>)[field] = value;
-    setMaterials(updated);
+    setMaterials(updated); markDirty();
   }
-  function removeMaterial(i: number) { setMaterials(materials.filter((_, idx) => idx !== i)); }
+  function removeMaterial(i: number) { setMaterials(materials.filter((_, idx) => idx !== i)); markDirty(); }
 
-  function addLabor() { setLabor([...labor, { date: new Date().toISOString().split("T")[0], hours: 0, rate: 60, cost: 0 }]); }
+  function addLabor() { setLabor([...labor, { date: new Date().toISOString().split("T")[0], hours: 0, rate: 60, cost: 0 }]); markDirty(); }
   function updateLabor(i: number, field: keyof LaborEntry, value: string | number) {
     const updated = [...labor];
     (updated[i] as unknown as Record<string, string | number>)[field] = value;
     if (field === "hours" || field === "rate") {
       updated[i].cost = Number(updated[i].hours) * Number(updated[i].rate);
     }
-    setLabor(updated);
+    setLabor(updated); markDirty();
   }
-  function removeLabor(i: number) { setLabor(labor.filter((_, idx) => idx !== i)); }
+  function removeLabor(i: number) { setLabor(labor.filter((_, idx) => idx !== i)); markDirty(); }
 
   function handleCustomerSelect(c: Customer) {
     if (!c.id) {
@@ -462,6 +467,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       setClientEmail(c.email || "");
       setClientPhone(c.phone || "");
     }
+    markDirty();
   }
 
   function save() {
@@ -483,6 +489,8 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       due_date: dueDate || undefined,
       portal_stage: portalStage as CustomWork["portal_stage"],
     });
+    setDirty(false);
+    setSaved(true);
   }
 
   const portalUrl = project.portal_token
@@ -505,12 +513,12 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 
       {/* Client info — editable */}
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Client Name" value={clientName} onChange={setClientName} />
-        <Field label="Client Email" value={clientEmail} onChange={setClientEmail} type="email" />
-        <Field label="Client Phone" value={clientPhone} onChange={setClientPhone} />
+        <Field label="Client Name" value={clientName} onChange={(v) => { setClientName(v); markDirty(); }} />
+        <Field label="Client Email" value={clientEmail} onChange={(v) => { setClientEmail(v); markDirty(); }} type="email" />
+        <Field label="Client Phone" value={clientPhone} onChange={(v) => { setClientPhone(v); markDirty(); }} />
         <div>
           <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Budget Range</label>
-          <select value={budgetRange} onChange={(e) => setBudgetRange(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">
+          <select value={budgetRange} onChange={(e) => { setBudgetRange(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">
             <option value="">Select...</option>
             {BUDGET_RANGES.map((b) => <option key={b} value={b}>{b}</option>)}
           </select>
@@ -518,20 +526,20 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       </div>
       <div>
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Description</label>
-        <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
+        <textarea value={description} onChange={(e) => { setDescription(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
       </div>
 
       {/* Dates + status */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Field label="Start Date" type="date" value={startDate} onChange={setStartDate} />
-        <Field label="Due Date" type="date" value={dueDate} onChange={setDueDate} />
+        <Field label="Start Date" type="date" value={startDate} onChange={(v) => { setStartDate(v); markDirty(); }} />
+        <Field label="Due Date" type="date" value={dueDate} onChange={(v) => { setDueDate(v); markDirty(); }} />
         <div>
           <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Status</label>
           <select value={project.status} onChange={(e) => onUpdate({ status: e.target.value as CustomWork["status"] })} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">
             {STATUS_COLUMNS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
         </div>
-        <Field label="Quoted Amount" type="number" value={String(quoted)} onChange={(v) => setQuoted(Number(v))} />
+        <Field label="Quoted Amount" type="number" value={String(quoted)} onChange={(v) => { setQuoted(Number(v)); markDirty(); }} />
       </div>
 
       {/* Profit box */}
@@ -609,7 +617,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       {/* Notes */}
       <div>
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Internal Notes</label>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
+        <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
       </div>
 
       {/* Portal */}
@@ -629,7 +637,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             </div>
             <div>
               <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Portal Stage</label>
-              <select value={portalStage} onChange={(e) => setPortalStage(e.target.value as CustomWork["portal_stage"])} className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent">
+              <select value={portalStage} onChange={(e) => { setPortalStage(e.target.value as CustomWork["portal_stage"]); markDirty(); }} className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent">
                 {PORTAL_STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
               </select>
             </div>
@@ -639,7 +647,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t border-border flex-wrap">
-        <Button onClick={save}>Save Changes</Button>
+        <SaveButton dirty={dirty} saved={saved} onClick={save} />
         <Button variant="outline" onClick={onGenerateInvoice}>
           <FileText size={14} className="mr-1" /> Generate Invoice
         </Button>

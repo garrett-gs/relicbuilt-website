@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem } from "@/types/axiom";
 import Button from "@/components/ui/Button";
+import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
 import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package } from "lucide-react";
 
@@ -291,6 +292,10 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showLoadQuote, setShowLoadQuote] = useState(false);
   const [laborOpen, setLaborOpen] = useState(true);
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  function markDirty() { setDirty(true); setSaved(false); }
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [vendorId, setVendorId] = useState(estimate.vendor_id || "");
   const [vendorName, setVendorName] = useState(estimate.vendor_name || "");
@@ -353,17 +358,17 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   });
 
   function addLine() {
-    setLineItems([...lineItems, { item_number: "", description: "", quantity: 1, unit_price: 0, unit: "ea" }]);
+    setLineItems([...lineItems, { item_number: "", description: "", quantity: 1, unit_price: 0, unit: "ea" }]); markDirty();
   }
   function updateLine(i: number, field: keyof EstimateLineItem, value: string | number) {
     const updated = [...lineItems];
     (updated[i] as unknown as Record<string, string | number>)[field] = value;
-    setLineItems(updated);
+    setLineItems(updated); markDirty();
   }
-  function removeLine(i: number) { setLineItems(lineItems.filter((_, idx) => idx !== i)); }
+  function removeLine(i: number) { setLineItems(lineItems.filter((_, idx) => idx !== i)); markDirty(); }
 
   function addLabor() {
-    setLaborItems([...laborItems, { description: "", hours: 0, rate: 60, cost: 0 }]);
+    setLaborItems([...laborItems, { description: "", hours: 0, rate: 60, cost: 0 }]); markDirty();
   }
   function updateLabor(i: number, field: keyof EstimateLaborItem, value: string | number) {
     const updated = [...laborItems];
@@ -371,9 +376,9 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     if (field === "hours" || field === "rate") {
       updated[i].cost = Number(updated[i].hours) * Number(updated[i].rate);
     }
-    setLaborItems(updated);
+    setLaborItems(updated); markDirty();
   }
-  function removeLabor(i: number) { setLaborItems(laborItems.filter((_, idx) => idx !== i)); }
+  function removeLabor(i: number) { setLaborItems(laborItems.filter((_, idx) => idx !== i)); markDirty(); }
 
   function handleCustomerSelect(c: Customer) {
     if (!c.id) {
@@ -384,6 +389,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       setCustomerName(c.name);
       setClientName(c.name);
     }
+    markDirty();
   }
 
   function save() {
@@ -399,6 +405,8 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       markup_percent: markupPct,
       notes,
     });
+    setDirty(false);
+    setSaved(true);
   }
 
   return (
@@ -406,16 +414,16 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 space-y-3">
-          <Field label="Project / Description" value={projectName} onChange={setProjectName} />
+          <Field label="Project / Description" value={projectName} onChange={(v) => { setProjectName(v); markDirty(); }} />
           <div className="grid grid-cols-2 gap-3">
             <CustomerSearch onSelect={handleCustomerSelect} initialName={customerName} />
-            <Field label="Client Name" value={clientName} onChange={setClientName} />
+            <Field label="Client Name" value={clientName} onChange={(v) => { setClientName(v); markDirty(); }} />
           </div>
           <div className="flex items-center gap-4">
             <p className="text-xs text-muted font-mono">{estimate.estimate_number}</p>
             <select
               value={status}
-              onChange={(e) => setStatus(e.target.value as Estimate["status"])}
+              onChange={(e) => { setStatus(e.target.value as Estimate["status"]); markDirty(); }}
               className="bg-card border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
             >
               {(["draft", "sent", "accepted", "rejected"] as const).map((s) => (
@@ -599,7 +607,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
               <input
                 type="number"
                 value={markupPct || ""}
-                onChange={(e) => setMarkupPct(Number(e.target.value))}
+                onChange={(e) => { setMarkupPct(Number(e.target.value)); markDirty(); }}
                 placeholder="0"
                 className="w-16 bg-background border border-border px-2 py-1 text-sm text-foreground focus:outline-none focus:border-accent text-right font-mono"
               />
@@ -621,12 +629,12 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       {/* Notes */}
       <div>
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Notes</label>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
+        <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
       </div>
 
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t border-border flex-wrap items-center">
-        <Button onClick={save}>Save Changes</Button>
+        <SaveButton dirty={dirty} saved={saved} onClick={save} />
         <Button variant="outline" onClick={() => { save(); setShowLoadQuote(true); }}>
           <CheckCircle2 size={14} className="mr-1" /> Load into Quote
         </Button>

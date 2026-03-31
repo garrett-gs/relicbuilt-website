@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { Settings, TeamMember } from "@/types/axiom";
 import Button from "@/components/ui/Button";
-import { Plus, Trash2, Save } from "lucide-react";
+import SaveButton from "@/components/ui/SaveButton";
+import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = ["General", "Team", "Categories", "Terms"] as const;
@@ -14,6 +15,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [tab, setTab] = useState<Tab>("General");
   const [saved, setSaved] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
   const load = useCallback(async () => {
     const { data } = await axiom.from("settings").select("*").limit(1).single();
@@ -25,12 +27,14 @@ export default function SettingsPage() {
   async function save() {
     if (!settings) return;
     await axiom.from("settings").update(settings).eq("id", settings.id);
+    setDirty(false);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
   }
 
   function updateField(field: string, value: unknown) {
     setSettings((s) => s ? { ...s, [field]: value } : s);
+    setDirty(true);
+    setSaved(false);
   }
 
   if (!settings) return <div className="text-muted animate-pulse">Loading settings...</div>;
@@ -39,9 +43,7 @@ export default function SettingsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-heading font-bold">Settings</h1>
-        <Button onClick={save} size="sm">
-          <Save size={14} className="mr-1" /> {saved ? "Saved!" : "Save"}
-        </Button>
+        <SaveButton dirty={dirty} saved={saved} onClick={save} size="sm" label="Save" />
       </div>
 
       {/* Tabs */}
