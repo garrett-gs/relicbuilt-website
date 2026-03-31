@@ -8,7 +8,10 @@ import { Invoice, InvoiceLineItem, Payment, Settings } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
-import { Plus, X, Trash2, Printer, DollarSign, Send, CheckCircle, Eye } from "lucide-react";
+import { Plus, X, Trash2, Printer, DollarSign, Send, CheckCircle, Eye, Search } from "lucide-react";
+import { useRef } from "react";
+
+interface Customer { id: string; name: string; email?: string; phone?: string; }
 import { generateInvoiceHtml } from "@/lib/invoice-html";
 
 function money(n: number) {
@@ -214,6 +217,82 @@ function SlideModal({ title, onClose, children, wide }: { title: string; onClose
   );
 }
 
+// ── Customer search dropdown ───────────────────────────────────────────────────
+
+function CustomerSearch({ onSelect }: { onSelect: (c: Customer) => void }) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Customer[]>([]);
+  const [open, setOpen] = useState(false);
+  const [selectedName, setSelectedName] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  async function search(q: string) {
+    setQuery(q);
+    if (!q.trim()) { setResults([]); setOpen(false); return; }
+    const { data } = await axiom.from("customers").select("*").ilike("name", `%${q}%`).limit(8);
+    if (data) { setResults(data); setOpen(true); }
+  }
+
+  function pick(c: Customer) {
+    setSelectedName(c.name);
+    setQuery("");
+    setOpen(false);
+    onSelect(c);
+  }
+
+  function clear() {
+    setSelectedName("");
+    onSelect({} as Customer);
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Customer</label>
+      <div className="flex items-center gap-2">
+        {selectedName ? (
+          <span className="flex items-center gap-1 bg-accent/10 text-accent text-sm px-3 py-2 border border-accent/30 flex-1 truncate">
+            {selectedName}
+            <button onClick={clear} className="ml-1 hover:text-foreground"><X size={12} /></button>
+          </span>
+        ) : (
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+            <input
+              value={query}
+              onChange={(e) => search(e.target.value)}
+              placeholder="Search customers…"
+              className="w-full bg-card border border-border pl-9 pr-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+            />
+          </div>
+        )}
+      </div>
+      {open && results.length > 0 && (
+        <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border shadow-lg mt-0.5 max-h-48 overflow-y-auto">
+          {results.map((c) => (
+            <button key={c.id} onMouseDown={() => pick(c)} className="w-full text-left px-4 py-2.5 text-sm hover:bg-background flex items-center justify-between">
+              <span>{c.name}</span>
+              <span className="text-xs text-muted">{c.email || c.phone || ""}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {open && results.length === 0 && query && (
+        <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border mt-0.5 px-4 py-3 text-sm text-muted">
+          No customers found — <a href="/axiom/customers" className="text-accent underline">add one first</a>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Create form ────────────────────────────────────────────────────────────────
 
 function CreateInvoiceForm({ onSubmit, onCancel }: {
@@ -224,8 +303,18 @@ function CreateInvoiceForm({ onSubmit, onCancel }: {
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const inp = "w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent";
   const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
+
+  function handleCustomerSelect(c: Customer) {
+    if (!c.id) {
+      setForm((f) => ({ ...f, client_name: "", client_email: "", client_phone: "" }));
+    } else {
+      setForm((f) => ({ ...f, client_name: c.name, client_email: c.email || "", client_phone: c.phone || "" }));
+    }
+  }
+
   return (
     <div className="space-y-4">
+      <CustomerSearch onSelect={handleCustomerSelect} />
       <div className="grid grid-cols-2 gap-4">
         <div><label className={lbl}>Client Name *</label><input value={form.client_name} onChange={(e) => set("client_name", e.target.value)} className={inp} /></div>
         <div><label className={lbl}>Client Email</label><input type="email" value={form.client_email} onChange={(e) => set("client_email", e.target.value)} className={inp} /></div>
