@@ -64,6 +64,12 @@ export default function SettingsPage() {
           <Field label="Business Name" value={settings.biz_name} onChange={(v) => updateField("biz_name", v)} />
           <Field label="Email" value={settings.biz_email || ""} onChange={(v) => updateField("biz_email", v)} type="email" />
           <Field label="Phone" value={settings.biz_phone || ""} onChange={(v) => updateField("biz_phone", v)} />
+          <Field label="Street Address" value={settings.biz_address || ""} onChange={(v) => updateField("biz_address", v)} />
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="City" value={settings.biz_city || ""} onChange={(v) => updateField("biz_city", v)} />
+            <Field label="State" value={settings.biz_state || ""} onChange={(v) => updateField("biz_state", v)} />
+            <Field label="ZIP" value={settings.biz_zip || ""} onChange={(v) => updateField("biz_zip", v)} />
+          </div>
           <Field label="Accent Color" value={settings.accent_color} onChange={(v) => updateField("accent_color", v)} />
           <div className="flex gap-2 mt-2">
             {["#c4a24d", "#1e3a5f", "#3d5a3e", "#5a2d5a", "#8b1a1a", "#1a5a5a", "#2d3a6b", "#1a1a1a"].map((c) => (

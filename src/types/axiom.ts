@@ -156,7 +156,9 @@ export interface Invoice {
   custom_work_id?: string;
   client_name: string;
   client_email?: string;
+  client_phone?: string;
   description?: string;
+  reference_number?: string;
   issued_date?: string;
   due_date?: string;
   subtotal: number;
@@ -310,6 +312,10 @@ export interface Settings {
   biz_name: string;
   biz_email?: string;
   biz_phone?: string;
+  biz_address?: string;
+  biz_city?: string;
+  biz_state?: string;
+  biz_zip?: string;
   logo_url?: string;
   accent_color: string;
   terms_text?: string;
