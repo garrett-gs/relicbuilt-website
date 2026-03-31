@@ -240,7 +240,7 @@ export default function TasksPage() {
 
         {/* ── Right: Notes panel ── */}
         <div
-          className="w-72 shrink-0 border-l border-border pl-5 flex flex-col"
+          className="w-[36rem] shrink-0 border-l border-border pl-5 flex flex-col"
           style={{ position: "sticky", top: "1.5rem", height: "calc(100vh - 7rem)", overflow: "hidden" }}
         >
           <NotesPanel />
