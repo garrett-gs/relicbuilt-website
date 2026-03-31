@@ -38,13 +38,14 @@ const PRIORITIES = [
   { key: "low", label: "Low", color: "#22c55e" },
 ];
 
-const TEAM = ["Garrett", "Mike", "Dana", "Jesse", "Priya"];
+// Team loaded from settings at runtime
 
 // ── Tasks page ───────────────────────────────────────────────
 
 export default function TasksPage() {
   const { userEmail } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [team, setTeam] = useState<string[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [selected, setSelected] = useState<Task | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
@@ -57,6 +58,14 @@ export default function TasksPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    axiom.from("settings").select("team_members").limit(1).single().then(({ data }) => {
+      if (data?.team_members) {
+        setTeam((data.team_members as { name: string }[]).map((m) => m.name).filter(Boolean));
+      }
+    });
+  }, []);
 
   const filtered = teamFilter === "all" ? tasks : tasks.filter((t) => t.assignee === teamFilter);
   const overdue = tasks.filter((t) => t.due_date && t.status !== "done" && new Date(t.due_date) < new Date());
@@ -132,7 +141,7 @@ export default function TasksPage() {
             <div className="flex gap-3">
               <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent">
                 <option value="all">All Team</option>
-                {TEAM.map((t) => <option key={t} value={t}>{t}</option>)}
+                {team.map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
               <Button onClick={() => setShowCreate(true)} size="sm"><Plus size={14} className="mr-1" /> New Task</Button>
             </div>
@@ -190,7 +199,7 @@ export default function TasksPage() {
           {/* Create modal */}
           {showCreate && (
             <TaskModal title="New Task" onClose={() => setShowCreate(false)}>
-              <TaskForm onSubmit={createTask} onCancel={() => setShowCreate(false)} />
+              <TaskForm onSubmit={createTask} onCancel={() => setShowCreate(false)} team={team} />
             </TaskModal>
           )}
 
@@ -260,7 +269,7 @@ function TaskModal({ title, onClose, children }: { title: string; onClose: () =>
 
 // ── Task Form ────────────────────────────────────────────────
 
-function TaskForm({ onSubmit, onCancel }: { onSubmit: (f: Record<string, string>) => void; onCancel: () => void }) {
+function TaskForm({ onSubmit, onCancel, team }: { onSubmit: (f: Record<string, string>) => void; onCancel: () => void; team: string[] }) {
   const [form, setForm] = useState({ title: "", description: "", priority: "medium", assignee: "", due_date: "" });
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   return (
@@ -284,7 +293,7 @@ function TaskForm({ onSubmit, onCancel }: { onSubmit: (f: Record<string, string>
           <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Assignee</label>
           <select value={form.assignee} onChange={(e) => set("assignee", e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-sm text-foreground focus:outline-none focus:border-accent">
             <option value="">Unassigned</option>
-            {TEAM.map((t) => <option key={t} value={t}>{t}</option>)}
+            {team.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
         <div>
