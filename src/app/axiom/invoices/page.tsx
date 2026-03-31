@@ -560,117 +560,115 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
         </button>
       </div>
 
-      {/* Invoice document */}
-      <div className="max-w-3xl mx-auto my-8 bg-white shadow-md print:shadow-none print:my-0 print:max-w-none">
-        <div className="p-10 print:p-8">
+      {/* Invoice document — no outer box, full-width sections */}
+      <div className="max-w-4xl mx-auto my-8 bg-white print:my-0 print:max-w-none print:shadow-none shadow-sm">
 
-          {/* Header: logo + name left, INVOICE + address right */}
-          <div className="flex justify-between items-start mb-6">
-            <div className="flex items-center gap-4">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo-emblem.png" alt="RELIC" className="w-16 h-16 object-contain" />
-              <div>
-                <p className="text-xl font-bold tracking-wider text-gray-900">RELIC</p>
-                <p className="text-[10px] tracking-[0.18em] text-gray-500 uppercase mt-0.5">Custom Fabrications</p>
-              </div>
+        {/* Header */}
+        <div className="flex justify-between items-start px-10 pt-10 pb-8 print:px-8 print:pt-8">
+          <div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-full.png" alt="RELIC Custom Fabrications" className="h-20 object-contain object-left print:h-16" />
+          </div>
+          <div className="text-right">
+            <h1 className="text-4xl font-bold text-gray-900 mb-3 tracking-wide">INVOICE</h1>
+            {biz.biz_name && <p className="text-sm font-semibold text-gray-800">{biz.biz_name}</p>}
+            {biz.biz_address && <p className="text-xs text-gray-500 mt-0.5">{biz.biz_address}</p>}
+            {addressLine2 && <p className="text-xs text-gray-500">{addressLine2}</p>}
+            {(biz.biz_state || biz.biz_city) && <p className="text-xs text-gray-500">United States</p>}
+            {biz.biz_phone && <p className="text-xs text-gray-500 mt-1">{biz.biz_phone}</p>}
+            <p className="text-xs text-gray-500">relicbuilt.com</p>
+          </div>
+        </div>
+
+        {/* Thin rule */}
+        <div className="mx-10 border-t border-gray-200 print:mx-8" />
+
+        {/* Bill To / Invoice meta — no box */}
+        <div className="grid grid-cols-2 gap-10 px-10 py-8 print:px-8">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "#c4a24d" }}>Bill To</p>
+            <p className="font-bold text-gray-900 text-base">{invoice.client_name}</p>
+            {invoice.client_phone && <p className="text-sm text-gray-600 mt-1">{invoice.client_phone}</p>}
+            {invoice.client_email && <p className="text-sm text-gray-600 mt-0.5">{invoice.client_email}</p>}
+            {invoice.description && <p className="text-sm text-gray-500 mt-2">{invoice.description}</p>}
+          </div>
+          <div>
+            <div className="space-y-2 text-sm mb-5">
+              <div className="flex justify-between"><span className="font-semibold text-gray-500">Invoice Number:</span><span className="font-bold">{invoice.invoice_number}</span></div>
+              {invoice.reference_number && <div className="flex justify-between"><span className="font-semibold text-gray-500">P.O./S.O. Number:</span><span>{invoice.reference_number}</span></div>}
+              {invoice.issued_date && <div className="flex justify-between"><span className="font-semibold text-gray-500">Invoice Date:</span><span>{fmtDate(invoice.issued_date)}</span></div>}
+              {invoice.due_date && <div className="flex justify-between"><span className="font-semibold text-gray-500">Payment Due:</span><span>{fmtDate(invoice.due_date)}</span></div>}
             </div>
-            <div className="text-right">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">INVOICE</h1>
-              {biz.biz_name && <p className="text-sm font-semibold text-gray-800">{biz.biz_name}</p>}
-              {biz.biz_address && <p className="text-xs text-gray-500">{biz.biz_address}</p>}
-              {addressLine2 && <p className="text-xs text-gray-500">{addressLine2}</p>}
-              {(biz.biz_state || biz.biz_city) && <p className="text-xs text-gray-500">United States</p>}
-              {biz.biz_phone && <p className="text-xs text-gray-500 mt-1">{biz.biz_phone}</p>}
-              <p className="text-xs text-gray-500">relicbuilt.com</p>
+            <div className="bg-gray-100 px-4 py-3 flex justify-between font-bold text-sm">
+              <span>Amount Due (USD):</span>
+              <span className="font-mono">{money(amountDue)}</span>
             </div>
           </div>
+        </div>
 
-          {/* Bill To / Invoice meta */}
-          <div className="grid grid-cols-2 border border-gray-200 mb-0">
-            <div className="p-5 border-r border-gray-200">
-              <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "#c4a24d" }}>Bill To</p>
-              <p className="font-bold text-gray-900 text-base">{invoice.client_name}</p>
-              {invoice.client_phone && <p className="text-sm text-gray-600 mt-1">{invoice.client_phone}</p>}
-              {invoice.client_email && <p className="text-sm text-gray-600 mt-0.5">{invoice.client_email}</p>}
-              {invoice.description && <p className="text-sm text-gray-500 mt-2">{invoice.description}</p>}
+        {/* Gold Items bar — full width */}
+        <div className="px-10 py-3 print:px-8" style={{ background: "#8b6914" }}>
+          <p className="text-sm font-bold text-white uppercase tracking-widest">Items</p>
+        </div>
+
+        {/* Line items — single row per item, no outer border */}
+        {lineItems.length > 0 ? lineItems.map((li, i) => (
+          <div key={i} className="flex items-center justify-between px-10 py-4 border-b border-gray-100 last:border-0 print:px-8">
+            <div className="flex items-center gap-3 flex-1 min-w-0 mr-8">
+              {li.category && <span className="font-bold text-gray-900 shrink-0">{li.category}</span>}
+              {li.category && li.description && <span className="text-gray-300 shrink-0">—</span>}
+              {li.description && <span className="text-gray-700 truncate">{li.description}</span>}
+              {!li.category && !li.description && <span className="text-gray-400 italic">—</span>}
             </div>
-            <div className="p-5">
-              <div className="space-y-1.5 text-sm mb-4">
-                <div className="flex justify-between"><span className="font-semibold text-gray-600">Invoice Number:</span><span className="font-bold">{invoice.invoice_number}</span></div>
-                {invoice.reference_number && <div className="flex justify-between"><span className="font-semibold text-gray-600">P.O./S.O. Number:</span><span>{invoice.reference_number}</span></div>}
-                {invoice.issued_date && <div className="flex justify-between"><span className="font-semibold text-gray-600">Invoice Date:</span><span>{fmtDate(invoice.issued_date)}</span></div>}
-                {invoice.due_date && <div className="flex justify-between"><span className="font-semibold text-gray-600">Payment Due:</span><span>{fmtDate(invoice.due_date)}</span></div>}
-              </div>
-              <div className="bg-gray-50 border border-gray-200 px-4 py-3 flex justify-between font-bold text-sm">
-                <span>Amount Due (USD):</span>
-                <span className="font-mono">{money(amountDue)}</span>
-              </div>
-            </div>
+            <span className="font-bold font-mono text-gray-900 shrink-0">{money((li.quantity || 0) * (li.unit_price || 0))}</span>
           </div>
+        )) : (
+          <div className="px-10 py-8 text-gray-400 text-sm text-center print:px-8">No line items added yet</div>
+        )}
 
-          {/* Items header bar */}
-          <div className="px-5 py-2.5" style={{ background: "#c4a24d" }}>
-            <p className="text-xs font-bold text-white uppercase tracking-wider">Items</p>
-          </div>
+        {/* Thin rule before totals */}
+        <div className="mx-10 border-t border-gray-200 mt-2 print:mx-8" />
 
-          {/* Line items */}
-          <div className="border border-t-0 border-gray-200">
-            {lineItems.length > 0 ? lineItems.map((li, i) => (
-              <div key={i} className="flex justify-between items-start px-5 py-4 border-b border-gray-100 last:border-0">
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-gray-900 text-sm">{li.category || li.description}</p>
-                  {li.category && li.description && <p className="text-sm text-gray-500 mt-0.5">{li.description}</p>}
-                </div>
-                <div className="text-right ml-8 shrink-0">
-                  {li.quantity !== 1 && <p className="text-xs text-gray-400 mb-0.5">{li.quantity} × {money(li.unit_price)}</p>}
-                  <p className="font-bold text-sm font-mono">{money((li.quantity || 0) * (li.unit_price || 0))}</p>
-                </div>
-              </div>
-            )) : (
-              <div className="px-5 py-6 text-gray-400 text-sm text-center">No line items added yet</div>
+        {/* Totals — no outer border */}
+        <div className="flex justify-end px-10 py-8 print:px-8">
+          <div className="w-80 text-sm space-y-2">
+            {(discountAmt > 0 || invoice.tax_rate > 0) && (
+              <div className="flex justify-between text-gray-500"><span>Subtotal:</span><span className="font-mono">{money(subtotal)}</span></div>
             )}
-          </div>
-
-          {/* Totals */}
-          <div className="border border-t-0 border-gray-200 p-5">
-            <div className="flex justify-end">
-              <div className="w-72 text-sm space-y-1.5">
-                {(discountAmt > 0 || invoice.tax_rate > 0) && (
-                  <div className="flex justify-between text-gray-600"><span>Subtotal:</span><span className="font-mono">{money(subtotal)}</span></div>
-                )}
-                {discountAmt > 0 && (
-                  <div className="flex justify-between text-gray-600"><span>Discount:</span><span className="font-mono text-green-600">-{money(discountAmt)}</span></div>
-                )}
-                {invoice.tax_rate > 0 && (
-                  <div className="flex justify-between text-gray-600"><span>Tax ({invoice.tax_rate}%):</span><span className="font-mono">{money(taxAmt)}</span></div>
-                )}
-                <div className="flex justify-between font-bold text-gray-900 border-t border-gray-200 pt-2">
-                  <span>Total:</span><span className="font-mono">{money(total)}</span>
-                </div>
-                {paid > 0 && (
-                  <div className="flex justify-between text-green-600"><span>Paid:</span><span className="font-mono">{money(paid)}</span></div>
-                )}
-                <div className="bg-gray-50 border border-gray-200 px-4 py-3 flex justify-between font-bold mt-2">
-                  <span>Amount Due (USD):</span>
-                  <span className="font-mono" style={{ color: balance > 0 ? "#111" : "#22c55e" }}>{money(amountDue)}</span>
-                </div>
-              </div>
+            {discountAmt > 0 && (
+              <div className="flex justify-between text-gray-500"><span>Discount:</span><span className="font-mono text-green-600">-{money(discountAmt)}</span></div>
+            )}
+            {invoice.tax_rate > 0 && (
+              <div className="flex justify-between text-gray-500"><span>Tax ({invoice.tax_rate}%):</span><span className="font-mono">{money(taxAmt)}</span></div>
+            )}
+            <div className="flex justify-between font-bold text-gray-900 pt-1 border-t border-gray-200">
+              <span>Total:</span><span className="font-mono">{money(total)}</span>
+            </div>
+            {paid > 0 && (
+              <div className="flex justify-between text-green-600"><span>Paid:</span><span className="font-mono">{money(paid)}</span></div>
+            )}
+            <div className="bg-gray-100 px-4 py-3 flex justify-between font-bold mt-1">
+              <span>Amount Due (USD):</span>
+              <span className="font-mono" style={{ color: balance > 0 ? "#111" : "#22c55e" }}>{money(amountDue)}</span>
             </div>
           </div>
+        </div>
 
-          {/* Terms */}
-          {biz.terms_text && (
-            <div className="mt-8 pt-6 border-t border-gray-200">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Terms</p>
-              <p className="text-xs text-gray-500 whitespace-pre-wrap leading-relaxed">{biz.terms_text}</p>
-            </div>
-          )}
+        {/* Terms */}
+        {biz.terms_text && (
+          <div className="px-10 pb-8 pt-0 border-t border-gray-100 print:px-8">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 mt-6">Terms</p>
+            <p className="text-xs text-gray-500 whitespace-pre-wrap leading-relaxed">{biz.terms_text}</p>
+          </div>
+        )}
 
-          {/* Footer */}
-          <p className="text-xs text-gray-300 mt-10 text-center">
+        {/* Footer */}
+        <div className="px-10 pb-10 print:px-8 print:pb-8">
+          <p className="text-xs text-gray-300 text-center">
             RELIC &middot; Custom Fabrications &middot; (402) 235-8179 &middot; relicbuilt.com
           </p>
         </div>
+
       </div>
     </div>
   );
