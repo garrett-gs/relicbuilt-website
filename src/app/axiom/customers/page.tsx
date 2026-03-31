@@ -156,7 +156,6 @@ export default function CustomersPage() {
     const { data } = await axiom.from("customers").insert({
       name: form.name, email: form.email, phone: form.phone,
       title: form.title, company_id: companyId,
-      company_name: co?.name ?? "",
       type: "Contact",
     }).select().single();
     if (data) {
