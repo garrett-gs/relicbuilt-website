@@ -9,12 +9,10 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   CheckSquare,
-  ListTodo,
   Hammer,
   Clock,
   CalendarDays,
   Users,
-  Building2,
   FileText,
   Calculator,
   ShoppingCart,
@@ -46,7 +44,6 @@ const navSections = [
     label: "Clients",
     items: [
       { href: "/axiom/customers", icon: Users, label: "Customers" },
-      { href: "/axiom/companies", icon: Building2, label: "Companies" },
     ],
   },
   {

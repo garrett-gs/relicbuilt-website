@@ -86,13 +86,15 @@ export interface Customer {
   name: string;
   email?: string;
   phone?: string;
-  type: "Individual" | "Business";
+  type: "Individual" | "Business" | "Contact";
+  title?: string;
   address?: string;
   website?: string;
   industry?: string;
   status: "active" | "inactive";
   notes: CustomerNote[];
   company_id?: string;
+  company_name?: string;
   created_at: string;
   updated_at: string;
 }
@@ -109,6 +111,8 @@ export interface Company {
   name: string;
   address?: string;
   industry?: string;
+  phone?: string;
+  website?: string;
   created_at: string;
   updated_at: string;
 }
@@ -366,7 +370,6 @@ export type AxiomPage =
   | "projects"
   | "tasks"
   | "customers"
-  | "companies"
   | "invoices"
   | "purchase-orders"
   | "expenses"
