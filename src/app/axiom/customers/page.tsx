@@ -10,7 +10,7 @@ import { cn, formatPhone } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2,
   ChevronRight, ChevronDown,
-  Building2, User, UserPlus, ExternalLink,
+  Building2, User, UserPlus, ExternalLink, Pencil, Check,
 } from "lucide-react";
 
 function money(n: number) {
@@ -165,6 +165,16 @@ export default function CustomersPage() {
       await loadAll();
       selectCustomer(data.id);
     }
+  }
+
+  async function updateCompany(id: string, fields: Partial<Company>) {
+    await axiom.from("companies").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id);
+    await loadAll();
+  }
+
+  async function updateCustomer(id: string, fields: Partial<Customer>) {
+    await axiom.from("customers").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id);
+    await loadAll();
   }
 
   async function deleteCompany(id: string) {
@@ -327,6 +337,7 @@ export default function CustomersPage() {
             invoices={detailInvoices}
             onDelete={() => deleteCustomer(selectedCustomer.id)}
             onAddNote={(text) => addNote(selectedCustomer.id, text)}
+            onUpdate={(fields) => updateCustomer(selectedCustomer.id, fields)}
           />
         ) : selectedCompany ? (
           <CompanyDetail
@@ -336,6 +347,7 @@ export default function CustomersPage() {
             onDelete={() => deleteCompany(selectedCompany.id)}
             onSelectContact={selectCustomer}
             onAddContact={() => setShowCreateContact(selectedCompany.id)}
+            onUpdate={(fields) => updateCompany(selectedCompany.id, fields)}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-muted gap-2">
@@ -370,16 +382,29 @@ export default function CustomersPage() {
 
 // ── Company detail panel ─────────────────────────────────────
 
-function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact, onAddContact }: {
+function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact, onAddContact, onUpdate }: {
   company: Company;
   contacts: Customer[];
   projects: CustomWork[];
   onDelete: () => void;
   onSelectContact: (id: string) => void;
   onAddContact: () => void;
+  onUpdate: (fields: Partial<Company>) => void;
 }) {
   const [confirmDel, setConfirmDel] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ name: company.name, industry: company.industry ?? "", address: company.address ?? "", phone: company.phone ?? "", website: company.website ?? "" });
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const totalQuoted = projects.reduce((s, p) => s + (p.quoted_amount || 0), 0);
+
+  // Sync form if company prop changes (e.g. after another company selected)
+  const companyId = company.id;
+  useState(() => { setForm({ name: company.name, industry: company.industry ?? "", address: company.address ?? "", phone: company.phone ?? "", website: company.website ?? "" }); setEditing(false); });
+
+  function saveEdit() {
+    onUpdate({ name: form.name, industry: form.industry || undefined, address: form.address || undefined, phone: form.phone || undefined, website: form.website || undefined });
+    setEditing(false);
+  }
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -390,39 +415,63 @@ function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact,
             <Building2 size={16} className="text-accent" />
             <h2 className="text-xl font-heading font-bold">{company.name}</h2>
           </div>
-          {company.industry && <p className="text-muted text-sm">{company.industry}</p>}
+          {company.industry && !editing && <p className="text-muted text-sm">{company.industry}</p>}
         </div>
-        {confirmDel ? (
-          <div className="flex items-center gap-2">
-            <span className="text-red-500 text-sm">Delete company?</span>
-            <button onClick={onDelete} className="text-xs border border-red-400 text-red-500 px-2 py-1 hover:bg-red-50/10">Yes</button>
-            <button onClick={() => setConfirmDel(false)} className="text-xs border border-border text-muted px-2 py-1">No</button>
-          </div>
-        ) : (
-          <button onClick={() => setConfirmDel(true)} className="text-muted hover:text-red-500"><Trash2 size={16} /></button>
-        )}
+        <div className="flex items-center gap-2">
+          {!editing && !confirmDel && (
+            <button onClick={() => { setForm({ name: company.name, industry: company.industry ?? "", address: company.address ?? "", phone: company.phone ?? "", website: company.website ?? "" }); setEditing(true); }} className="text-muted hover:text-accent flex items-center gap-1 text-xs border border-border px-2 py-1">
+              <Pencil size={11} /> Edit
+            </button>
+          )}
+          {confirmDel ? (
+            <div className="flex items-center gap-2">
+              <span className="text-red-500 text-sm">Delete company?</span>
+              <button onClick={onDelete} className="text-xs border border-red-400 text-red-500 px-2 py-1 hover:bg-red-50/10">Yes</button>
+              <button onClick={() => setConfirmDel(false)} className="text-xs border border-border text-muted px-2 py-1">No</button>
+            </div>
+          ) : !editing && (
+            <button onClick={() => setConfirmDel(true)} className="text-muted hover:text-red-500"><Trash2 size={16} /></button>
+          )}
+        </div>
       </div>
 
-      {/* Info */}
-      <div className="bg-card border border-border p-4 grid grid-cols-2 gap-4 text-sm">
-        {company.address && (
-          <div><span className="text-xs text-muted block">Address</span>{company.address}</div>
-        )}
-        {company.phone && (
-          <div><span className="text-xs text-muted block">Phone</span>{company.phone}</div>
-        )}
-        {company.website && (
-          <div className="col-span-2">
-            <span className="text-xs text-muted block">Website</span>
-            <a href={company.website.startsWith("http") ? company.website : `https://${company.website}`}
-              target="_blank" rel="noopener noreferrer"
-              className="text-accent hover:underline flex items-center gap-1"
-            >
-              {company.website} <ExternalLink size={12} />
-            </a>
+      {/* Inline edit form */}
+      {editing ? (
+        <div className="bg-card border border-border p-4 space-y-3">
+          <div><label className={lbl}>Company Name</label><input value={form.name} onChange={(e) => set("name", e.target.value)} className={inp} /></div>
+          <div><label className={lbl}>Industry</label><input value={form.industry} onChange={(e) => set("industry", e.target.value)} className={inp} /></div>
+          <div><label className={lbl}>Address</label><input value={form.address} onChange={(e) => set("address", e.target.value)} className={inp} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Phone</label><input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>
+            <div><label className={lbl}>Website</label><input value={form.website} onChange={(e) => set("website", e.target.value)} placeholder="example.com" className={inp} /></div>
           </div>
-        )}
-      </div>
+          <div className="flex gap-2 pt-1">
+            <button onClick={saveEdit} disabled={!form.name} className="flex items-center gap-1 bg-accent text-white text-sm px-4 py-2 hover:bg-accent/80 disabled:opacity-40"><Check size={13} /> Save</button>
+            <button onClick={() => setEditing(false)} className="text-sm border border-border text-muted px-4 py-2 hover:text-foreground">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        /* Info read-only */
+        <div className="bg-card border border-border p-4 grid grid-cols-2 gap-4 text-sm">
+          {company.address && <div><span className="text-xs text-muted block">Address</span>{company.address}</div>}
+          {company.phone && <div><span className="text-xs text-muted block">Phone</span>{company.phone}</div>}
+          {company.website && (
+            <div className="col-span-2">
+              <span className="text-xs text-muted block">Website</span>
+              <a href={company.website.startsWith("http") ? company.website : `https://${company.website}`}
+                target="_blank" rel="noopener noreferrer"
+                className="text-accent hover:underline flex items-center gap-1"
+              >
+                {company.website} <ExternalLink size={12} />
+              </a>
+            </div>
+          )}
+          {!company.address && !company.phone && !company.website && (
+            <p className="col-span-2 text-muted text-xs">No details — click Edit to add.</p>
+          )}
+        </div>
+      )}
+
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
@@ -496,16 +545,25 @@ function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact,
 
 // ── Customer / Contact detail panel ─────────────────────────
 
-function CustomerDetail({ customer, company, projects, invoices, onDelete, onAddNote }: {
+function CustomerDetail({ customer, company, projects, invoices, onDelete, onAddNote, onUpdate }: {
   customer: Customer;
   company: Company | null;
   projects: CustomWork[];
   invoices: Invoice[];
   onDelete: () => void;
   onAddNote: (text: string) => void;
+  onUpdate: (fields: Partial<Customer>) => void;
 }) {
   const [confirmDel, setConfirmDel] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ name: customer.name, title: customer.title ?? "", email: customer.email ?? "", phone: customer.phone ?? "", address: customer.address ?? "" });
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const totalSpend = projects.reduce((s, p) => s + (p.quoted_amount || 0), 0);
+
+  function saveEdit() {
+    onUpdate({ name: form.name, title: form.title || undefined, email: form.email || undefined, phone: form.phone || undefined, address: form.address || undefined });
+    setEditing(false);
+  }
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -524,23 +582,49 @@ function CustomerDetail({ customer, company, projects, invoices, onDelete, onAdd
             }
           </p>
         </div>
-        {confirmDel ? (
-          <div className="flex items-center gap-2">
-            <span className="text-red-500 text-sm">Delete?</span>
-            <button onClick={onDelete} className="text-xs border border-red-400 text-red-500 px-2 py-1 hover:bg-red-50/10">Yes</button>
-            <button onClick={() => setConfirmDel(false)} className="text-xs border border-border text-muted px-2 py-1">No</button>
-          </div>
-        ) : (
-          <button onClick={() => setConfirmDel(true)} className="text-muted hover:text-red-500"><Trash2 size={16} /></button>
-        )}
+        <div className="flex items-center gap-2">
+          {!editing && !confirmDel && (
+            <button onClick={() => { setForm({ name: customer.name, title: customer.title ?? "", email: customer.email ?? "", phone: customer.phone ?? "", address: customer.address ?? "" }); setEditing(true); }} className="text-muted hover:text-accent flex items-center gap-1 text-xs border border-border px-2 py-1">
+              <Pencil size={11} /> Edit
+            </button>
+          )}
+          {confirmDel ? (
+            <div className="flex items-center gap-2">
+              <span className="text-red-500 text-sm">Delete?</span>
+              <button onClick={onDelete} className="text-xs border border-red-400 text-red-500 px-2 py-1 hover:bg-red-50/10">Yes</button>
+              <button onClick={() => setConfirmDel(false)} className="text-xs border border-border text-muted px-2 py-1">No</button>
+            </div>
+          ) : !editing && (
+            <button onClick={() => setConfirmDel(true)} className="text-muted hover:text-red-500"><Trash2 size={16} /></button>
+          )}
+        </div>
       </div>
 
-      {/* Contact info */}
-      <div className="bg-card border border-border p-4 grid grid-cols-2 gap-4 text-sm">
-        <div><span className="text-xs text-muted block">Email</span>{customer.email || "—"}</div>
-        <div><span className="text-xs text-muted block">Phone</span>{customer.phone || "—"}</div>
-        {customer.address && <div className="col-span-2"><span className="text-xs text-muted block">Address</span>{customer.address}</div>}
-      </div>
+      {/* Inline edit form */}
+      {editing ? (
+        <div className="bg-card border border-border p-4 space-y-3">
+          <div><label className={lbl}>Name</label><input value={form.name} onChange={(e) => set("name", e.target.value)} className={inp} /></div>
+          {customer.type === "Contact" && (
+            <div><label className={lbl}>Title / Role</label><input value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Project Manager" className={inp} /></div>
+          )}
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className={lbl}>Email</label><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inp} /></div>
+            <div><label className={lbl}>Phone</label><input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>
+          </div>
+          <div><label className={lbl}>Address</label><input value={form.address} onChange={(e) => set("address", e.target.value)} className={inp} /></div>
+          <div className="flex gap-2 pt-1">
+            <button onClick={saveEdit} disabled={!form.name} className="flex items-center gap-1 bg-accent text-white text-sm px-4 py-2 hover:bg-accent/80 disabled:opacity-40"><Check size={13} /> Save</button>
+            <button onClick={() => setEditing(false)} className="text-sm border border-border text-muted px-4 py-2 hover:text-foreground">Cancel</button>
+          </div>
+        </div>
+      ) : (
+        /* Contact info read-only */
+        <div className="bg-card border border-border p-4 grid grid-cols-2 gap-4 text-sm">
+          <div><span className="text-xs text-muted block">Email</span>{customer.email || "—"}</div>
+          <div><span className="text-xs text-muted block">Phone</span>{customer.phone || "—"}</div>
+          {customer.address && <div className="col-span-2"><span className="text-xs text-muted block">Address</span>{customer.address}</div>}
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">
