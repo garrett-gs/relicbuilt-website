@@ -99,7 +99,7 @@ function OrdersTab() {
 
   const grandTotal = filtered.reduce((s, p) => s + poTotal(p), 0);
 
-  async function createPO(vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string) {
+  async function createPO(vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string) {
     const total = lineItems.reduce((s, li) => s + li.quantity * li.unit_price, 0);
     const { data } = await axiom.from("purchase_orders").insert({
       po_number: "PO-TEMP",
@@ -111,6 +111,9 @@ function OrdersTab() {
       line_items: lineItems,
       notes: notes || null,
       need_by_date: needByDate || null,
+      delivery_method: deliveryMethod || null,
+      delivery_date: deliveryDate || null,
+      ship_to_address: shipToAddress || null,
       status: "pending",
     }).select().single();
     if (data) {
@@ -171,6 +174,8 @@ function OrdersTab() {
         {filtered.map((po) => {
           const total = poTotal(po);
           const hasLines = po.line_items && po.line_items.length > 0;
+          const hasDelivery = !!(po.delivery_method || po.delivery_date);
+          const hasExpandable = hasLines || hasDelivery;
           const expanded = expandedId === po.id;
           return (
             <div key={po.id} className="bg-card border border-border">
@@ -195,7 +200,7 @@ function OrdersTab() {
                 <div className="flex gap-2 flex-shrink-0 items-center">
                   <button onClick={() => setPrintPO(po)} className="text-muted hover:text-foreground" title="Print"><Printer size={14} /></button>
                   <button onClick={() => setSendPO(po)} className="text-muted hover:text-accent" title="Send"><Send size={14} /></button>
-                  {hasLines && (
+                  {hasExpandable && (
                     <button onClick={() => setExpandedId(expanded ? null : po.id)} className="text-muted hover:text-foreground">
                       {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                     </button>
@@ -251,6 +256,31 @@ function OrdersTab() {
               {!hasLines && po.item_description && (
                 <div className="border-t border-border px-4 py-2 text-sm text-muted">
                   {po.item_description} — Qty: {po.quantity} × {money(po.unit_price)}
+                </div>
+              )}
+              {/* Delivery info */}
+              {expanded && (po.delivery_method || po.delivery_date) && (
+                <div className="border-t border-border px-4 py-3 flex flex-wrap gap-6 text-sm">
+                  {po.delivery_method && (
+                    <div>
+                      <span className="text-xs uppercase tracking-wider text-muted mr-2">Delivery</span>
+                      <span className="font-medium capitalize">
+                        {po.delivery_method === "will_call" ? "Will Call" : po.delivery_method === "ship" ? "Ship to Address" : "Pick Up"}
+                      </span>
+                    </div>
+                  )}
+                  {po.delivery_date && (
+                    <div>
+                      <span className="text-xs uppercase tracking-wider text-muted mr-2">Delivery Date</span>
+                      <span className="font-medium">{new Date(po.delivery_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                    </div>
+                  )}
+                  {po.delivery_method === "ship" && po.ship_to_address && (
+                    <div>
+                      <span className="text-xs uppercase tracking-wider text-muted mr-2">Ship To</span>
+                      <span className="font-medium whitespace-pre-line">{po.ship_to_address}</span>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -337,7 +367,7 @@ function OrdersTab() {
 
 function CreatePOModal({ vendors, onSubmit, onClose }: {
   vendors: Vendor[];
-  onSubmit: (vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string) => void;
+  onSubmit: (vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string) => void;
   onClose: () => void;
 }) {
   const [vendorId, setVendorId] = useState("");
@@ -347,6 +377,9 @@ function CreatePOModal({ vendors, onSubmit, onClose }: {
   const [notes, setNotes] = useState("");
   const [needByDate, setNeedByDate] = useState("");
   const [catalogSearch, setCatalogSearch] = useState("");
+  const [deliveryMethod, setDeliveryMethod] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState("");
+  const [shipToAddress, setShipToAddress] = useState("");
 
   // Load catalog when vendor changes
   useEffect(() => {
@@ -461,6 +494,32 @@ function CreatePOModal({ vendors, onSubmit, onClose }: {
                 )}
               </div>
 
+              {/* Delivery */}
+              <div className="bg-card border border-border p-4 space-y-4">
+                <h3 className="text-xs uppercase tracking-wider text-muted">Delivery</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Method</label>
+                    <select value={deliveryMethod} onChange={(e) => setDeliveryMethod(e.target.value)} className="w-full bg-background border border-border px-3 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent">
+                      <option value="">Select...</option>
+                      <option value="pickup">Pick Up</option>
+                      <option value="will_call">Will Call</option>
+                      <option value="ship">Ship to Address</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Delivery Date</label>
+                    <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="w-full bg-background border border-border px-3 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent" />
+                  </div>
+                </div>
+                {deliveryMethod === "ship" && (
+                  <div>
+                    <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Ship To Address</label>
+                    <textarea value={shipToAddress} onChange={(e) => setShipToAddress(e.target.value)} placeholder={"123 Main St\nCity, State 00000"} className="w-full bg-background border border-border px-3 py-2 text-foreground text-sm focus:outline-none focus:border-accent min-h-[70px] resize-none" />
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Need By</label>
@@ -474,7 +533,7 @@ function CreatePOModal({ vendors, onSubmit, onClose }: {
               </div>
 
               <div className="flex gap-3">
-                <Button onClick={() => onSubmit(vendorId, vendorName, lineItems, notes, needByDate)} disabled={!vendorName || lineItems.length === 0}>Create P.O.</Button>
+                <Button onClick={() => onSubmit(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress)} disabled={!vendorName || lineItems.length === 0}>Create P.O.</Button>
                 <Button variant="outline" onClick={onClose}>Cancel</Button>
               </div>
             </div>

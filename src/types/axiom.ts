@@ -226,6 +226,9 @@ export interface PurchaseOrder {
   custom_work_id?: string;
   status: "pending" | "approved" | "rejected";
   need_by_date?: string;
+  delivery_method?: "pickup" | "will_call" | "ship";
+  delivery_date?: string;
+  ship_to_address?: string;
   attachments: string[];
   approved_by?: string;
   approved_at?: string;

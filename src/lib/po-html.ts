@@ -66,6 +66,32 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
         </tfoot>
       </table>
 
+      ${(po.delivery_method || po.delivery_date) ? `
+        <div style="margin-bottom:24px;padding:16px;background:#f9f9f9;border-left:3px solid #c4a24d;">
+          <p style="margin:0 0 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#888;">Delivery</p>
+          <div style="display:flex;flex-wrap:wrap;gap:32px;">
+            ${po.delivery_method ? `
+              <div>
+                <p style="margin:0;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.08em;">Method</p>
+                <p style="margin:3px 0 0;font-size:14px;font-weight:bold;color:#111;">${po.delivery_method === "will_call" ? "Will Call" : po.delivery_method === "ship" ? "Ship to Address" : "Pick Up"}</p>
+              </div>
+            ` : ""}
+            ${po.delivery_date ? `
+              <div>
+                <p style="margin:0;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.08em;">Delivery Date</p>
+                <p style="margin:3px 0 0;font-size:14px;font-weight:bold;color:#111;">${new Date(po.delivery_date + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</p>
+              </div>
+            ` : ""}
+            ${po.delivery_method === "ship" && po.ship_to_address ? `
+              <div>
+                <p style="margin:0;font-size:11px;color:#888;text-transform:uppercase;letter-spacing:0.08em;">Ship To</p>
+                <p style="margin:3px 0 0;font-size:13px;color:#333;white-space:pre-line;">${po.ship_to_address}</p>
+              </div>
+            ` : ""}
+          </div>
+        </div>
+      ` : ""}
+
       ${po.notes ? `
         <div style="margin-bottom:24px;padding:12px;background:#f9f9f9;border-left:3px solid #c4a24d;">
           <p style="margin:0;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#888;margin-bottom:4px;">Notes</p>
