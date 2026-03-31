@@ -143,6 +143,13 @@ export interface Estimate {
 
 // ── Invoices ────────────────────────────────────────────────
 
+export interface InvoiceLineItem {
+  category: string;
+  description: string;
+  quantity: number;
+  unit_price: number;
+}
+
 export interface Invoice {
   id: string;
   invoice_number: string;
@@ -156,6 +163,7 @@ export interface Invoice {
   delivery_fee: number;
   discount: number;
   tax_rate: number;
+  line_items?: InvoiceLineItem[];
   payments: Payment[];
   status: "unpaid" | "partial" | "paid";
   notes?: string;
