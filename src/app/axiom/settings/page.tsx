@@ -6,7 +6,7 @@ import { Settings, TeamMember } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { Plus, Trash2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatPhone } from "@/lib/utils";
 
 const TABS = ["General", "Team", "Categories", "Terms"] as const;
 type Tab = (typeof TABS)[number];
@@ -63,7 +63,7 @@ export default function SettingsPage() {
         <div className="space-y-4 max-w-lg">
           <Field label="Business Name" value={settings.biz_name} onChange={(v) => updateField("biz_name", v)} />
           <Field label="Email" value={settings.biz_email || ""} onChange={(v) => updateField("biz_email", v)} type="email" />
-          <Field label="Phone" value={settings.biz_phone || ""} onChange={(v) => updateField("biz_phone", v)} />
+          <Field label="Phone" value={settings.biz_phone || ""} onChange={(v) => updateField("biz_phone", formatPhone(v))} type="tel" placeholder="(###) ###-####" />
           <Field label="Street Address" value={settings.biz_address || ""} onChange={(v) => updateField("biz_address", v)} />
           <div className="grid grid-cols-3 gap-3">
             <Field label="City" value={settings.biz_city || ""} onChange={(v) => updateField("biz_city", v)} />
@@ -189,11 +189,11 @@ export default function SettingsPage() {
   );
 }
 
-function Field({ label, value, onChange, type = "text" }: { label: string; value: string; onChange: (v: string) => void; type?: string }) {
+function Field({ label, value, onChange, type = "text", placeholder }: { label: string; value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
   return (
     <div>
       <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">{label}</label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
+      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
     </div>
   );
 }

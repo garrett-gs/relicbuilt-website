@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatPhone } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Input, Textarea } from "@/components/ui/Input";
@@ -241,7 +242,8 @@ export default function BookingPage() {
                     id="phone"
                     name="phone"
                     type="tel"
-                    placeholder="(555) 555-5555"
+                    placeholder="(###) ###-####"
+                    onChange={(e) => { e.target.value = formatPhone(e.target.value); }}
                   />
                   <Textarea
                     label="Project Notes"

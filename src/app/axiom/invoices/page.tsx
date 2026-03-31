@@ -7,7 +7,7 @@ import { useAuth } from "@/components/axiom/AuthProvider";
 import { Invoice, InvoiceLineItem, Payment, Settings } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
-import { cn } from "@/lib/utils";
+import { cn, formatPhone } from "@/lib/utils";
 import { Plus, X, Trash2, Printer, DollarSign, Send, CheckCircle, Eye, Search } from "lucide-react";
 import { useRef } from "react";
 
@@ -308,7 +308,7 @@ function CreateInvoiceForm({ onSubmit, onCancel }: {
     if (!c.id) {
       setForm((f) => ({ ...f, client_name: "", client_email: "", client_phone: "" }));
     } else {
-      setForm((f) => ({ ...f, client_name: c.name, client_email: c.email || "", client_phone: c.phone || "" }));
+      setForm((f) => ({ ...f, client_name: c.name, client_email: c.email || "", client_phone: formatPhone(c.phone || "") }));
     }
   }
 
@@ -318,7 +318,7 @@ function CreateInvoiceForm({ onSubmit, onCancel }: {
       <div className="grid grid-cols-2 gap-4">
         <div><label className={lbl}>Client Name *</label><input value={form.client_name} onChange={(e) => set("client_name", e.target.value)} className={inp} /></div>
         <div><label className={lbl}>Client Email</label><input type="email" value={form.client_email} onChange={(e) => set("client_email", e.target.value)} className={inp} /></div>
-        <div><label className={lbl}>Client Phone</label><input value={form.client_phone} onChange={(e) => set("client_phone", e.target.value)} className={inp} /></div>
+        <div><label className={lbl}>Client Phone</label><input type="tel" value={form.client_phone} onChange={(e) => set("client_phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>
         <div><label className={lbl}>P.O. / Reference #</label><input value={form.reference_number} onChange={(e) => set("reference_number", e.target.value)} className={inp} /></div>
       </div>
       <div><label className={lbl}>Project / Description</label><input value={form.description} onChange={(e) => set("description", e.target.value)} className={inp} /></div>
@@ -395,7 +395,7 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
       <div className="grid grid-cols-2 gap-4">
         <div><label className={lbl}>Client Name</label><input value={inv.client_name} onChange={(e) => mark({ client_name: e.target.value })} className={inp} /></div>
         <div><label className={lbl}>Email</label><input type="email" value={inv.client_email || ""} onChange={(e) => mark({ client_email: e.target.value })} className={inp} /></div>
-        <div><label className={lbl}>Phone</label><input value={inv.client_phone || ""} onChange={(e) => mark({ client_phone: e.target.value })} className={inp} /></div>
+        <div><label className={lbl}>Phone</label><input type="tel" value={inv.client_phone || ""} onChange={(e) => mark({ client_phone: formatPhone(e.target.value) })} placeholder="(###) ###-####" className={inp} /></div>
         <div><label className={lbl}>P.O. / Reference #</label><input value={inv.reference_number || ""} onChange={(e) => mark({ reference_number: e.target.value })} className={inp} /></div>
         <div><label className={lbl}>Issued Date</label><input type="date" value={inv.issued_date || ""} onChange={(e) => mark({ issued_date: e.target.value })} className={inp} /></div>
         <div><label className={lbl}>Due Date</label><input type="date" value={inv.due_date || ""} onChange={(e) => mark({ due_date: e.target.value })} className={inp} /></div>

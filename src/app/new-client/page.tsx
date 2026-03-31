@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatPhone } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { Input, Textarea, Select } from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -103,7 +104,8 @@ export default function NewClientPage() {
               id="phone"
               name="phone"
               type="tel"
-              placeholder="(555) 555-5555"
+              placeholder="(###) ###-####"
+              onChange={(e) => { e.target.value = formatPhone(e.target.value); }}
             />
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">

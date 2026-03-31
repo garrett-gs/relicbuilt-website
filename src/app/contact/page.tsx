@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatPhone } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { Input, Textarea } from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
@@ -93,7 +94,8 @@ export default function ContactPage() {
                 id="phone"
                 name="phone"
                 type="tel"
-                placeholder="(555) 555-5555"
+                placeholder="(###) ###-####"
+                onChange={(e) => { e.target.value = formatPhone(e.target.value); }}
               />
               <Input
                 label="Subject"

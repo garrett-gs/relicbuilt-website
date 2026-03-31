@@ -7,7 +7,7 @@ import { useAuth } from "@/components/axiom/AuthProvider";
 import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
-import { cn } from "@/lib/utils";
+import { cn, formatPhone } from "@/lib/utils";
 import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { generateProposalHtml } from "@/lib/proposal-html";
@@ -364,7 +364,7 @@ function CreateProjectForm({ onSubmit, onCancel }: { onSubmit: (form: Record<str
         customer_id: c.id,
         client_name: c.name,
         client_email: c.email || "",
-        client_phone: c.phone || "",
+        client_phone: formatPhone(c.phone || ""),
       }));
     }
   }
@@ -377,7 +377,7 @@ function CreateProjectForm({ onSubmit, onCancel }: { onSubmit: (form: Record<str
 
       <div className="grid grid-cols-2 gap-4">
         <Field label="Client Name" value={form.client_name} onChange={(v) => set("client_name", v)} />
-        <Field label="Client Phone" value={form.client_phone} onChange={(v) => set("client_phone", v)} />
+        <Field label="Client Phone" value={form.client_phone} onChange={(v) => set("client_phone", formatPhone(v))} />
       </div>
       <Field label="Client Email" value={form.client_email} onChange={(v) => set("client_email", v)} type="email" />
 
@@ -507,7 +507,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       setCustomerName(c.name);
       setClientName(c.name);
       setClientEmail(c.email || "");
-      setClientPhone(c.phone || "");
+      setClientPhone(formatPhone(c.phone || ""));
     }
     markDirty();
   }
@@ -559,7 +559,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       <div className="grid grid-cols-2 gap-4">
         <Field label="Client Name" value={clientName} onChange={(v) => { setClientName(v); markDirty(); }} />
         <Field label="Client Email" value={clientEmail} onChange={(v) => { setClientEmail(v); markDirty(); }} type="email" />
-        <Field label="Client Phone" value={clientPhone} onChange={(v) => { setClientPhone(v); markDirty(); }} />
+        <Field label="Client Phone" value={clientPhone} onChange={(v) => { setClientPhone(formatPhone(v)); markDirty(); }} />
         <div>
           <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Budget Range</label>
           <select value={budgetRange} onChange={(e) => { setBudgetRange(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">

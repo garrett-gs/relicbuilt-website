@@ -6,7 +6,7 @@ import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { Customer, CustomerNote, CustomWork, Invoice } from "@/types/axiom";
 import Button from "@/components/ui/Button";
-import { cn } from "@/lib/utils";
+import { cn, formatPhone } from "@/lib/utils";
 import { Plus, X, Search, Trash2 } from "lucide-react";
 
 function money(n: number) {
@@ -208,7 +208,7 @@ function CustomerForm({ onSubmit, onCancel }: { onSubmit: (f: Record<string, str
         </div>
         <div>
           <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Phone</label>
-          <input value={form.phone} onChange={(e) => set("phone", e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
+          <input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
         </div>
       </div>
       <div>
