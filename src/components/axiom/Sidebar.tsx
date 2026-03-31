@@ -32,7 +32,6 @@ const navSections = [
     items: [
       { href: "/axiom/dashboard", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/axiom/tasks", icon: CheckSquare, label: "Tasks" },
-      { href: "/axiom/my-tasks", icon: ListTodo, label: "My Tasks" },
     ],
   },
   {

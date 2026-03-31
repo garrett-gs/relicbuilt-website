@@ -365,7 +365,6 @@ export type AxiomPage =
   | "dashboard"
   | "projects"
   | "tasks"
-  | "my-tasks"
   | "customers"
   | "companies"
   | "invoices"
