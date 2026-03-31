@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { Customer, CustomerNote, Company, CustomWork, Invoice } from "@/types/axiom";
 import Button from "@/components/ui/Button";
+import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 import { cn, formatPhone } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2,
@@ -440,7 +441,15 @@ function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact,
         <div className="bg-card border border-border p-4 space-y-3">
           <div><label className={lbl}>Company Name</label><input value={form.name} onChange={(e) => set("name", e.target.value)} className={inp} /></div>
           <div><label className={lbl}>Industry</label><input value={form.industry} onChange={(e) => set("industry", e.target.value)} className={inp} /></div>
-          <div><label className={lbl}>Address</label><input value={form.address} onChange={(e) => set("address", e.target.value)} className={inp} /></div>
+          <div>
+            <label className={lbl}>Address</label>
+            <AddressAutocomplete
+              value={form.address}
+              onChange={(v) => set("address", v)}
+              onSelect={(r) => set("address", r.formatted)}
+              className={inp}
+            />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div><label className={lbl}>Phone</label><input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>
             <div><label className={lbl}>Website</label><input value={form.website} onChange={(e) => set("website", e.target.value)} placeholder="example.com" className={inp} /></div>
@@ -611,7 +620,7 @@ function CustomerDetail({ customer, company, projects, invoices, onDelete, onAdd
             <div><label className={lbl}>Email</label><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inp} /></div>
             <div><label className={lbl}>Phone</label><input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>
           </div>
-          <div><label className={lbl}>Address</label><input value={form.address} onChange={(e) => set("address", e.target.value)} className={inp} /></div>
+          <div><label className={lbl}>Address</label><AddressAutocomplete value={form.address} onChange={(v) => set("address", v)} onSelect={(r) => set("address", r.formatted)} className={inp} /></div>
           <div className="flex gap-2 pt-1">
             <button onClick={saveEdit} disabled={!form.name} className="flex items-center gap-1 bg-accent text-white text-sm px-4 py-2 hover:bg-accent/80 disabled:opacity-40"><Check size={13} /> Save</button>
             <button onClick={() => setEditing(false)} className="text-sm border border-border text-muted px-4 py-2 hover:text-foreground">Cancel</button>
@@ -703,7 +712,7 @@ function CompanyForm({ onSubmit, onCancel }: { onSubmit: (f: Record<string, stri
     <div className="space-y-4">
       <div><label className={lbl}>Company Name *</label><input value={form.name} onChange={(e) => set("name", e.target.value)} className={inp} /></div>
       <div><label className={lbl}>Industry</label><input value={form.industry} onChange={(e) => set("industry", e.target.value)} className={inp} /></div>
-      <div><label className={lbl}>Address</label><input value={form.address} onChange={(e) => set("address", e.target.value)} className={inp} /></div>
+      <div><label className={lbl}>Address</label><AddressAutocomplete value={form.address} onChange={(v) => set("address", v)} onSelect={(r) => set("address", r.formatted)} className={inp} /></div>
       <div className="grid grid-cols-2 gap-4">
         <div><label className={lbl}>Phone</label><input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>
         <div><label className={lbl}>Website</label><input value={form.website} onChange={(e) => set("website", e.target.value)} placeholder="relicbuilt.com" className={inp} /></div>

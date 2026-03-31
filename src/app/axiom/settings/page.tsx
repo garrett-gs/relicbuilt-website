@@ -7,6 +7,7 @@ import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { Plus, Trash2 } from "lucide-react";
 import { cn, formatPhone } from "@/lib/utils";
+import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 
 const TABS = ["General", "Team", "Categories", "Terms"] as const;
 type Tab = (typeof TABS)[number];
@@ -64,7 +65,19 @@ export default function SettingsPage() {
           <Field label="Business Name" value={settings.biz_name} onChange={(v) => updateField("biz_name", v)} />
           <Field label="Email" value={settings.biz_email || ""} onChange={(v) => updateField("biz_email", v)} type="email" />
           <Field label="Phone" value={settings.biz_phone || ""} onChange={(v) => updateField("biz_phone", formatPhone(v))} type="tel" placeholder="(###) ###-####" />
-          <Field label="Street Address" value={settings.biz_address || ""} onChange={(v) => updateField("biz_address", v)} />
+          <div>
+            <label className="block text-xs text-muted mb-1">Street Address</label>
+            <AddressAutocomplete
+              value={settings.biz_address || ""}
+              onChange={(v) => updateField("biz_address", v)}
+              onSelect={(r) => {
+                setSettings((s) => s ? { ...s, biz_address: r.street, biz_city: r.city, biz_state: r.state, biz_zip: r.zip } : s);
+                setDirty(true);
+                setSaved(false);
+              }}
+              className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+            />
+          </div>
           <div className="grid grid-cols-3 gap-3">
             <Field label="City" value={settings.biz_city || ""} onChange={(v) => updateField("biz_city", v)} />
             <Field label="State" value={settings.biz_state || ""} onChange={(v) => updateField("biz_state", v)} />

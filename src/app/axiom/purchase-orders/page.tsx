@@ -7,6 +7,7 @@ import { useAuth } from "@/components/axiom/AuthProvider";
 import { PurchaseOrder, POLineItem, Vendor, CatalogItem } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 import {
   Plus, X, Search, Check, XCircle, RotateCcw, Trash2,
   ChevronDown, ChevronUp, Package, Send, Printer,
@@ -515,7 +516,7 @@ function CreatePOModal({ vendors, onSubmit, onClose }: {
                 {deliveryMethod === "ship" && (
                   <div>
                     <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Ship To Address</label>
-                    <textarea value={shipToAddress} onChange={(e) => setShipToAddress(e.target.value)} placeholder={"123 Main St\nCity, State 00000"} className="w-full bg-background border border-border px-3 py-2 text-foreground text-sm focus:outline-none focus:border-accent min-h-[70px] resize-none" />
+                    <AddressAutocomplete value={shipToAddress} onChange={setShipToAddress} onSelect={(r) => setShipToAddress(r.formatted)} className="w-full bg-background border border-border px-3 py-2 text-foreground text-sm focus:outline-none focus:border-accent" />
                   </div>
                 )}
               </div>
