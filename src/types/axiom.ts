@@ -364,6 +364,7 @@ export interface Settings {
   reminder_interval_days: number;
   team_members: TeamMember[];
   categories: string[];
+  receipts_pin?: string;
   created_at: string;
 }
 

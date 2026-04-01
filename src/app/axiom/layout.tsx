@@ -10,7 +10,7 @@ function AxiomShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
   // Public routes — no auth required
-  if (pathname.startsWith("/axiom/portal/") || pathname === "/axiom/timeclock") {
+  if (pathname.startsWith("/axiom/portal/") || pathname === "/axiom/timeclock" || pathname === "/axiom/receipts") {
     return <>{children}</>;
   }
 

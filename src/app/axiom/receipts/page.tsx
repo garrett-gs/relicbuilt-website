@@ -3,9 +3,88 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { CustomWork } from "@/types/axiom";
-import { Camera, Check, Plus, X, Loader2, Trash2 } from "lucide-react";
+import { Camera, Check, Plus, X, Loader2, Trash2, Delete } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+
+// ── PIN Gate ─────────────────────────────────────────────────
+
+const PIN_SESSION_KEY = "relic_receipts_pin_ok";
+
+function PinGate({ onUnlock }: { onUnlock: () => void }) {
+  const [entry, setEntry] = useState("");
+  const [shake, setShake] = useState(false);
+  const [checking, setChecking] = useState(false);
+
+  async function checkPin(pin: string) {
+    setChecking(true);
+    const { data } = await axiom.from("settings").select("receipts_pin").limit(1).single();
+    setChecking(false);
+    if (data?.receipts_pin && pin === data.receipts_pin) {
+      sessionStorage.setItem(PIN_SESSION_KEY, "1");
+      onUnlock();
+    } else {
+      setShake(true);
+      setTimeout(() => { setShake(false); setEntry(""); }, 600);
+    }
+  }
+
+  function press(val: string) {
+    if (entry.length >= 4) return;
+    const next = entry + val;
+    setEntry(next);
+    if (next.length === 4) checkPin(next);
+  }
+
+  function del() { setEntry((e) => e.slice(0, -1)); }
+
+  const pad = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 gap-8">
+      <div className="text-center">
+        <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center mx-auto mb-4">
+          <Camera size={22} className="text-accent" />
+        </div>
+        <h1 className="text-2xl font-heading font-bold">RELIC Receipts</h1>
+        <p className="text-muted text-sm mt-1">Enter your PIN to continue</p>
+      </div>
+
+      {/* Dots */}
+      <div className={cn("flex gap-4 transition-transform", shake && "animate-[shake_0.4s_ease-in-out]")}>
+        {[0,1,2,3].map((i) => (
+          <div
+            key={i}
+            className={cn(
+              "w-4 h-4 rounded-full border-2 transition-colors",
+              i < entry.length ? "bg-accent border-accent" : "border-border bg-transparent"
+            )}
+          />
+        ))}
+      </div>
+
+      {/* Numpad */}
+      <div className="grid grid-cols-3 gap-3 w-64">
+        {pad.map((k, i) => k === "" ? (
+          <div key={i} />
+        ) : k === "⌫" ? (
+          <button key={i} onPointerDown={del} className="h-16 rounded-lg bg-card border border-border flex items-center justify-center text-muted hover:text-foreground active:scale-95 transition-transform">
+            <Delete size={20} />
+          </button>
+        ) : (
+          <button
+            key={i}
+            onPointerDown={() => press(k)}
+            disabled={checking}
+            className="h-16 rounded-lg bg-card border border-border text-xl font-medium text-foreground hover:border-accent hover:text-accent active:scale-95 transition-all"
+          >
+            {checking && entry.length === 4 ? <Loader2 size={18} className="animate-spin mx-auto text-accent" /> : k}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface LineItem {
   description: string;
@@ -42,6 +121,18 @@ const money = (n: number) => `$${(n || 0).toFixed(2)}`;
 type Step = "capture" | "parsing" | "review" | "saving" | "saved";
 
 export default function ReceiptsPage() {
+  const [pinOk, setPinOk] = useState(false);
+
+  useEffect(() => {
+    if (sessionStorage.getItem(PIN_SESSION_KEY) === "1") setPinOk(true);
+  }, []);
+
+  if (!pinOk) return <PinGate onUnlock={() => setPinOk(true)} />;
+
+  return <ReceiptsMain />;
+}
+
+function ReceiptsMain() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("capture");
   const [imageUrl, setImageUrl] = useState("");

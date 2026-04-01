@@ -83,6 +83,19 @@ export default function SettingsPage() {
             <Field label="State" value={settings.biz_state || ""} onChange={(v) => updateField("biz_state", v)} />
             <Field label="ZIP" value={settings.biz_zip || ""} onChange={(v) => updateField("biz_zip", v)} />
           </div>
+          <div>
+            <label className="block text-xs text-muted mb-1">Mobile Receipt PIN</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              value={settings.receipts_pin || ""}
+              onChange={(e) => updateField("receipts_pin", e.target.value.replace(/\D/g, "").slice(0, 4))}
+              placeholder="4-digit PIN"
+              className="w-32 bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent tracking-[0.4em] font-mono"
+            />
+            <p className="text-xs text-muted mt-1">Used to access the Receipts page on mobile without a full login.</p>
+          </div>
           <Field label="Accent Color" value={settings.accent_color} onChange={(v) => updateField("accent_color", v)} />
           <div className="flex gap-2 mt-2">
             {["#c4a24d", "#1e3a5f", "#3d5a3e", "#5a2d5a", "#8b1a1a", "#1a5a5a", "#2d3a6b", "#1a1a1a"].map((c) => (
