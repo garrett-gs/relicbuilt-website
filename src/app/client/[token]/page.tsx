@@ -365,25 +365,25 @@ export default function ClientPortalPage() {
                       {project.budget_range && (
                         <div className="bg-gray-50 border border-gray-200 p-3">
                           <p className="text-xs text-gray-500 mb-1">Budget</p>
-                          <p className="text-sm font-medium">{project.budget_range}</p>
+                          <p className="text-sm font-medium text-gray-900">{project.budget_range}</p>
                         </div>
                       )}
                       {project.timeline && (
                         <div className="bg-gray-50 border border-gray-200 p-3">
                           <p className="text-xs text-gray-500 mb-1">Timeline</p>
-                          <p className="text-sm font-medium">{project.timeline}</p>
+                          <p className="text-sm font-medium text-gray-900">{project.timeline}</p>
                         </div>
                       )}
                       {project.due_date && (
                         <div className="bg-gray-50 border border-gray-200 p-3">
                           <p className="text-xs text-gray-500 mb-1">Due Date</p>
-                          <p className="text-sm font-medium">{new Date(project.due_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
+                          <p className="text-sm font-medium text-gray-900">{new Date(project.due_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
                         </div>
                       )}
                       {project.quoted_amount > 0 && (
                         <div className="bg-gray-50 border border-gray-200 p-3">
                           <p className="text-xs text-gray-500 mb-1">Quote</p>
-                          <p className="text-sm font-medium font-mono">
+                          <p className="text-sm font-medium font-mono text-gray-900">
                             {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(project.quoted_amount)}
                           </p>
                         </div>
