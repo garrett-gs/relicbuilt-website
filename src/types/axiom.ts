@@ -52,6 +52,7 @@ export interface Material {
 
 export interface LaborEntry {
   date: string;
+  description?: string;
   hours: number;
   rate: number;
   cost: number;

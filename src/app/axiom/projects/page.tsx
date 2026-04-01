@@ -535,7 +535,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   }
   function removeMaterial(i: number) { setMaterials(materials.filter((_, idx) => idx !== i)); markDirty(); }
 
-  function addLabor() { setLabor([...labor, { date: new Date().toISOString().split("T")[0], hours: 0, rate: 60, cost: 0 }]); markDirty(); }
+  function addLabor() { setLabor([...labor, { date: new Date().toISOString().split("T")[0], description: "", hours: 0, rate: 60, cost: 0 }]); markDirty(); }
   function updateLabor(i: number, field: keyof LaborEntry, value: string | number) {
     const updated = [...labor];
     (updated[i] as unknown as Record<string, string | number>)[field] = value;
@@ -710,12 +710,21 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         ) : (
           <div className="space-y-2">
             {labor.map((l, i) => (
-              <div key={i} className="grid grid-cols-[120px_80px_80px_80px_32px] gap-2 items-center">
-                <input type="date" value={l.date} onChange={(e) => updateLabor(i, "date", e.target.value)} className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
-                <input type="number" value={l.hours || ""} onChange={(e) => updateLabor(i, "hours", Number(e.target.value))} placeholder="Hrs" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
-                <input type="number" value={l.rate || ""} onChange={(e) => updateLabor(i, "rate", Number(e.target.value))} placeholder="Rate" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
-                <span className="text-sm font-mono text-right">{money(l.cost || 0)}</span>
-                <button onClick={() => removeLabor(i)} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
+              <div key={i} className="bg-card border border-border p-2 space-y-1.5">
+                <input
+                  type="text"
+                  value={l.description || ""}
+                  onChange={(e) => updateLabor(i, "description", e.target.value)}
+                  placeholder="Description (e.g. Welding, Assembly…)"
+                  className="w-full bg-background border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
+                />
+                <div className="grid grid-cols-[120px_80px_80px_80px_32px] gap-2 items-center">
+                  <input type="date" value={l.date} onChange={(e) => updateLabor(i, "date", e.target.value)} className="bg-background border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent" />
+                  <input type="number" value={l.hours || ""} onChange={(e) => updateLabor(i, "hours", Number(e.target.value))} placeholder="Hrs" className="bg-background border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
+                  <input type="number" value={l.rate || ""} onChange={(e) => updateLabor(i, "rate", Number(e.target.value))} placeholder="Rate" className="bg-background border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
+                  <span className="text-sm font-mono text-right">{money(l.cost || 0)}</span>
+                  <button onClick={() => removeLabor(i)} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
+                </div>
               </div>
             ))}
             <p className="text-right text-sm font-mono text-muted">Total: {money(laborTotal)}</p>
