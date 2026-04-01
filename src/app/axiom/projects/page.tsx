@@ -661,8 +661,8 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       </div>
 
       {/* Profit box */}
-      <div className="bg-card border border-border p-4">
-        <h3 className="text-xs uppercase tracking-wider text-muted mb-3">Profit Analysis</h3>
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
+        <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3 mb-4">Profit Analysis</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
           <div>
             <span className="text-muted block text-xs">Quoted</span>
@@ -688,7 +688,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       {/* Materials */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs uppercase tracking-wider text-muted">Materials</h3>
+          <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Materials</h3>
           <button onClick={addMaterial} className="text-accent text-xs flex items-center gap-1"><Plus size={12} /> Add</button>
         </div>
         {materials.length === 0 ? (
@@ -711,7 +711,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       {/* Labor */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs uppercase tracking-wider text-muted">Labor Log</h3>
+          <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Labor Log</h3>
           <button onClick={addLabor} className="text-accent text-xs flex items-center gap-1"><Plus size={12} /> Add</button>
         </div>
         {labor.length === 0 ? (
@@ -742,7 +742,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       <div className="border border-border">
         <div className="bg-card px-4 py-3 flex items-center justify-between border-b border-border">
           <div>
-            <h3 className="text-xs uppercase tracking-wider text-muted font-medium">Proposal Content</h3>
+            <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Proposal Content</h3>
             <p className="text-xs text-muted mt-0.5 opacity-60">Highlights and visuals shown in the generated proposal</p>
           </div>
           <ClipboardList size={14} className="text-muted" />
@@ -860,9 +860,9 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       </div>
 
       {/* Portal */}
-      <div className="bg-card border border-border p-4">
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs uppercase tracking-wider text-muted">Client Portal</h3>
+          <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Client Portal</h3>
           <button onClick={onTogglePortal} className={cn("text-xs px-3 py-1 border rounded", project.portal_enabled ? "border-green-500 text-green-500" : "border-border text-muted")}>
             {project.portal_enabled ? "Enabled" : "Disabled"}
           </button>
@@ -883,7 +883,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 
             {/* Send Approval Request */}
             <div className="border-t border-border pt-4">
-              <h4 className="text-xs uppercase tracking-wider text-muted mb-3">Send Approval Request</h4>
+              <h4 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3 mb-3">Send Approval Request</h4>
               <div className="space-y-2">
                 <input
                   value={approvalDesc}
@@ -914,7 +914,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             {/* Approvals list */}
             {approvals.length > 0 && (
               <div className="border-t border-border pt-4 space-y-2">
-                <h4 className="text-xs uppercase tracking-wider text-muted mb-2">Approval Requests</h4>
+                <h4 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3 mb-2">Approval Requests</h4>
                 {approvals.map((a) => (
                   <div key={a.id} className="bg-background border border-border p-3 text-xs space-y-1">
                     <div className="flex justify-between items-start gap-2">
@@ -940,7 +940,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 
             {/* Communication thread */}
             <div className="border-t border-border pt-4">
-              <h4 className="text-xs uppercase tracking-wider text-muted mb-3">Communication</h4>
+              <h4 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3 mb-3">Communication</h4>
               <div className="space-y-2 mb-3 max-h-64 overflow-y-auto">
                 {comments.length === 0 && <p className="text-muted text-xs">No messages yet.</p>}
                 {comments.map((c) => (
