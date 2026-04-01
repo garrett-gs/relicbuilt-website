@@ -115,8 +115,9 @@ export default function ReceiptsPage() {
         }))
       );
       setTax(Number(parsed.tax) || 0);
-    } catch {
-      setError("Could not auto-parse. Review and fill in items manually.");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(`Parse error: ${msg}`);
       setItems([{ description: "", qty: 1, unit_price: 0, total: 0 }]);
     }
 
