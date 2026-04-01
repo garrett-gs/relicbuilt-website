@@ -229,8 +229,15 @@ export default function ClientPortalPage() {
                       </span>
                     )}
                   </div>
-                  <div className="shrink-0 text-gray-500">
-                    {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  <div className="flex items-center gap-4 shrink-0">
+                    {project.quoted_amount > 0 && (
+                      <p className="text-sm font-mono font-semibold text-gray-900">
+                        {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(project.quoted_amount)}
+                      </p>
+                    )}
+                    <span className="text-gray-500">
+                      {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </span>
                   </div>
                 </button>
 
