@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
       fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ from: `${bizName} <onboarding@resend.dev>`, to: [to], subject, html }),
+        body: JSON.stringify({ from: `${bizName} <notifications@relicbuilt.com>`, to: [to], subject, html }),
       });
 
     // Notify team members who have portal_updates on
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
         fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ from: `${bizName} <onboarding@resend.dev>`, to: [client_email], subject, html: clientHtml }),
+          body: JSON.stringify({ from: `${bizName} <notifications@relicbuilt.com>`, to: [client_email], subject, html: clientHtml }),
         })
       );
     }
