@@ -17,6 +17,7 @@ import {
   Calculator,
   ShoppingCart,
   Receipt,
+  Camera,
   Activity,
   Settings,
   LogOut,
@@ -53,6 +54,7 @@ const navSections = [
       { href: "/axiom/invoices", icon: FileText, label: "Invoices" },
       { href: "/axiom/purchase-orders", icon: ShoppingCart, label: "Purchase Orders" },
       { href: "/axiom/expenses", icon: Receipt, label: "Expenses" },
+      { href: "/axiom/receipts", icon: Camera, label: "Receipts" },
     ],
   },
   {

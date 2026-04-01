@@ -31,6 +31,12 @@ export const metadata: Metadata = {
     "cabinetry",
     "millwork",
   ],
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    title: "RELIC",
+    statusBarStyle: "black-translucent",
+  },
   openGraph: {
     title: "RELIC | Custom Woodworking & Metalworks",
     description:

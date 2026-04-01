@@ -58,6 +58,28 @@ export interface LaborEntry {
   cost: number;
 }
 
+// ── Receipts ─────────────────────────────────────────────────
+
+export interface ReceiptLineItem {
+  description: string;
+  qty: number;
+  unit_price: number;
+  total: number;
+}
+
+export interface Receipt {
+  id: string;
+  image_url?: string;
+  vendor?: string;
+  receipt_date?: string;
+  total?: number;
+  line_items: ReceiptLineItem[];
+  project_id?: string;
+  project_name?: string;
+  notes?: string;
+  created_at: string;
+}
+
 // ── Tasks ───────────────────────────────────────────────────
 
 export interface Task {

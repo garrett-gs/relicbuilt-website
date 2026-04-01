@@ -1,0 +1,18 @@
+{
+  "name": "RELIC Axiom",
+  "short_name": "RELIC",
+  "description": "RELIC custom fabrication management",
+  "start_url": "/axiom/receipts",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#0a0a0a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/logo-emblem.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
