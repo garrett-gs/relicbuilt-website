@@ -292,6 +292,7 @@ export interface BuildComment {
   author: string;
   body: string;
   is_change_request: boolean;
+  image_url?: string;
   created_at: string;
 }
 
@@ -301,6 +302,8 @@ export interface ApprovalRequest {
   description?: string;
   status: "pending" | "approved" | "rejected";
   client_notes?: string;
+  images?: string[];
+  response_images?: string[];
   responded_at?: string;
   created_at: string;
 }

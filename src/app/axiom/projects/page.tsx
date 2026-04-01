@@ -4,9 +4,10 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
-import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight } from "@/types/axiom";
+import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, BuildComment, ApprovalRequest } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
+import ImageUpload from "@/components/ui/ImageUpload";
 import { cn, formatPhone } from "@/lib/utils";
 import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -438,6 +439,56 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // Communication state
+  const [comments, setComments] = useState<BuildComment[]>([]);
+  const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
+  const [approvalDesc, setApprovalDesc] = useState("");
+  const [approvalImages, setApprovalImages] = useState<string[]>([]);
+  const [newApprovalImage, setNewApprovalImage] = useState("");
+  const [newComment, setNewComment] = useState("");
+  const [commentImage, setCommentImage] = useState("");
+
+  // Load comments & approvals for this project
+  useEffect(() => {
+    if (!project.id) return;
+    Promise.all([
+      axiom.from("build_comments").select("*").eq("custom_work_id", project.id).order("created_at"),
+      axiom.from("approval_requests").select("*").eq("custom_work_id", project.id).order("created_at", { ascending: false }),
+    ]).then(([c, a]) => {
+      if (c.data) setComments(c.data);
+      if (a.data) setApprovals(a.data);
+    });
+  }, [project.id]);
+
+  async function sendApprovalRequest() {
+    if (!approvalDesc.trim()) return;
+    await axiom.from("approval_requests").insert({
+      custom_work_id: project.id,
+      description: approvalDesc.trim(),
+      images: approvalImages,
+      status: "pending",
+    });
+    setApprovalDesc("");
+    setApprovalImages([]);
+    const { data } = await axiom.from("approval_requests").select("*").eq("custom_work_id", project.id).order("created_at", { ascending: false });
+    if (data) setApprovals(data);
+  }
+
+  async function sendComment() {
+    if (!newComment.trim() && !commentImage) return;
+    await axiom.from("build_comments").insert({
+      custom_work_id: project.id,
+      author: "Relic",
+      body: newComment.trim() || " ",
+      is_change_request: false,
+      image_url: commentImage || null,
+    });
+    setNewComment("");
+    setCommentImage("");
+    const { data } = await axiom.from("build_comments").select("*").eq("custom_work_id", project.id).order("created_at");
+    if (data) setComments(data);
+  }
+
   // Resolve customer name for display if we have a customer_id
   useEffect(() => {
     if (project.customer_id) {
@@ -805,6 +856,103 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
               <select value={portalStage} onChange={(e) => { setPortalStage(e.target.value as CustomWork["portal_stage"]); markDirty(); }} className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent">
                 {PORTAL_STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
               </select>
+            </div>
+
+            {/* Send Approval Request */}
+            <div className="border-t border-border pt-4">
+              <h4 className="text-xs uppercase tracking-wider text-muted mb-3">Send Approval Request</h4>
+              <div className="space-y-2">
+                <input
+                  value={approvalDesc}
+                  onChange={(e) => setApprovalDesc(e.target.value)}
+                  placeholder="Describe what needs approval…"
+                  className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+                />
+                <div className="flex flex-wrap gap-2">
+                  {approvalImages.map((url, i) => (
+                    <div key={i} className="relative">
+                      <img src={url} alt="" className="h-16 w-16 object-cover border border-border" />
+                      <button onClick={() => setApprovalImages((prev) => prev.filter((_, j) => j !== i))} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5"><X size={10} /></button>
+                    </div>
+                  ))}
+                  <ImageUpload
+                    label="Add image"
+                    onUploaded={(url) => { setApprovalImages((prev) => [...prev, url]); setNewApprovalImage(url); }}
+                    preview={newApprovalImage && !approvalImages.includes(newApprovalImage) ? newApprovalImage : undefined}
+                    onRemove={() => setNewApprovalImage("")}
+                  />
+                </div>
+                <Button size="sm" onClick={sendApprovalRequest} disabled={!approvalDesc.trim()}>
+                  <Send size={12} className="mr-1" /> Send to Client
+                </Button>
+              </div>
+            </div>
+
+            {/* Approvals list */}
+            {approvals.length > 0 && (
+              <div className="border-t border-border pt-4 space-y-2">
+                <h4 className="text-xs uppercase tracking-wider text-muted mb-2">Approval Requests</h4>
+                {approvals.map((a) => (
+                  <div key={a.id} className="bg-background border border-border p-3 text-xs space-y-1">
+                    <div className="flex justify-between items-start gap-2">
+                      <p className="text-foreground">{a.description}</p>
+                      <span className={cn("px-2 py-0.5 shrink-0 font-medium", a.status === "approved" ? "bg-green-500/20 text-green-400" : a.status === "rejected" ? "bg-red-500/20 text-red-400" : "bg-accent/20 text-accent")}>
+                        {a.status === "pending" ? "Awaiting" : a.status}
+                      </span>
+                    </div>
+                    {a.client_notes && <p className="text-muted italic">&ldquo;{a.client_notes}&rdquo;</p>}
+                    {a.response_images && a.response_images.length > 0 && (
+                      <div className="flex gap-1 flex-wrap pt-1">
+                        {a.response_images.map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                            <img src={url} alt="" className="h-12 w-12 object-cover border border-border hover:border-accent" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Communication thread */}
+            <div className="border-t border-border pt-4">
+              <h4 className="text-xs uppercase tracking-wider text-muted mb-3">Communication</h4>
+              <div className="space-y-2 mb-3 max-h-64 overflow-y-auto">
+                {comments.length === 0 && <p className="text-muted text-xs">No messages yet.</p>}
+                {comments.map((c) => (
+                  <div key={c.id} className={cn("p-3 text-xs border", c.author === "Relic" ? "bg-accent/5 border-accent/20 ml-4" : "bg-background border-border mr-4")}>
+                    <p className="font-medium mb-0.5 text-muted">{c.author}</p>
+                    {c.body.trim() && <p className="text-foreground">{c.body}</p>}
+                    {c.image_url && (
+                      <a href={c.image_url} target="_blank" rel="noopener noreferrer" className="block mt-1.5">
+                        <img src={c.image_url} alt="Attachment" className="max-h-32 max-w-full object-contain border border-border hover:border-accent" />
+                      </a>
+                    )}
+                    <p className="text-muted mt-1">{new Date(c.created_at).toLocaleDateString()}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") sendComment(); }}
+                    placeholder="Send a message to the client…"
+                    className="flex-1 bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+                  />
+                  <button onClick={sendComment} disabled={!newComment.trim() && !commentImage} className="bg-accent text-white px-3 py-2 text-xs hover:bg-accent/80 disabled:opacity-40">
+                    <Send size={13} />
+                  </button>
+                </div>
+                <ImageUpload
+                  label="Attach image"
+                  preview={commentImage}
+                  onUploaded={setCommentImage}
+                  onRemove={() => setCommentImage("")}
+                />
+              </div>
             </div>
           </>
         )}

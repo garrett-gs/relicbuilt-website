@@ -7,6 +7,7 @@ import { Company, CustomWork, BuildFile, BuildComment, ApprovalRequest, Proposal
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Check, ChevronDown, ChevronUp, MessageSquare, FileText, ImageIcon } from "lucide-react";
+import ImageUpload from "@/components/ui/ImageUpload";
 
 const STAGES = [
   { key: "consultation",  label: "Consultation" },
@@ -48,6 +49,8 @@ export default function ClientPortalPage() {
   const [projectsData, setProjectsData] = useState<ProjectData[]>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [newComments, setNewComments] = useState<Record<string, string>>({});
+  const [commentImages, setCommentImages] = useState<Record<string, string>>({});
+  const [approvalResponses, setApprovalResponses] = useState<Record<string, { notes: string; image: string; responding: boolean }>>({});
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -109,17 +112,31 @@ export default function ClientPortalPage() {
       author: clientName || "Client",
       body: text,
       is_change_request: false,
+      image_url: commentImages[projectId] || null,
     });
     setNewComments((prev) => ({ ...prev, [projectId]: "" }));
+    setCommentImages((prev) => ({ ...prev, [projectId]: "" }));
     load();
   }
 
   async function respondToApproval(id: string, status: "approved" | "rejected") {
+    const resp = approvalResponses[id];
     await axiom.from("approval_requests").update({
       status,
+      client_notes: resp?.notes?.trim() || null,
+      response_images: resp?.image ? [resp.image] : [],
       responded_at: new Date().toISOString(),
     }).eq("id", id);
+    setApprovalResponses((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
     load();
+  }
+
+  function startResponding(id: string) {
+    setApprovalResponses((prev) => ({ ...prev, [id]: { notes: "", image: "", responding: true } }));
   }
 
   const totalValue = projectsData.reduce((s, { project }) => s + (project.quoted_amount || 0), 0);
@@ -268,29 +285,71 @@ export default function ClientPortalPage() {
 
                     {/* Pending approvals */}
                     {pendingApprovals.length > 0 && (
-                      <div className="bg-accent/10 border border-accent/30 p-5">
-                        <h3 className="text-xs uppercase tracking-wider text-accent mb-3">Action Required</h3>
-                        <div className="space-y-4">
-                          {pendingApprovals.map((a) => (
-                            <div key={a.id}>
-                              <p className="text-sm mb-3">{a.description}</p>
-                              <div className="flex gap-3">
+                      <div className="bg-amber-50 border border-amber-200 p-5 space-y-5">
+                        <h3 className="text-xs uppercase tracking-wider text-amber-700 font-semibold">Action Required</h3>
+                        {pendingApprovals.map((a) => {
+                          const resp = approvalResponses[a.id];
+                          return (
+                            <div key={a.id} className="space-y-3">
+                              <p className="text-sm font-medium text-gray-900">{a.description}</p>
+
+                              {/* Approval images from Relic */}
+                              {a.images && a.images.length > 0 && (
+                                <div className="flex flex-wrap gap-2">
+                                  {a.images.map((url, i) => (
+                                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                                      <img src={url} alt={`Approval image ${i + 1}`} className="h-24 w-24 object-cover border border-amber-200 hover:border-accent transition-colors" />
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
+
+                              {!resp ? (
                                 <button
-                                  onClick={() => respondToApproval(a.id, "approved")}
-                                  className="flex items-center gap-1.5 bg-accent text-white text-sm px-4 py-2 hover:bg-accent/80"
+                                  onClick={() => startResponding(a.id)}
+                                  className="text-sm bg-gray-900 text-white px-4 py-2 hover:bg-gray-700"
                                 >
-                                  <Check size={13} /> Approve
+                                  Respond
                                 </button>
-                                <button
-                                  onClick={() => respondToApproval(a.id, "rejected")}
-                                  className="text-sm border border-gray-300 text-gray-500 px-4 py-2 hover:text-gray-900"
-                                >
-                                  Request Changes
-                                </button>
-                              </div>
+                              ) : (
+                                <div className="bg-white border border-amber-200 p-4 space-y-3">
+                                  <textarea
+                                    value={resp.notes}
+                                    onChange={(e) => setApprovalResponses((prev) => ({ ...prev, [a.id]: { ...prev[a.id], notes: e.target.value } }))}
+                                    placeholder="Add notes or feedback (optional)…"
+                                    className="w-full border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-accent min-h-[70px] resize-none"
+                                  />
+                                  <ImageUpload
+                                    label="Attach image (optional)"
+                                    preview={resp.image}
+                                    onUploaded={(url) => setApprovalResponses((prev) => ({ ...prev, [a.id]: { ...prev[a.id], image: url } }))}
+                                    onRemove={() => setApprovalResponses((prev) => ({ ...prev, [a.id]: { ...prev[a.id], image: "" } }))}
+                                  />
+                                  <div className="flex gap-3 pt-1">
+                                    <button
+                                      onClick={() => respondToApproval(a.id, "approved")}
+                                      className="flex items-center gap-1.5 bg-green-600 text-white text-sm px-4 py-2 hover:bg-green-700"
+                                    >
+                                      <Check size={13} /> Approve
+                                    </button>
+                                    <button
+                                      onClick={() => respondToApproval(a.id, "rejected")}
+                                      className="text-sm border border-red-300 text-red-600 px-4 py-2 hover:bg-red-50"
+                                    >
+                                      Request Changes
+                                    </button>
+                                    <button
+                                      onClick={() => setApprovalResponses((prev) => { const n = { ...prev }; delete n[a.id]; return n; })}
+                                      className="text-sm text-gray-400 hover:text-gray-600 ml-auto"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
                     )}
 
@@ -413,27 +472,40 @@ export default function ClientPortalPage() {
                               <span className="text-[10px] uppercase tracking-wider text-amber-600 block mb-1">Change Request</span>
                             )}
                             <p className="text-gray-900">{c.body}</p>
+                            {c.image_url && (
+                              <a href={c.image_url} target="_blank" rel="noopener noreferrer" className="block mt-2">
+                                <img src={c.image_url} alt="Attached image" className="max-h-48 max-w-full object-contain border border-gray-200 hover:border-accent transition-colors" />
+                              </a>
+                            )}
                             <p className="text-xs text-gray-500 mt-1">
                               {c.author} &middot; {new Date(c.created_at).toLocaleDateString()}
                             </p>
                           </div>
                         ))}
                       </div>
-                      <div className="flex gap-3">
-                        <input
-                          value={newComments[project.id] || ""}
-                          onChange={(e) => setNewComments((prev) => ({ ...prev, [project.id]: e.target.value }))}
-                          onKeyDown={(e) => { if (e.key === "Enter") submitComment(project.id, project.client_name); }}
-                          placeholder="Leave a comment…"
-                          className="flex-1 bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-accent"
+                      <div className="space-y-2">
+                        <div className="flex gap-3">
+                          <input
+                            value={newComments[project.id] || ""}
+                            onChange={(e) => setNewComments((prev) => ({ ...prev, [project.id]: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === "Enter" && !commentImages[project.id]) submitComment(project.id, project.client_name); }}
+                            placeholder="Leave a comment…"
+                            className="flex-1 bg-white border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-accent"
+                          />
+                          <button
+                            onClick={() => submitComment(project.id, project.client_name)}
+                            disabled={!newComments[project.id]?.trim() && !commentImages[project.id]}
+                            className="bg-accent text-white text-sm px-4 py-2 hover:bg-accent/80 disabled:opacity-40"
+                          >
+                            Send
+                          </button>
+                        </div>
+                        <ImageUpload
+                          label="Attach an image"
+                          preview={commentImages[project.id]}
+                          onUploaded={(url) => setCommentImages((prev) => ({ ...prev, [project.id]: url }))}
+                          onRemove={() => setCommentImages((prev) => ({ ...prev, [project.id]: "" }))}
                         />
-                        <button
-                          onClick={() => submitComment(project.id, project.client_name)}
-                          disabled={!newComments[project.id]?.trim()}
-                          className="bg-accent text-white text-sm px-4 py-2 hover:bg-accent/80 disabled:opacity-40"
-                        >
-                          Send
-                        </button>
                       </div>
                     </div>
 
@@ -443,14 +515,28 @@ export default function ClientPortalPage() {
                         <h3 className="text-xs uppercase tracking-wider text-gray-600 mb-3">Approval History</h3>
                         <div className="space-y-2">
                           {approvals.filter((a) => a.status !== "pending").map((a) => (
-                            <div key={a.id} className="bg-gray-50 border border-gray-200 p-3 text-sm flex justify-between items-start gap-4">
-                              <p className="text-sm">{a.description}</p>
-                              <span className={cn(
-                                "text-xs px-2 py-0.5 shrink-0",
-                                a.status === "approved" ? "bg-green-500/20 text-green-400" : "bg-red-500/20 text-red-400"
-                              )}>
-                                {a.status}
-                              </span>
+                            <div key={a.id} className="bg-white border border-gray-200 p-4 text-sm space-y-2">
+                              <div className="flex justify-between items-start gap-4">
+                                <p className="text-sm text-gray-900">{a.description}</p>
+                                <span className={cn(
+                                  "text-xs px-2 py-0.5 shrink-0 font-medium",
+                                  a.status === "approved" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                                )}>
+                                  {a.status === "approved" ? "Approved" : "Changes Requested"}
+                                </span>
+                              </div>
+                              {a.client_notes && (
+                                <p className="text-xs text-gray-600 italic">&ldquo;{a.client_notes}&rdquo;</p>
+                              )}
+                              {a.response_images && a.response_images.length > 0 && (
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                  {a.response_images.map((url, i) => (
+                                    <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                                      <img src={url} alt="Response image" className="h-20 w-20 object-cover border border-gray-200 hover:border-accent transition-colors" />
+                                    </a>
+                                  ))}
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
