@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { CustomWork } from "@/types/axiom";
-import { Camera, Check, Plus, X, Loader2 } from "lucide-react";
+import { Camera, Check, Plus, X, Loader2, Trash2 } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 
@@ -455,7 +455,19 @@ export default function ReceiptsPage() {
                     <p className="text-xs text-muted mt-0.5">{r.line_items.length} item{r.line_items.length !== 1 ? "s" : ""}</p>
                   )}
                 </div>
-                <p className="text-sm font-mono shrink-0">{money(r.total || 0)}</p>
+                <div className="flex flex-col items-end gap-2 shrink-0">
+                  <p className="text-sm font-mono">{money(r.total || 0)}</p>
+                  <button
+                    onClick={async () => {
+                      if (!confirm("Delete this receipt?")) return;
+                      await axiom.from("receipts").delete().eq("id", r.id);
+                      setReceipts((prev) => prev.filter((x) => x.id !== r.id));
+                    }}
+                    className="text-muted hover:text-red-500 transition-colors"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
