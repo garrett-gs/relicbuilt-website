@@ -710,21 +710,13 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         ) : (
           <div className="space-y-2">
             {labor.map((l, i) => (
-              <div key={i} className="bg-card border border-border p-2 space-y-1.5">
-                <input
-                  type="text"
-                  value={l.description || ""}
-                  onChange={(e) => updateLabor(i, "description", e.target.value)}
-                  placeholder="Description (e.g. Welding, Assembly…)"
-                  className="w-full bg-background border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
-                />
-                <div className="grid grid-cols-[120px_80px_80px_80px_32px] gap-2 items-center">
-                  <input type="date" value={l.date} onChange={(e) => updateLabor(i, "date", e.target.value)} className="bg-background border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent" />
-                  <input type="number" value={l.hours || ""} onChange={(e) => updateLabor(i, "hours", Number(e.target.value))} placeholder="Hrs" className="bg-background border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
-                  <input type="number" value={l.rate || ""} onChange={(e) => updateLabor(i, "rate", Number(e.target.value))} placeholder="Rate" className="bg-background border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
-                  <span className="text-sm font-mono text-right">{money(l.cost || 0)}</span>
-                  <button onClick={() => removeLabor(i)} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
-                </div>
+              <div key={i} className="flex gap-2 items-center">
+                <input type="date" value={l.date} onChange={(e) => updateLabor(i, "date", e.target.value)} className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent shrink-0" />
+                <input type="text" value={l.description || ""} onChange={(e) => updateLabor(i, "description", e.target.value)} placeholder="Description…" className="flex-1 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent min-w-0" />
+                <input type="number" value={l.hours || ""} onChange={(e) => updateLabor(i, "hours", Number(e.target.value))} placeholder="Hrs" className="w-16 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right shrink-0" />
+                <input type="number" value={l.rate || ""} onChange={(e) => updateLabor(i, "rate", Number(e.target.value))} placeholder="Rate" className="w-20 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right shrink-0" />
+                <span className="text-sm font-mono text-right w-20 shrink-0">{money(l.cost || 0)}</span>
+                <button onClick={() => removeLabor(i)} className="text-muted hover:text-red-500 shrink-0"><Trash2 size={14} /></button>
               </div>
             ))}
             <p className="text-right text-sm font-mono text-muted">Total: {money(laborTotal)}</p>
