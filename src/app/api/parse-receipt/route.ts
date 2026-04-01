@@ -49,8 +49,9 @@ Rules:
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      console.error("[parse-receipt] OpenAI error:", err);
-      return NextResponse.json({ error: "OpenAI request failed", detail: err }, { status: 500 });
+      console.error("[parse-receipt] OpenAI error:", JSON.stringify(err));
+      const message = err?.error?.message || err?.error?.code || JSON.stringify(err);
+      return NextResponse.json({ error: message }, { status: 500 });
     }
 
     const data = await res.json();
