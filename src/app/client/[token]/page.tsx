@@ -122,9 +122,13 @@ export default function ClientPortalPage() {
     load();
   }
 
+  const totalValue = projectsData.reduce((s, { project }) => s + (project.quoted_amount || 0), 0);
+  const activeCount = projectsData.filter(({ project }) => project.status !== "complete").length;
+  const completeCount = projectsData.filter(({ project }) => project.status === "complete").length;
+
   if (notFound) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f3f4f6" }}>
         <div className="text-center">
           <Image src="/logo-emblem.png" alt="Relic" width={48} height={48} className="mx-auto mb-4" />
           <h1 className="text-xl font-heading font-bold mb-2">Portal Not Found</h1>
@@ -136,16 +140,16 @@ export default function ClientPortalPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f3f4f6" }}>
         <p className="text-muted animate-pulse">Loading portal…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen" style={{ background: "#f3f4f6" }}>
       {/* Header */}
-      <header className="border-b border-border">
+      <header className="bg-white border-b border-gray-200">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Image src="/logo-emblem.png" alt="Relic" width={32} height={32} />
@@ -166,15 +170,33 @@ export default function ClientPortalPage() {
       <div className="max-w-5xl mx-auto px-6 py-10">
 
         {/* Welcome */}
-        <div className="mb-10">
-          <h1 className="text-3xl font-heading font-bold mb-1">
+        <div className="mb-8">
+          <h1 className="text-3xl font-heading font-bold mb-1 text-gray-900">
             Welcome, {company?.name}
           </h1>
-          <p className="text-muted">
-            {projectsData.length === 0
-              ? "No projects yet — check back soon."
-              : `You have ${projectsData.length} project${projectsData.length !== 1 ? "s" : ""} with Relic.`}
-          </p>
+          <p className="text-gray-500 text-sm">Here&apos;s an overview of your projects with Relic.</p>
+        </div>
+
+        {/* Stat cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+          <div className="bg-white border border-gray-200 p-5">
+            <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Total Projects</p>
+            <p className="text-3xl font-mono font-bold text-gray-900">{projectsData.length}</p>
+          </div>
+          <div className="bg-white border border-gray-200 p-5">
+            <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Active</p>
+            <p className="text-3xl font-mono font-bold text-gray-900">{activeCount}</p>
+          </div>
+          <div className="bg-white border border-gray-200 p-5">
+            <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Completed</p>
+            <p className="text-3xl font-mono font-bold text-gray-900">{completeCount}</p>
+          </div>
+          <div className="bg-white border border-gray-200 p-5">
+            <p className="text-xs uppercase tracking-wider text-gray-400 mb-1">Total Value</p>
+            <p className="text-3xl font-mono font-bold" style={{ color: "var(--accent)" }}>
+              {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(totalValue)}
+            </p>
+          </div>
         </div>
 
         {/* Projects */}
@@ -185,11 +207,11 @@ export default function ClientPortalPage() {
             const pendingApprovals = approvals.filter((a) => a.status === "pending");
 
             return (
-              <div key={project.id} className="border border-border bg-card">
+              <div key={project.id} className="border border-gray-200 bg-white">
                 {/* Project header row */}
                 <button
                   onClick={() => setExpandedId(isOpen ? null : project.id)}
-                  className="w-full text-left px-6 py-4 flex items-center justify-between gap-4 hover:bg-card/80 transition-colors"
+                  className="w-full text-left px-6 py-4 flex items-center justify-between gap-4 hover:bg-gray-50 transition-colors"
                 >
                   <div className="flex items-center gap-4 min-w-0">
                     <div className="min-w-0">
@@ -235,7 +257,7 @@ export default function ClientPortalPage() {
 
                 {/* Expanded content */}
                 {isOpen && (
-                  <div className="border-t border-border px-6 py-6 space-y-8">
+                  <div className="border-t border-gray-200 px-6 py-6 space-y-8">
 
                     {/* Pending approvals */}
                     {pendingApprovals.length > 0 && (
@@ -254,7 +276,7 @@ export default function ClientPortalPage() {
                                 </button>
                                 <button
                                   onClick={() => respondToApproval(a.id, "rejected")}
-                                  className="text-sm border border-border text-muted px-4 py-2 hover:text-foreground"
+                                  className="text-sm border border-gray-300 text-gray-500 px-4 py-2 hover:text-gray-900"
                                 >
                                   Request Changes
                                 </button>
@@ -300,7 +322,7 @@ export default function ClientPortalPage() {
                               <img
                                 src={url}
                                 alt={`Project image ${i + 1}`}
-                                className="w-full aspect-square object-cover border border-border hover:border-accent transition-colors"
+                                className="w-full aspect-square object-cover border border-gray-200 hover:border-accent transition-colors"
                               />
                             </a>
                           ))}
@@ -321,7 +343,7 @@ export default function ClientPortalPage() {
                               href={f.file_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="bg-background border border-border p-3 hover:border-accent transition-colors"
+                              className="bg-gray-50 border border-gray-200 p-3 hover:border-accent transition-colors"
                             >
                               <p className="text-sm font-medium truncate">{f.file_name || "File"}</p>
                               <p className="text-xs text-muted">{f.label || f.file_type || ""}</p>
@@ -334,25 +356,25 @@ export default function ClientPortalPage() {
                     {/* Project details sidebar info */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       {project.budget_range && (
-                        <div className="bg-background border border-border p-3">
+                        <div className="bg-gray-50 border border-gray-200 p-3">
                           <p className="text-xs text-muted mb-1">Budget</p>
                           <p className="text-sm font-medium">{project.budget_range}</p>
                         </div>
                       )}
                       {project.timeline && (
-                        <div className="bg-background border border-border p-3">
+                        <div className="bg-gray-50 border border-gray-200 p-3">
                           <p className="text-xs text-muted mb-1">Timeline</p>
                           <p className="text-sm font-medium">{project.timeline}</p>
                         </div>
                       )}
                       {project.due_date && (
-                        <div className="bg-background border border-border p-3">
+                        <div className="bg-gray-50 border border-gray-200 p-3">
                           <p className="text-xs text-muted mb-1">Due Date</p>
                           <p className="text-sm font-medium">{new Date(project.due_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
                         </div>
                       )}
                       {project.quoted_amount > 0 && (
-                        <div className="bg-background border border-border p-3">
+                        <div className="bg-gray-50 border border-gray-200 p-3">
                           <p className="text-xs text-muted mb-1">Quote</p>
                           <p className="text-sm font-medium font-mono">
                             {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(project.quoted_amount)}
@@ -377,7 +399,7 @@ export default function ClientPortalPage() {
                               "border p-3 text-sm",
                               c.is_change_request
                                 ? "bg-amber-500/5 border-amber-500/30"
-                                : "bg-background border-border"
+                                : "bg-gray-50 border-gray-200"
                             )}
                           >
                             {c.is_change_request && (
@@ -396,7 +418,7 @@ export default function ClientPortalPage() {
                           onChange={(e) => setNewComments((prev) => ({ ...prev, [project.id]: e.target.value }))}
                           onKeyDown={(e) => { if (e.key === "Enter") submitComment(project.id, project.client_name); }}
                           placeholder="Leave a comment…"
-                          className="flex-1 bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+                          className="flex-1 bg-gray-50 border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-accent"
                         />
                         <button
                           onClick={() => submitComment(project.id, project.client_name)}
@@ -414,7 +436,7 @@ export default function ClientPortalPage() {
                         <h3 className="text-xs uppercase tracking-wider text-muted mb-3">Approval History</h3>
                         <div className="space-y-2">
                           {approvals.filter((a) => a.status !== "pending").map((a) => (
-                            <div key={a.id} className="bg-background border border-border p-3 text-sm flex justify-between items-start gap-4">
+                            <div key={a.id} className="bg-gray-50 border border-gray-200 p-3 text-sm flex justify-between items-start gap-4">
                               <p className="text-sm">{a.description}</p>
                               <span className={cn(
                                 "text-xs px-2 py-0.5 shrink-0",
@@ -444,7 +466,7 @@ export default function ClientPortalPage() {
       </div>
 
       {/* Footer */}
-      <footer className="border-t border-border px-6 py-5 mt-16">
+      <footer className="border-t border-gray-200 bg-white px-6 py-5 mt-16">
         <p className="text-center text-xs text-muted">
           R&ensp;E&ensp;L&ensp;I&ensp;C &middot; Custom Fabrications &middot; (402) 235-8179
         </p>
