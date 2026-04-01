@@ -8,6 +8,7 @@ import Image from "next/image";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { Check, MessageSquare } from "lucide-react";
+import { notifyPortal } from "@/lib/notify-portal";
 
 const STAGES = [
   { key: "consultation", label: "Consultation" },
@@ -56,6 +57,13 @@ export default function ClientPortalPage() {
     });
     setNewComment("");
     setIsChangeRequest(false);
+    notifyPortal({
+      event: "client_comment",
+      project_name: project.project_name,
+      from_name: project.client_name || "Client",
+      portal_url: window.location.href,
+      message: newComment.trim(),
+    });
     load();
   }
 
@@ -65,6 +73,14 @@ export default function ClientPortalPage() {
       client_notes: notes,
       responded_at: new Date().toISOString(),
     }).eq("id", id);
+    notifyPortal({
+      event: "approval_response",
+      project_name: project?.project_name || "Project",
+      from_name: project?.client_name || "Client",
+      portal_url: window.location.href,
+      message: notes,
+      extra: status === "approved" ? "✅ Approved" : "🔄 Changes Requested",
+    });
     load();
   }
 
