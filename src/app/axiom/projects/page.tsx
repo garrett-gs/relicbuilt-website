@@ -435,7 +435,6 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [portalStage, setPortalStage] = useState(project.portal_stage || "consultation");
   const [proposalHighlights, setProposalHighlights] = useState<ProposalHighlight[]>(project.proposal_highlights || []);
   const [proposalImages, setProposalImages] = useState<string[]>(project.proposal_images || []);
-  const [newImageUrl, setNewImageUrl] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -561,14 +560,6 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       : [...proposalImages, url]
     );
     markDirty();
-  }
-  function addProposalImageUrl() {
-    const url = newImageUrl.trim();
-    if (url && !proposalImages.includes(url)) {
-      setProposalImages([...proposalImages, url]);
-      setNewImageUrl("");
-      markDirty();
-    }
   }
   function removeProposalImage(i: number) { setProposalImages(proposalImages.filter((_, idx) => idx !== i)); markDirty(); }
 
@@ -821,21 +812,12 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             </div>
           )}
 
-          {/* Add by URL */}
-          <div className="flex gap-2 mb-3">
-            <input
-              type="url"
-              value={newImageUrl}
-              onChange={(e) => setNewImageUrl(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") addProposalImageUrl(); }}
-              placeholder="Paste image URL..."
-              className="flex-1 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+          {/* Upload image */}
+          <div className="mb-3">
+            <ImageUpload
+              label="Upload proposal image"
+              onUploaded={(url) => { setProposalImages((prev) => prev.includes(url) ? prev : [...prev, url]); markDirty(); }}
             />
-            <button
-              onClick={addProposalImageUrl}
-              disabled={!newImageUrl.trim()}
-              className="border border-accent text-accent px-3 py-2 text-xs hover:bg-accent/10 disabled:opacity-40"
-            >Add</button>
           </div>
 
           {/* Selected images row */}
@@ -854,7 +836,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             </div>
           )}
           {proposalImages.length === 0 && (project.inspiration_images || []).length === 0 && (
-            <p className="text-sm text-muted">Paste image URLs above to add visuals to the proposal.</p>
+            <p className="text-sm text-muted">Upload images above to add visuals to the proposal.</p>
           )}
         </div>
       </div>

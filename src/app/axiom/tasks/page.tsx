@@ -11,6 +11,7 @@ import {
   Plus, X, AlertTriangle, Trash2,
   ChevronDown, Folder, FileText, ImageIcon, Link as LinkIcon, BookOpen,
 } from "lucide-react";
+import ImageUpload from "@/components/ui/ImageUpload";
 
 // ── Note type ────────────────────────────────────────────────
 
@@ -458,11 +459,11 @@ function NotesPanel() {
     );
   }
 
-  function insertImage() {
-    const url = imageUrl.trim();
+  function insertImage(urlOverride?: string) {
+    const url = (urlOverride || imageUrl).trim();
     if (!url) return;
     editorRef.current?.focus();
-    document.execCommand("insertHTML", false, `<img src="${url}" alt="" />`);
+    document.execCommand("insertHTML", false, `<img src="${url}" alt="" style="max-width:100%" />`);
     setImageUrl(""); setShowImageInput(false);
   }
 
@@ -561,17 +562,17 @@ function NotesPanel() {
             >File Away</button>
           </div>
 
-          {/* Image URL input */}
+          {/* Image upload */}
           {showImageInput && (
-            <div className="flex gap-1 mb-1.5 shrink-0">
-              <input
-                type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="Paste image URL…"
-                className="flex-1 text-xs bg-card border border-border px-2 py-1.5 text-foreground focus:outline-none focus:border-accent"
-                onKeyDown={(e) => { if (e.key === "Enter") insertImage(); }}
-              />
-              <button onClick={insertImage} className="text-xs border border-accent text-accent px-2 hover:bg-accent/10">Insert</button>
-              <button onClick={() => setShowImageInput(false)} className="text-muted hover:text-foreground"><X size={12} /></button>
+            <div className="mb-1.5 shrink-0 flex items-start gap-2">
+              <div className="flex-1">
+                <ImageUpload
+                  label="Upload image"
+                  onUploaded={(url) => { insertImage(url); }}
+                  className="text-xs"
+                />
+              </div>
+              <button onClick={() => setShowImageInput(false)} className="text-muted hover:text-foreground mt-1"><X size={12} /></button>
             </div>
           )}
 
