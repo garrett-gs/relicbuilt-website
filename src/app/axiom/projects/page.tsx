@@ -876,9 +876,22 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             </div>
             <div>
               <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Portal Stage</label>
-              <select value={portalStage} onChange={(e) => { setPortalStage(e.target.value as CustomWork["portal_stage"]); markDirty(); }} className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent">
-                {PORTAL_STAGES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-              </select>
+              <div className="flex w-full border border-border overflow-hidden">
+                {PORTAL_STAGES.map((s) => (
+                  <button
+                    key={s.key}
+                    onClick={() => { setPortalStage(s.key as CustomWork["portal_stage"]); markDirty(); }}
+                    className={cn(
+                      "flex-1 text-xs py-2 px-1 text-center transition-colors border-r border-border last:border-r-0",
+                      portalStage === s.key
+                        ? "bg-accent text-white font-semibold"
+                        : "bg-background text-muted hover:text-foreground hover:bg-card"
+                    )}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Send Approval Request */}
