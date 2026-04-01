@@ -685,15 +685,51 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         {materials.length === 0 ? (
           <p className="text-muted text-sm">No materials added</p>
         ) : (
-          <div className="space-y-2">
-            {materials.map((m, i) => (
-              <div key={i} className="grid grid-cols-[1fr_1fr_100px_32px] gap-2 items-center">
-                <input value={m.description} onChange={(e) => updateMaterial(i, "description", e.target.value)} placeholder="Description" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
-                <input value={m.vendor} onChange={(e) => updateMaterial(i, "vendor", e.target.value)} placeholder="Vendor" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
-                <input type="number" value={m.cost || ""} onChange={(e) => updateMaterial(i, "cost", Number(e.target.value))} placeholder="Cost" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
-                <button onClick={() => removeMaterial(i)} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
-              </div>
-            ))}
+          <div className="space-y-3">
+            {/* Receipt groups */}
+            {Array.from(new Set(materials.filter(m => m.receipt_id).map(m => m.receipt_id))).map((rid) => {
+              const group = materials.filter(m => m.receipt_id === rid);
+              const groupTotal = group.reduce((s, m) => s + (m.cost || 0), 0);
+              const vendor = group[0]?.vendor || "Receipt";
+              return (
+                <div key={rid} className="border border-border rounded overflow-hidden">
+                  <div className="flex items-center justify-between bg-card px-3 py-2 border-b border-border">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-foreground">{vendor}</span>
+                      <span className="text-xs text-muted">· {group.length} item{group.length !== 1 ? "s" : ""}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-mono text-muted">{money(groupTotal)}</span>
+                      <button onClick={() => { setMaterials(materials.filter(m => m.receipt_id !== rid)); markDirty(); }} className="text-muted hover:text-red-500"><Trash2 size={13} /></button>
+                    </div>
+                  </div>
+                  <div className="divide-y divide-border">
+                    {group.map((m, gi) => {
+                      const globalIdx = materials.findIndex((x, xi) => x.receipt_id === rid && materials.filter((y, yi) => y.receipt_id === rid && yi < xi).length === gi);
+                      return (
+                        <div key={gi} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                          <span className="flex-1 text-foreground truncate">{m.description || <span className="text-muted italic">No description</span>}</span>
+                          <span className="font-mono text-muted shrink-0">{money(m.cost || 0)}</span>
+                          <button onClick={() => removeMaterial(globalIdx)} className="text-muted hover:text-red-500 shrink-0"><X size={12} /></button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            {/* Manual materials */}
+            {materials.filter(m => !m.receipt_id).map((m, i) => {
+              const globalIdx = materials.findIndex((x, xi) => !x.receipt_id && materials.filter((y, yi) => !y.receipt_id && yi < xi).length === i);
+              return (
+                <div key={globalIdx} className="grid grid-cols-[1fr_1fr_100px_32px] gap-2 items-center">
+                  <input value={m.description} onChange={(e) => updateMaterial(globalIdx, "description", e.target.value)} placeholder="Description" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
+                  <input value={m.vendor} onChange={(e) => updateMaterial(globalIdx, "vendor", e.target.value)} placeholder="Vendor" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
+                  <input type="number" value={m.cost || ""} onChange={(e) => updateMaterial(globalIdx, "cost", Number(e.target.value))} placeholder="Cost" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
+                  <button onClick={() => removeMaterial(globalIdx)} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
+                </div>
+              );
+            })}
             <p className="text-right text-sm font-mono text-muted">Total: {money(materialTotal)}</p>
           </div>
         )}

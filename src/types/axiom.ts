@@ -48,6 +48,7 @@ export interface Material {
   description: string;
   vendor: string;
   cost: number;
+  receipt_id?: string;
 }
 
 export interface LaborEntry {
