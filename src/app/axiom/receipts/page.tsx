@@ -16,17 +16,31 @@ function PinGate({ onUnlock }: { onUnlock: () => void }) {
   const [entry, setEntry] = useState("");
   const [shake, setShake] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [hint, setHint] = useState("");
 
   async function checkPin(pin: string) {
     setChecking(true);
-    const { data } = await axiom.from("settings").select("receipts_pin").limit(1).single();
+    setHint("");
+    const { data, error } = await axiom.from("settings").select("receipts_pin").limit(1).single();
     setChecking(false);
-    if (data?.receipts_pin && pin === data.receipts_pin) {
+
+    if (error) {
+      setHint(`DB error: ${error.message}`);
+      setEntry("");
+      return;
+    }
+    if (!data?.receipts_pin) {
+      setHint("No PIN set — go to Settings → General to set one.");
+      setEntry("");
+      return;
+    }
+    if (pin === data.receipts_pin) {
       sessionStorage.setItem(PIN_SESSION_KEY, "1");
       onUnlock();
     } else {
+      setHint("Incorrect PIN");
       setShake(true);
-      setTimeout(() => { setShake(false); setEntry(""); }, 600);
+      setTimeout(() => { setShake(false); setEntry(""); setHint(""); }, 1000);
     }
   }
 
@@ -52,16 +66,19 @@ function PinGate({ onUnlock }: { onUnlock: () => void }) {
       </div>
 
       {/* Dots */}
-      <div className={cn("flex gap-4 transition-transform", shake && "animate-[shake_0.4s_ease-in-out]")}>
-        {[0,1,2,3].map((i) => (
-          <div
-            key={i}
-            className={cn(
-              "w-4 h-4 rounded-full border-2 transition-colors",
-              i < entry.length ? "bg-accent border-accent" : "border-border bg-transparent"
-            )}
-          />
-        ))}
+      <div className="flex flex-col items-center gap-3">
+        <div className={cn("flex gap-4 transition-transform", shake && "animate-[shake_0.4s_ease-in-out]")}>
+          {[0,1,2,3].map((i) => (
+            <div
+              key={i}
+              className={cn(
+                "w-4 h-4 rounded-full border-2 transition-colors",
+                i < entry.length ? "bg-accent border-accent" : "border-border bg-transparent"
+              )}
+            />
+          ))}
+        </div>
+        {hint && <p className="text-xs text-amber-400 text-center max-w-xs">{hint}</p>}
       </div>
 
       {/* Numpad */}
