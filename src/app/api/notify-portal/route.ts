@@ -96,10 +96,11 @@ export async function POST(req: NextRequest) {
     const notifyTeam = ["approval_response", "client_comment"].includes(event);
     const notifyClient = to_client && client_email;
 
+    const teamToNotify = teamMembers.filter((m) => m.notifications?.portal_updates && m.email);
+    console.log("[notify-portal] event:", event, "| notifyTeam:", notifyTeam, "| notifyClient:", !!notifyClient, "| client_email:", client_email, "| team eligible:", teamToNotify.map((m) => m.email));
+
     if (notifyTeam) {
-      teamMembers
-        .filter((m) => m.notifications?.portal_updates && m.email)
-        .forEach((m) => sends.push(sendEmail(m.email)));
+      teamToNotify.forEach((m) => sends.push(sendEmail(m.email)));
     }
 
     if (notifyClient && client_email) {
@@ -120,8 +121,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await Promise.all(sends);
-    return NextResponse.json({ ok: true, sent: sends.length });
+    const results = await Promise.all(sends);
+    const statuses = await Promise.all(results.map(async (r) => ({ status: r.status, body: await r.json().catch(() => ({})) })));
+    console.log("[notify-portal] send results:", JSON.stringify(statuses));
+    return NextResponse.json({ ok: true, sent: sends.length, statuses });
   } catch (err) {
     console.error("notify-portal error:", err);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
