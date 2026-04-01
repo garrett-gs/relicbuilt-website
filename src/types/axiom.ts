@@ -113,6 +113,8 @@ export interface Company {
   industry?: string;
   phone?: string;
   website?: string;
+  portal_token?: string;
+  portal_enabled?: boolean;
   created_at: string;
   updated_at: string;
 }

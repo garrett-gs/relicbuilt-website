@@ -547,6 +547,91 @@ function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact,
           </div>
         </div>
       )}
+
+      {/* Client Portal */}
+      <CompanyPortalSection company={company} onUpdate={onUpdate} />
+    </div>
+  );
+}
+
+// ── Company portal section ───────────────────────────────────
+
+function CompanyPortalSection({ company, onUpdate }: { company: Company; onUpdate: (fields: Partial<Company>) => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const portalUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/client/${company.portal_token}`
+    : "";
+
+  async function enablePortal() {
+    const token = crypto.randomUUID();
+    onUpdate({ portal_token: token, portal_enabled: true });
+  }
+
+  async function disablePortal() {
+    onUpdate({ portal_enabled: false });
+  }
+
+  function copyLink() {
+    navigator.clipboard.writeText(portalUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div>
+      <h3 className="text-xs uppercase tracking-wider text-muted mb-3 flex items-center gap-1.5">
+        <ExternalLink size={11} /> Client Portal
+      </h3>
+      <div className="bg-card border border-border p-4 space-y-3">
+        {!company.portal_enabled || !company.portal_token ? (
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted">No portal active for this company.</p>
+            <button
+              onClick={enablePortal}
+              className="text-xs bg-accent text-white px-3 py-1.5 hover:bg-accent/80"
+            >
+              Enable Portal
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+              <p className="text-sm font-medium">Portal Active</p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                readOnly
+                value={portalUrl}
+                className="flex-1 bg-background border border-border px-3 py-2 text-xs text-muted font-mono focus:outline-none"
+              />
+              <button
+                onClick={copyLink}
+                className="text-xs border border-border px-3 py-2 hover:border-accent hover:text-accent transition-colors whitespace-nowrap"
+              >
+                {copied ? "Copied!" : "Copy Link"}
+              </button>
+            </div>
+            <div className="flex gap-3">
+              <a
+                href={portalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-accent hover:underline flex items-center gap-1"
+              >
+                <ExternalLink size={11} /> Open Portal
+              </a>
+              <button
+                onClick={disablePortal}
+                className="text-xs text-muted hover:text-red-500 transition-colors"
+              >
+                Disable Portal
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
