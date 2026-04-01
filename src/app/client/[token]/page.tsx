@@ -128,11 +128,11 @@ export default function ClientPortalPage() {
 
   if (notFound) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f3f4f6" }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#e2e4e8" }}>
         <div className="text-center">
           <Image src="/logo-emblem.png" alt="Relic" width={48} height={48} className="mx-auto mb-4" />
           <h1 className="text-xl font-heading font-bold mb-2">Portal Not Found</h1>
-          <p className="text-muted text-sm">This portal link is invalid or has been disabled.</p>
+          <p className="text-gray-700 text-sm">This portal link is invalid or has been disabled.</p>
         </div>
       </div>
     );
@@ -140,28 +140,28 @@ export default function ClientPortalPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "#f3f4f6" }}>
-        <p className="text-muted animate-pulse">Loading portal…</p>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#e2e4e8" }}>
+        <p className="text-gray-500 animate-pulse">Loading portal…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen" style={{ background: "#f3f4f6" }}>
+    <div className="min-h-screen" style={{ background: "#e2e4e8" }}>
       {/* Header */}
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Image src="/logo-emblem.png" alt="Relic" width={32} height={32} />
             <div>
-              <p className="font-heading font-bold tracking-widest text-sm">R&ensp;E&ensp;L&ensp;I&ensp;C</p>
-              <p className="text-xs text-muted">Client Portal</p>
+              <p className="font-heading font-bold tracking-widest text-sm text-gray-900">R&ensp;E&ensp;L&ensp;I&ensp;C</p>
+              <p className="text-xs text-gray-600">Client Portal</p>
             </div>
           </div>
           {company && (
             <div className="text-right">
-              <p className="text-sm font-medium">{company.name}</p>
-              {company.industry && <p className="text-xs text-muted">{company.industry}</p>}
+              <p className="text-sm font-semibold text-gray-900">{company.name}</p>
+              {company.industry && <p className="text-xs text-gray-600">{company.industry}</p>}
             </div>
           )}
         </div>
@@ -174,7 +174,7 @@ export default function ClientPortalPage() {
           <h1 className="text-3xl font-heading font-bold mb-1 text-gray-900">
             Welcome, {company?.name}
           </h1>
-          <p className="text-gray-500 text-sm">Here&apos;s an overview of your projects with Relic.</p>
+          <p className="text-gray-700 text-sm">Here&apos;s an overview of your projects with Relic.</p>
         </div>
 
         {/* Stat cards */}
@@ -217,10 +217,10 @@ export default function ClientPortalPage() {
                     <div className="min-w-0">
                       <p className="font-heading font-bold text-base truncate">{project.project_name}</p>
                       {project.timeline && (
-                        <p className="text-xs text-muted mt-0.5">{project.timeline}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">{project.timeline}</p>
                       )}
                     </div>
-                    <span className={cn("text-xs px-2 py-0.5 whitespace-nowrap", STATUS_COLORS[project.status] || "bg-muted/20 text-muted")}>
+                    <span className={cn("text-xs px-2 py-0.5 whitespace-nowrap", STATUS_COLORS[project.status] || "bg-muted/20 text-gray-500")}>
                       {STATUS_LABELS[project.status] || project.status}
                     </span>
                     {pendingApprovals.length > 0 && (
@@ -229,7 +229,7 @@ export default function ClientPortalPage() {
                       </span>
                     )}
                   </div>
-                  <div className="shrink-0 text-muted">
+                  <div className="shrink-0 text-gray-500">
                     {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                   </div>
                 </button>
@@ -246,7 +246,7 @@ export default function ClientPortalPage() {
                             "h-1.5 w-full rounded-full",
                             done ? "bg-accent" : cur ? "bg-accent/50" : "bg-border"
                           )} />
-                          <p className={cn("text-[9px] tracking-wide", cur ? "text-accent" : "text-muted/50")}>
+                          <p className={cn("text-[9px] tracking-wide", cur ? "text-accent" : "text-gray-500/50")}>
                             {stage.label}
                           </p>
                         </div>
@@ -290,20 +290,20 @@ export default function ClientPortalPage() {
                     {/* Description */}
                     {project.project_description && (
                       <div>
-                        <h3 className="text-xs uppercase tracking-wider text-muted mb-3">Project Description</h3>
-                        <p className="text-sm text-muted leading-relaxed">{project.project_description}</p>
+                        <h3 className="text-xs uppercase tracking-wider text-gray-600 mb-3">Project Description</h3>
+                        <p className="text-sm text-gray-500 leading-relaxed">{project.project_description}</p>
                       </div>
                     )}
 
                     {/* Proposal highlights */}
                     {project.proposal_highlights && project.proposal_highlights.length > 0 && (
                       <div>
-                        <h3 className="text-xs uppercase tracking-wider text-muted mb-4">Project Highlights</h3>
+                        <h3 className="text-xs uppercase tracking-wider text-gray-600 mb-4">Project Highlights</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {(project.proposal_highlights as ProposalHighlight[]).map((h, i) => (
                             <div key={i} className="border-l-2 border-accent pl-4 py-1">
                               <p className="text-sm font-semibold mb-1">{h.title}</p>
-                              <p className="text-sm text-muted leading-relaxed">{h.body}</p>
+                              <p className="text-sm text-gray-500 leading-relaxed">{h.body}</p>
                             </div>
                           ))}
                         </div>
@@ -313,7 +313,7 @@ export default function ClientPortalPage() {
                     {/* Gallery */}
                     {project.proposal_images && project.proposal_images.length > 0 && (
                       <div>
-                        <h3 className="text-xs uppercase tracking-wider text-muted mb-4 flex items-center gap-1.5">
+                        <h3 className="text-xs uppercase tracking-wider text-gray-600 mb-4 flex items-center gap-1.5">
                           <ImageIcon size={11} /> Gallery
                         </h3>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -333,7 +333,7 @@ export default function ClientPortalPage() {
                     {/* Files */}
                     {files.length > 0 && (
                       <div>
-                        <h3 className="text-xs uppercase tracking-wider text-muted mb-3 flex items-center gap-1.5">
+                        <h3 className="text-xs uppercase tracking-wider text-gray-600 mb-3 flex items-center gap-1.5">
                           <FileText size={11} /> Drawings &amp; Files
                         </h3>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -346,7 +346,7 @@ export default function ClientPortalPage() {
                               className="bg-gray-50 border border-gray-200 p-3 hover:border-accent transition-colors"
                             >
                               <p className="text-sm font-medium truncate">{f.file_name || "File"}</p>
-                              <p className="text-xs text-muted">{f.label || f.file_type || ""}</p>
+                              <p className="text-xs text-gray-500">{f.label || f.file_type || ""}</p>
                             </a>
                           ))}
                         </div>
@@ -357,25 +357,25 @@ export default function ClientPortalPage() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       {project.budget_range && (
                         <div className="bg-gray-50 border border-gray-200 p-3">
-                          <p className="text-xs text-muted mb-1">Budget</p>
+                          <p className="text-xs text-gray-500 mb-1">Budget</p>
                           <p className="text-sm font-medium">{project.budget_range}</p>
                         </div>
                       )}
                       {project.timeline && (
                         <div className="bg-gray-50 border border-gray-200 p-3">
-                          <p className="text-xs text-muted mb-1">Timeline</p>
+                          <p className="text-xs text-gray-500 mb-1">Timeline</p>
                           <p className="text-sm font-medium">{project.timeline}</p>
                         </div>
                       )}
                       {project.due_date && (
                         <div className="bg-gray-50 border border-gray-200 p-3">
-                          <p className="text-xs text-muted mb-1">Due Date</p>
+                          <p className="text-xs text-gray-500 mb-1">Due Date</p>
                           <p className="text-sm font-medium">{new Date(project.due_date + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
                         </div>
                       )}
                       {project.quoted_amount > 0 && (
                         <div className="bg-gray-50 border border-gray-200 p-3">
-                          <p className="text-xs text-muted mb-1">Quote</p>
+                          <p className="text-xs text-gray-500 mb-1">Quote</p>
                           <p className="text-sm font-medium font-mono">
                             {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(project.quoted_amount)}
                           </p>
@@ -385,12 +385,12 @@ export default function ClientPortalPage() {
 
                     {/* Comments */}
                     <div>
-                      <h3 className="text-xs uppercase tracking-wider text-muted mb-3 flex items-center gap-1.5">
+                      <h3 className="text-xs uppercase tracking-wider text-gray-600 mb-3 flex items-center gap-1.5">
                         <MessageSquare size={11} /> Notes &amp; Comments
                       </h3>
                       <div className="space-y-2 mb-4">
                         {comments.length === 0 && (
-                          <p className="text-muted text-sm">No comments yet.</p>
+                          <p className="text-gray-700 text-sm">No comments yet.</p>
                         )}
                         {comments.map((c) => (
                           <div
@@ -406,7 +406,7 @@ export default function ClientPortalPage() {
                               <span className="text-[10px] uppercase tracking-wider text-amber-500 block mb-1">Change Request</span>
                             )}
                             <p>{c.body}</p>
-                            <p className="text-xs text-muted mt-1">
+                            <p className="text-xs text-gray-500 mt-1">
                               {c.author} &middot; {new Date(c.created_at).toLocaleDateString()}
                             </p>
                           </div>
@@ -433,7 +433,7 @@ export default function ClientPortalPage() {
                     {/* Approval history */}
                     {approvals.filter((a) => a.status !== "pending").length > 0 && (
                       <div>
-                        <h3 className="text-xs uppercase tracking-wider text-muted mb-3">Approval History</h3>
+                        <h3 className="text-xs uppercase tracking-wider text-gray-600 mb-3">Approval History</h3>
                         <div className="space-y-2">
                           {approvals.filter((a) => a.status !== "pending").map((a) => (
                             <div key={a.id} className="bg-gray-50 border border-gray-200 p-3 text-sm flex justify-between items-start gap-4">
@@ -458,7 +458,7 @@ export default function ClientPortalPage() {
         </div>
 
         {projectsData.length === 0 && (
-          <div className="text-center py-20 text-muted">
+          <div className="text-center py-20 text-gray-500">
             <p className="text-lg font-heading mb-2">No projects yet</p>
             <p className="text-sm">Your projects will appear here once they&apos;re created.</p>
           </div>
@@ -467,7 +467,7 @@ export default function ClientPortalPage() {
 
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white px-6 py-5 mt-16">
-        <p className="text-center text-xs text-muted">
+        <p className="text-center text-xs text-gray-500">
           R&ensp;E&ensp;L&ensp;I&ensp;C &middot; Custom Fabrications &middot; (402) 235-8179
         </p>
       </footer>
