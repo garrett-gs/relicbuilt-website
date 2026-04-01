@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { CustomWork } from "@/types/axiom";
-import { Camera, Check, Plus, X, Loader2, Trash2, Delete } from "lucide-react";
+import { Camera, Check, Plus, X, Loader2, Trash2, Delete, ShoppingCart } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
+import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 
 // ── PIN Gate ─────────────────────────────────────────────────
 
@@ -146,6 +147,7 @@ function ReceiptsMain() {
   const [projects, setProjects] = useState<CustomWork[]>([]);
   const [receipts, setReceipts] = useState<ReceiptRecord[]>([]);
   const [error, setError] = useState("");
+  const [poItem, setPoItem] = useState<AddToPOItem | null>(null);
 
   const loadData = useCallback(async () => {
     const [{ data: pw }, { data: rec }] = await Promise.all([
@@ -436,6 +438,12 @@ function ReceiptsMain() {
                       <p className="text-sm font-mono text-right pt-1.5">{money(item.total)}</p>
                     </div>
                   </div>
+                  <button
+                    onClick={() => setPoItem({ description: item.description, qty: item.qty, unit_price: item.unit_price, vendor_name: vendor })}
+                    className="flex items-center gap-1 text-xs text-muted hover:text-accent transition-colors"
+                  >
+                    <ShoppingCart size={12} /> Add to P.O.
+                  </button>
                 </div>
               ))}
             </div>
@@ -547,7 +555,21 @@ function ReceiptsMain() {
                     {r.project_name ? ` · ${r.project_name}` : ""}
                   </p>
                   {r.line_items?.length > 0 && (
-                    <p className="text-xs text-muted mt-0.5">{r.line_items.length} item{r.line_items.length !== 1 ? "s" : ""}</p>
+                    <div className="mt-1.5 space-y-1">
+                      {r.line_items.map((li, li_i) => (
+                        <div key={li_i} className="flex items-center gap-2 text-xs">
+                          <span className="flex-1 text-muted truncate">{li.description}</span>
+                          <span className="font-mono text-muted shrink-0">{money(li.total)}</span>
+                          <button
+                            onClick={() => setPoItem({ description: li.description, qty: li.qty, unit_price: li.unit_price, vendor_name: r.vendor })}
+                            className="flex items-center gap-0.5 text-muted hover:text-accent transition-colors shrink-0"
+                            title="Add to P.O."
+                          >
+                            <ShoppingCart size={11} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
@@ -575,6 +597,15 @@ function ReceiptsMain() {
             ))}
           </div>
         </div>
+      )}
+
+      {/* Add to P.O. modal */}
+      {poItem && (
+        <AddToPOModal
+          item={poItem}
+          onClose={() => setPoItem(null)}
+          onAdded={() => setPoItem(null)}
+        />
       )}
     </div>
   );

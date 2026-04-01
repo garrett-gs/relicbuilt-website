@@ -9,7 +9,8 @@ import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import ImageUpload from "@/components/ui/ImageUpload";
 import { cn, formatPhone } from "@/lib/utils";
-import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon } from "lucide-react";
+import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart } from "lucide-react";
+import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { useRouter } from "next/navigation";
 import { generateProposalHtml } from "@/lib/proposal-html";
 import { notifyPortal } from "@/lib/notify-portal";
@@ -428,6 +429,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [description, setDescription] = useState(project.project_description || "");
   const [materials, setMaterials] = useState<Material[]>(project.materials || []);
   const [labor, setLabor] = useState<LaborEntry[]>(project.labor_log || []);
+  const [poItem, setPoItem] = useState<AddToPOItem | null>(null);
   const [quoted, setQuoted] = useState(project.quoted_amount || 0);
   const [notes, setNotes] = useState(project.internal_notes || "");
   const [startDate, setStartDate] = useState(project.start_date || "");
@@ -709,6 +711,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                       return (
                         <div key={gi} className="flex items-center gap-2 px-3 py-1.5 text-sm">
                           <span className="flex-1 text-foreground truncate">{m.description || <span className="text-muted italic">No description</span>}</span>
+                          <button onClick={() => setPoItem({ description: m.description, qty: 1, unit_price: m.cost || 0, vendor_name: m.vendor })} className="text-muted hover:text-accent shrink-0" title="Add to P.O."><ShoppingCart size={12} /></button>
                           <span className="font-mono text-muted shrink-0">{money(m.cost || 0)}</span>
                           <button onClick={() => removeMaterial(globalIdx)} className="text-muted hover:text-red-500 shrink-0"><X size={12} /></button>
                         </div>
@@ -1034,6 +1037,14 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
           </button>
         )}
       </div>
+
+      {poItem && (
+        <AddToPOModal
+          item={poItem}
+          onClose={() => setPoItem(null)}
+          onAdded={() => setPoItem(null)}
+        />
+      )}
     </div>
   );
 }
