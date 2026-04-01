@@ -215,7 +215,7 @@ export default function ClientPortalPage() {
                 >
                   <div className="flex items-center gap-4 min-w-0">
                     <div className="min-w-0">
-                      <p className="font-heading font-bold text-base truncate">{project.project_name}</p>
+                      <p className="font-heading font-bold text-base truncate text-gray-900">{project.project_name}</p>
                       {project.timeline && (
                         <p className="text-xs text-gray-500 mt-0.5">{project.timeline}</p>
                       )}
@@ -398,14 +398,14 @@ export default function ClientPortalPage() {
                             className={cn(
                               "border p-3 text-sm",
                               c.is_change_request
-                                ? "bg-amber-500/5 border-amber-500/30"
-                                : "bg-gray-50 border-gray-200"
+                                ? "bg-amber-50 border-amber-300"
+                                : "bg-white border-gray-300"
                             )}
                           >
                             {c.is_change_request && (
-                              <span className="text-[10px] uppercase tracking-wider text-amber-500 block mb-1">Change Request</span>
+                              <span className="text-[10px] uppercase tracking-wider text-amber-600 block mb-1">Change Request</span>
                             )}
-                            <p>{c.body}</p>
+                            <p className="text-gray-900">{c.body}</p>
                             <p className="text-xs text-gray-500 mt-1">
                               {c.author} &middot; {new Date(c.created_at).toLocaleDateString()}
                             </p>
