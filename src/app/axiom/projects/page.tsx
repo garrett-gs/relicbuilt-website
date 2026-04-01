@@ -12,6 +12,7 @@ import { cn, formatPhone } from "@/lib/utils";
 import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { generateProposalHtml } from "@/lib/proposal-html";
+import { notifyPortal } from "@/lib/notify-portal";
 import { Settings } from "@/types/axiom";
 
 const STATUS_COLUMNS = [
@@ -460,6 +461,8 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     });
   }, [project.id]);
 
+  const portalClientUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/axiom/portal/${project.portal_token}`;
+
   async function sendApprovalRequest() {
     if (!approvalDesc.trim()) return;
     await axiom.from("approval_requests").insert({
@@ -472,6 +475,16 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     setApprovalImages([]);
     const { data } = await axiom.from("approval_requests").select("*").eq("custom_work_id", project.id).order("created_at", { ascending: false });
     if (data) setApprovals(data);
+    notifyPortal({
+      event: "approval_sent",
+      project_name: project.project_name,
+      from_name: "Relic",
+      portal_url: portalClientUrl,
+      message: approvalDesc.trim(),
+      to_client: true,
+      client_email: project.client_email,
+      client_name: project.client_name,
+    });
   }
 
   async function sendComment() {
@@ -487,6 +500,16 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     setCommentImage("");
     const { data } = await axiom.from("build_comments").select("*").eq("custom_work_id", project.id).order("created_at");
     if (data) setComments(data);
+    notifyPortal({
+      event: "comment_sent",
+      project_name: project.project_name,
+      from_name: "Relic",
+      portal_url: portalClientUrl,
+      message: newComment.trim() || undefined,
+      to_client: true,
+      client_email: project.client_email,
+      client_name: project.client_name,
+    });
   }
 
   // Resolve customer name for display if we have a customer_id

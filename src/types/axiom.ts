@@ -351,6 +351,9 @@ export interface TeamMember {
   hourly_rate: number;
   pin?: string;
   color?: string;
+  notifications?: {
+    portal_updates?: boolean;
+  };
 }
 
 // ── Time Entries ────────────────────────────────────────────

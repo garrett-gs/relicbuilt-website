@@ -8,6 +8,7 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { Check, ChevronDown, ChevronUp, MessageSquare, FileText, ImageIcon } from "lucide-react";
 import ImageUpload from "@/components/ui/ImageUpload";
+import { notifyPortal } from "@/lib/notify-portal";
 
 const STAGES = [
   { key: "consultation",  label: "Consultation" },
@@ -104,22 +105,29 @@ export default function ClientPortalPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function submitComment(projectId: string, clientName: string) {
+  async function submitComment(projectId: string, clientName: string, projectName: string) {
     const text = newComments[projectId]?.trim();
-    if (!text) return;
+    if (!text && !commentImages[projectId]) return;
     await axiom.from("build_comments").insert({
       custom_work_id: projectId,
       author: clientName || "Client",
-      body: text,
+      body: text || " ",
       is_change_request: false,
       image_url: commentImages[projectId] || null,
     });
     setNewComments((prev) => ({ ...prev, [projectId]: "" }));
     setCommentImages((prev) => ({ ...prev, [projectId]: "" }));
+    notifyPortal({
+      event: "client_comment",
+      project_name: projectName,
+      from_name: clientName || company?.name || "Client",
+      portal_url: window.location.href,
+      message: text || undefined,
+    });
     load();
   }
 
-  async function respondToApproval(id: string, status: "approved" | "rejected") {
+  async function respondToApproval(id: string, status: "approved" | "rejected", projectName: string, clientName: string) {
     const resp = approvalResponses[id];
     await axiom.from("approval_requests").update({
       status,
@@ -131,6 +139,14 @@ export default function ClientPortalPage() {
       const next = { ...prev };
       delete next[id];
       return next;
+    });
+    notifyPortal({
+      event: "approval_response",
+      project_name: projectName,
+      from_name: clientName || company?.name || "Client",
+      portal_url: window.location.href,
+      message: resp?.notes?.trim() || undefined,
+      extra: status === "approved" ? "✅ Approved" : "🔄 Changes Requested",
     });
     load();
   }
@@ -327,13 +343,13 @@ export default function ClientPortalPage() {
                                   />
                                   <div className="flex gap-3 pt-1">
                                     <button
-                                      onClick={() => respondToApproval(a.id, "approved")}
+                                      onClick={() => respondToApproval(a.id, "approved", project.project_name, project.client_name)}
                                       className="flex items-center gap-1.5 bg-green-600 text-white text-sm px-4 py-2 hover:bg-green-700"
                                     >
                                       <Check size={13} /> Approve
                                     </button>
                                     <button
-                                      onClick={() => respondToApproval(a.id, "rejected")}
+                                      onClick={() => respondToApproval(a.id, "rejected", project.project_name, project.client_name)}
                                       className="text-sm border border-red-300 text-red-600 px-4 py-2 hover:bg-red-50"
                                     >
                                       Request Changes
@@ -488,12 +504,12 @@ export default function ClientPortalPage() {
                           <input
                             value={newComments[project.id] || ""}
                             onChange={(e) => setNewComments((prev) => ({ ...prev, [project.id]: e.target.value }))}
-                            onKeyDown={(e) => { if (e.key === "Enter" && !commentImages[project.id]) submitComment(project.id, project.client_name); }}
+                            onKeyDown={(e) => { if (e.key === "Enter" && !commentImages[project.id]) submitComment(project.id, project.client_name, project.project_name); }}
                             placeholder="Leave a comment…"
                             className="flex-1 bg-white border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-accent"
                           />
                           <button
-                            onClick={() => submitComment(project.id, project.client_name)}
+                            onClick={() => submitComment(project.id, project.client_name, project.project_name)}
                             disabled={!newComments[project.id]?.trim() && !commentImages[project.id]}
                             className="bg-accent text-white text-sm px-4 py-2 hover:bg-accent/80 disabled:opacity-40"
                           >

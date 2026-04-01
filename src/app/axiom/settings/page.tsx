@@ -128,6 +128,32 @@ export default function SettingsPage() {
                     updateField("team_members", members);
                   }} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
                 </div>
+                <div className="flex items-center justify-between border-t border-border pt-3">
+                  <div>
+                    <p className="text-xs font-medium">Notifications</p>
+                    <p className="text-[10px] text-muted">Choose which emails this person receives</p>
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <span className="text-xs text-muted">Portal Updates</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const members = [...(settings.team_members || [])];
+                        members[i] = { ...members[i], notifications: { ...members[i].notifications, portal_updates: !members[i].notifications?.portal_updates } };
+                        updateField("team_members", members);
+                      }}
+                      className={cn(
+                        "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                        m.notifications?.portal_updates ? "bg-accent" : "bg-border"
+                      )}
+                    >
+                      <span className={cn(
+                        "inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform",
+                        m.notifications?.portal_updates ? "translate-x-4" : "translate-x-0.5"
+                      )} />
+                    </button>
+                  </label>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="text-[10px] uppercase tracking-wider text-muted block mb-1">Hourly Rate ($)</label>
