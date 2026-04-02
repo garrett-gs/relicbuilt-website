@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: `${from_name || "RELIC"} <onboarding@resend.dev>`,
+        from: `${from_name || "RELIC"} <notifications@relicbuilt.com>`,
         to: [to],
         subject,
         html,
