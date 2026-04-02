@@ -292,6 +292,8 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [notes, setNotes] = useState(estimate.notes || "");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showLoadQuote, setShowLoadQuote] = useState(false);
+  const [sendToQuoteOpen, setSendToQuoteOpen] = useState(false);
+  const sendToQuoteRef = useRef<HTMLDivElement>(null);
   const [laborOpen, setLaborOpen] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -472,6 +474,17 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
 
     if (data) router.push("/axiom/invoices");
   }
+
+  // Close "Send to Quote" dropdown on outside click
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (sendToQuoteRef.current && !sendToQuoteRef.current.contains(e.target as Node)) {
+        setSendToQuoteOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -744,12 +757,38 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t border-border flex-wrap items-center">
         <SaveButton dirty={dirty} saved={saved} onClick={save} />
-        <Button variant="outline" onClick={() => { save(); setShowLoadQuote(true); }}>
-          <CheckCircle2 size={14} className="mr-1" /> Load into Quote
-        </Button>
-        <Button variant="outline" onClick={createQuote}>
-          <FileText size={14} className="mr-1" /> Create Invoice
-        </Button>
+        {/* Send to Quote dropdown */}
+        <div ref={sendToQuoteRef} className="relative">
+          <Button variant="outline" onClick={() => { save(); setSendToQuoteOpen((o) => !o); }}>
+            <FileText size={14} className="mr-1" /> Send to Quote
+            <ChevronDown size={12} className="ml-1" />
+          </Button>
+          {sendToQuoteOpen && (
+            <div className="absolute top-full left-0 mt-1 w-52 bg-card border border-border shadow-lg z-30">
+              <button
+                className="w-full text-left px-4 py-3 text-sm hover:bg-accent/10 flex items-center gap-2"
+                onClick={() => { setSendToQuoteOpen(false); createQuote(); }}
+              >
+                <FileText size={14} className="text-accent" />
+                <div>
+                  <p className="font-medium">New Quote</p>
+                  <p className="text-xs text-muted">Create invoice from estimate</p>
+                </div>
+              </button>
+              <div className="border-t border-border" />
+              <button
+                className="w-full text-left px-4 py-3 text-sm hover:bg-accent/10 flex items-center gap-2"
+                onClick={() => { setSendToQuoteOpen(false); setShowLoadQuote(true); }}
+              >
+                <CheckCircle2 size={14} className="text-accent" />
+                <div>
+                  <p className="font-medium">Apply to Project</p>
+                  <p className="text-xs text-muted">Set quoted amount on a project</p>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
         <button
           onClick={() => setChatOpen(true)}
           className="flex items-center gap-2 px-3 py-2 border border-accent/50 text-accent text-sm hover:bg-accent/10 transition-colors"
