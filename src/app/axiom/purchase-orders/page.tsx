@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 import {
   Plus, X, Search, Check, XCircle, RotateCcw, Trash2,
-  ChevronDown, ChevronUp, Package, Send, Printer,
+  ChevronDown, ChevronUp, Package, Send, Printer, Pencil,
 } from "lucide-react";
 import { generatePOHtml } from "@/lib/po-html";
 
@@ -71,6 +71,7 @@ function OrdersTab() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [sendPO, setSendPO] = useState<PurchaseOrder | null>(null);
   const [printPO, setPrintPO] = useState<PurchaseOrder | null>(null);
+  const [editPO, setEditPO] = useState<PurchaseOrder | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteText, setDeleteText] = useState("");
 
@@ -145,6 +146,27 @@ function OrdersTab() {
     load();
   }
 
+  async function updatePO(id: string, vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string) {
+    const total = lineItems.reduce((s, li) => s + li.quantity * li.unit_price, 0);
+    await axiom.from("purchase_orders").update({
+      vendor_id: vendorId || null,
+      vendor_name: vendorName,
+      item_description: lineItems.map((li) => li.description).join(", "),
+      quantity: lineItems.length,
+      unit_price: total,
+      line_items: lineItems,
+      notes: notes || null,
+      need_by_date: needByDate || null,
+      delivery_method: deliveryMethod || null,
+      delivery_date: deliveryDate || null,
+      ship_to_address: shipToAddress || null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", id);
+    await logActivity({ action: "updated", entity: "purchase_order", entity_id: id, label: `Updated PO: ${pos.find((p) => p.id === id)?.po_number} — ${vendorName}`, user_name: userEmail });
+    setEditPO(null);
+    load();
+  }
+
   async function deletePO(id: string) {
     await axiom.from("purchase_orders").delete().eq("id", id);
     load();
@@ -201,6 +223,7 @@ function OrdersTab() {
                 <div className="flex gap-2 flex-shrink-0 items-center">
                   <button onClick={() => setPrintPO(po)} className="text-muted hover:text-foreground" title="Print"><Printer size={14} /></button>
                   <button onClick={() => setSendPO(po)} className="text-muted hover:text-accent" title="Send"><Send size={14} /></button>
+                  <button onClick={() => setEditPO(po)} className="text-muted hover:text-foreground" title="Edit"><Pencil size={14} /></button>
                   {hasExpandable && (
                     <button onClick={() => setExpandedId(expanded ? null : po.id)} className="text-muted hover:text-foreground">
                       {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -357,6 +380,18 @@ function OrdersTab() {
       {/* Print PO view */}
       {printPO && (
         <PrintPOView po={printPO} onClose={() => setPrintPO(null)} />
+      )}
+
+      {/* Edit PO modal */}
+      {editPO && (
+        <EditPOModal
+          po={editPO}
+          vendors={vendors}
+          onSubmit={(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress) =>
+            updatePO(editPO.id, vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress)
+          }
+          onClose={() => setEditPO(null)}
+        />
       )}
     </div>
   );
@@ -565,6 +600,215 @@ function CreatePOModal({ vendors, onSubmit, onClose }: {
                           onClick={() => addFromCatalog(item)}
                           className="w-full text-left bg-card border border-border p-3 hover:border-accent/50 transition-colors"
                         >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              {item.item_number && <span className="text-xs font-mono text-muted mr-2">{item.item_number}</span>}
+                              <span className="text-sm">{item.description}</span>
+                            </div>
+                            <div className="text-right flex-shrink-0 ml-3">
+                              <span className="text-sm font-mono">{money(item.unit_price)}</span>
+                              <span className="text-xs text-muted ml-1">/{item.unit}</span>
+                            </div>
+                          </div>
+                          {item.category && <span className="text-[10px] text-muted">{item.category}</span>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-full text-muted text-sm">
+                  Select a vendor to view their material catalog
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EDIT PO MODAL
+// ═══════════════════════════════════════════════════════════════
+
+function EditPOModal({ po, vendors, onSubmit, onClose }: {
+  po: PurchaseOrder;
+  vendors: Vendor[];
+  onSubmit: (vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string) => void;
+  onClose: () => void;
+}) {
+  const [vendorId, setVendorId] = useState(po.vendor_id || "");
+  const [vendorName, setVendorName] = useState(po.vendor_name || "");
+  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [lineItems, setLineItems] = useState<POLineItem[]>(po.line_items || []);
+  const [notes, setNotes] = useState(po.notes || "");
+  const [needByDate, setNeedByDate] = useState(po.need_by_date || "");
+  const [catalogSearch, setCatalogSearch] = useState("");
+  const [deliveryMethod, setDeliveryMethod] = useState(po.delivery_method || "");
+  const [deliveryDate, setDeliveryDate] = useState(po.delivery_date || "");
+  const [shipToAddress, setShipToAddress] = useState(po.ship_to_address || "");
+
+  useEffect(() => {
+    if (!vendorId) { setCatalog([]); return; }
+    axiom.from("vendor_catalog").select("*").eq("vendor_id", vendorId).eq("active", true).order("description").then(({ data }) => {
+      if (data) setCatalog(data);
+    });
+    const v = vendors.find((v) => v.id === vendorId);
+    if (v) setVendorName(v.name);
+  }, [vendorId, vendors]);
+
+  function addFromCatalog(item: CatalogItem) {
+    const existing = lineItems.findIndex((li) => li.item_number === item.item_number && li.description === item.description);
+    if (existing >= 0) {
+      const updated = [...lineItems];
+      updated[existing].quantity += 1;
+      setLineItems(updated);
+      return;
+    }
+    setLineItems([...lineItems, { item_number: item.item_number || "", description: item.description, quantity: 1, unit_price: item.unit_price, unit: item.unit }]);
+  }
+
+  function addBlankLine() {
+    setLineItems([...lineItems, { item_number: "", description: "", quantity: 1, unit_price: 0, unit: "ea" }]);
+  }
+
+  function updateLine(i: number, field: keyof POLineItem, value: string | number) {
+    const updated = [...lineItems];
+    (updated[i] as unknown as Record<string, string | number>)[field] = value;
+    setLineItems(updated);
+  }
+
+  function removeLine(i: number) {
+    setLineItems(lineItems.filter((_, idx) => idx !== i));
+  }
+
+  const total = lineItems.reduce((s, li) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
+  const filteredCatalog = catalog.filter((c) => !catalogSearch || c.description.toLowerCase().includes(catalogSearch.toLowerCase()) || c.item_number?.toLowerCase().includes(catalogSearch.toLowerCase()));
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/60 z-50" onClick={onClose} />
+      <div className="fixed top-4 bottom-4 right-4 left-4 md:left-[15%] z-50 bg-background border border-border overflow-y-auto">
+        <div className="sticky top-0 bg-background border-b border-border px-6 py-4 flex items-center justify-between z-10">
+          <div>
+            <h2 className="text-lg font-heading font-bold">Edit Purchase Order</h2>
+            <p className="text-xs text-muted font-mono mt-0.5">{po.po_number}</p>
+          </div>
+          <button onClick={onClose} className="text-muted hover:text-foreground"><X size={20} /></button>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Left: PO form */}
+            <div className="space-y-5">
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Vendor *</label>
+                <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">
+                  <option value="">Select a vendor...</option>
+                  {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs uppercase tracking-wider text-muted">Line Items</label>
+                  <button onClick={addBlankLine} className="text-accent text-xs flex items-center gap-1"><Plus size={12} /> Add Manual Item</button>
+                </div>
+                {lineItems.length === 0 ? (
+                  <p className="text-muted text-sm bg-card border border-border p-4">
+                    {vendorId ? "Select items from the catalog on the right, or add manually." : "Select a vendor to load their catalog."}
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {lineItems.map((li, i) => (
+                      <div key={i} className="bg-card border border-border p-3">
+                        <div className="grid grid-cols-[80px_1fr_60px_90px_60px_28px] gap-2 items-center">
+                          <input value={li.item_number || ""} onChange={(e) => updateLine(i, "item_number", e.target.value)} placeholder="Item #" className="bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent font-mono" />
+                          <input value={li.description} onChange={(e) => updateLine(i, "description", e.target.value)} placeholder="Description" className="bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent" />
+                          <input type="number" value={li.quantity || ""} onChange={(e) => updateLine(i, "quantity", Number(e.target.value))} placeholder="Qty" className="bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent text-right" />
+                          <input type="number" value={li.unit_price || ""} onChange={(e) => updateLine(i, "unit_price", Number(e.target.value))} placeholder="Price" className="bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent text-right" />
+                          <input value={li.unit} onChange={(e) => updateLine(i, "unit", e.target.value)} className="bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent" />
+                          <button onClick={() => removeLine(i)} className="text-muted hover:text-red-500"><Trash2 size={12} /></button>
+                        </div>
+                        <div className="text-right mt-1">
+                          <span className="text-xs font-mono text-muted">{money((li.quantity || 0) * (li.unit_price || 0))}</span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="text-right pt-2 border-t border-border">
+                      <span className="text-sm text-muted">PO Total: </span>
+                      <span className="text-lg font-mono font-bold">{money(total)}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-card border border-border p-4 space-y-4">
+                <h3 className="text-xs uppercase tracking-wider text-muted">Delivery</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Method</label>
+                    <select value={deliveryMethod} onChange={(e) => setDeliveryMethod(e.target.value)} className="w-full bg-background border border-border px-3 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent">
+                      <option value="">Select...</option>
+                      <option value="pickup">Pick Up</option>
+                      <option value="will_call">Will Call</option>
+                      <option value="ship">Ship to Address</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Delivery Date</label>
+                    <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="w-full bg-background border border-border px-3 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent" />
+                  </div>
+                </div>
+                {deliveryMethod === "ship" && (
+                  <div>
+                    <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Ship To Address</label>
+                    <AddressAutocomplete value={shipToAddress} onChange={setShipToAddress} onSelect={(r) => setShipToAddress(r.formatted)} className="w-full bg-background border border-border px-3 py-2 text-foreground text-sm focus:outline-none focus:border-accent" />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Need By</label>
+                  <input type="date" value={needByDate} onChange={(e) => setNeedByDate(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Notes</label>
+                <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
+              </div>
+
+              <div className="flex gap-3">
+                <Button onClick={() => onSubmit(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress)} disabled={!vendorName || lineItems.length === 0}>Save Changes</Button>
+                <Button variant="outline" onClick={onClose}>Cancel</Button>
+              </div>
+            </div>
+
+            {/* Right: Vendor catalog */}
+            <div>
+              {vendorId ? (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs uppercase tracking-wider text-muted">
+                      <Package size={12} className="inline mr-1" />
+                      {vendorName} Catalog ({catalog.length} items)
+                    </h3>
+                  </div>
+                  {catalog.length > 0 && (
+                    <div className="relative mb-3">
+                      <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+                      <input value={catalogSearch} onChange={(e) => setCatalogSearch(e.target.value)} placeholder="Search catalog..." className="w-full bg-card border border-border pl-8 pr-4 py-2 text-xs text-foreground focus:outline-none focus:border-accent" />
+                    </div>
+                  )}
+                  {catalog.length === 0 ? (
+                    <p className="text-muted text-sm bg-card border border-border p-4">No items in this vendor&apos;s catalog yet.</p>
+                  ) : (
+                    <div className="space-y-1 max-h-[500px] overflow-y-auto">
+                      {filteredCatalog.map((item) => (
+                        <button key={item.id} onClick={() => addFromCatalog(item)} className="w-full text-left bg-card border border-border p-3 hover:border-accent/50 transition-colors">
                           <div className="flex items-center justify-between">
                             <div>
                               {item.item_number && <span className="text-xs font-mono text-muted mr-2">{item.item_number}</span>}
