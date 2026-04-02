@@ -285,6 +285,24 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
     loadData();
   }
 
+  const [addingTo, setAddingTo] = useState<Record<string, "materials" | "labor" | "done">>({});
+
+  async function addToProject(r: ReceiptRecord, type: "materials" | "labor") {
+    if (!r.project_id) return;
+    setAddingTo((prev) => ({ ...prev, [r.id + type]: type }));
+    const { data: project } = await axiom.from("custom_work").select("materials,labor_log").eq("id", r.project_id).single();
+    if (!project) { setAddingTo((prev) => ({ ...prev, [r.id + type]: "done" })); return; }
+    const date = r.receipt_date || new Date().toISOString().split("T")[0];
+    if (type === "materials") {
+      const updated = [...(project.materials || []), { description: r.vendor || "Receipt", vendor: r.vendor || "", cost: r.total || 0, receipt_id: r.id }];
+      await axiom.from("custom_work").update({ materials: updated }).eq("id", r.project_id);
+    } else {
+      const updated = [...(project.labor_log || []), { date, description: r.vendor || "Receipt", hours: 0, rate: 0, cost: r.total || 0 }];
+      await axiom.from("custom_work").update({ labor_log: updated }).eq("id", r.project_id);
+    }
+    setAddingTo((prev) => ({ ...prev, [r.id + type]: "done" }));
+  }
+
   function reset() {
     setStep("capture");
     setImageUrl("");
@@ -586,6 +604,44 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
                           </button>
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {r.project_id ? (
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => addToProject(r, "materials")}
+                        disabled={addingTo[r.id + "materials"] !== undefined}
+                        className="text-[10px] px-2 py-1 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50"
+                      >
+                        {addingTo[r.id + "materials"] === "done" ? "✓ Materials" : "+ Materials"}
+                      </button>
+                      <button
+                        onClick={() => addToProject(r, "labor")}
+                        disabled={addingTo[r.id + "labor"] !== undefined}
+                        className="text-[10px] px-2 py-1 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50"
+                      >
+                        {addingTo[r.id + "labor"] === "done" ? "✓ Labor" : "+ Labor"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-2">
+                      <select
+                        className="text-[10px] bg-card border border-border px-2 py-1 text-muted focus:outline-none focus:border-accent w-full"
+                        defaultValue=""
+                        onChange={(e) => {
+                          if (!e.target.value) return;
+                          const proj = projects.find((p) => p.id === e.target.value);
+                          if (proj) {
+                            const updated = { ...r, project_id: proj.id, project_name: proj.project_name };
+                            axiom.from("receipts").update({ project_id: proj.id, project_name: proj.project_name }).eq("id", r.id).then(() => {
+                              setReceipts((prev) => prev.map((x) => x.id === r.id ? updated : x));
+                            });
+                          }
+                        }}
+                      >
+                        <option value="">Link to project to add…</option>
+                        {projects.map((p) => <option key={p.id} value={p.id}>{p.project_name}</option>)}
+                      </select>
                     </div>
                   )}
                 </div>
