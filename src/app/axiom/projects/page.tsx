@@ -666,6 +666,18 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     markDirty();
   }
 
+  function addReceiptToMaterials(r: { id: string; vendor?: string; total?: number }) {
+    const entry = { description: r.vendor || "Receipt", vendor: r.vendor || "", cost: r.total || 0, receipt_id: r.id };
+    setMaterials((prev) => { const updated = [...prev, entry]; onUpdate({ materials: updated }); return updated; });
+    markDirty();
+  }
+
+  function addReceiptToLabor(r: { id: string; vendor?: string; receipt_date?: string; total?: number }) {
+    const entry = { date: r.receipt_date || new Date().toISOString().split("T")[0], description: r.vendor || "Receipt", hours: 0, rate: 0, cost: r.total || 0 };
+    setLabor((prev) => { const updated = [...prev, entry]; onUpdate({ labor_log: updated }); return updated; });
+    markDirty();
+  }
+
   function save() {
     onUpdate({
       customer_id: customerId || undefined,
@@ -793,8 +805,18 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                     {r.receipt_date && <span className="text-muted text-xs">{new Date(r.receipt_date + "T12:00:00").toLocaleDateString()}</span>}
                     <span className="text-muted text-xs">{r.line_items?.length || 0} items</span>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-foreground">{money(r.total || 0)}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); addReceiptToMaterials(r); }}
+                      className="text-[10px] px-2 py-0.5 border border-border hover:border-accent hover:text-accent text-muted transition-colors"
+                      title="Add to Materials"
+                    >+ Mat</button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); addReceiptToLabor(r); }}
+                      className="text-[10px] px-2 py-0.5 border border-border hover:border-accent hover:text-accent text-muted transition-colors"
+                      title="Add to Labor"
+                    >+ Labor</button>
                     <span className="text-muted text-xs">{receiptsExpanded[r.id] ? "▲" : "▼"}</span>
                   </div>
                 </button>
