@@ -250,8 +250,8 @@ function ReceiptsMain() {
     setStep("saving");
     const linkedProject = projects.find((p) => p.id === selectedProjectId);
 
-    // Insert receipt and get back the ID so we can tag materials with it
-    const { data: inserted } = await axiom.from("receipts").insert({
+    // Insert receipt — line items stay on the receipt, not copied to project materials
+    await axiom.from("receipts").insert({
       image_url: imageUrl || null,
       vendor: vendor || null,
       receipt_date: receiptDate || null,
@@ -260,29 +260,7 @@ function ReceiptsMain() {
       project_id: selectedProjectId || null,
       project_name: linkedProject?.project_name || null,
       notes: notes || null,
-    }).select("id").single();
-
-    const receiptId = inserted?.id;
-
-    // Push line items to project materials tagged with receipt_id
-    if (selectedProjectId && receiptId) {
-      const { data: proj } = await axiom
-        .from("custom_work")
-        .select("materials")
-        .eq("id", selectedProjectId)
-        .single();
-      const existing = proj?.materials || [];
-      const newMaterials = items.map((it) => ({
-        description: it.description,
-        vendor: vendor || "",
-        cost: Number(it.total) || Number(it.qty) * Number(it.unit_price),
-        receipt_id: receiptId,
-      }));
-      await axiom
-        .from("custom_work")
-        .update({ materials: [...existing, ...newMaterials] })
-        .eq("id", selectedProjectId);
-    }
+    });
 
     setStep("saved");
     loadData();
@@ -593,15 +571,7 @@ function ReceiptsMain() {
                   <p className="text-sm font-mono">{money(r.total || 0)}</p>
                   <button
                     onClick={async () => {
-                      if (!confirm("Delete this receipt? This will also remove its materials from the linked project.")) return;
-                      // Remove tagged materials from linked project
-                      if (r.project_id) {
-                        const { data: proj } = await axiom.from("custom_work").select("materials").eq("id", r.project_id).single();
-                        if (proj?.materials) {
-                          const filtered = proj.materials.filter((m: { receipt_id?: string }) => m.receipt_id !== r.id);
-                          await axiom.from("custom_work").update({ materials: filtered }).eq("id", r.project_id);
-                        }
-                      }
+                      if (!confirm("Delete this receipt?")) return;
                       await axiom.from("receipts").delete().eq("id", r.id);
                       setReceipts((prev) => prev.filter((x) => x.id !== r.id));
                     }}

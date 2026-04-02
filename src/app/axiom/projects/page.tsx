@@ -430,6 +430,8 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [materials, setMaterials] = useState<Material[]>(project.materials || []);
   const [labor, setLabor] = useState<LaborEntry[]>(project.labor_log || []);
   const [poItem, setPoItem] = useState<AddToPOItem | null>(null);
+  const [linkedReceipts, setLinkedReceipts] = useState<{ id: string; vendor?: string; receipt_date?: string; total?: number; line_items: { description: string; qty: number; unit_price: number; total: number }[] }[]>([]);
+  const [receiptsExpanded, setReceiptsExpanded] = useState<Record<string, boolean>>({});
   const [quoted, setQuoted] = useState(project.quoted_amount || 0);
   const [notes, setNotes] = useState(project.internal_notes || "");
   const [startDate, setStartDate] = useState(project.start_date || "");
@@ -522,9 +524,17 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     }
   }, [project.customer_id]);
 
+  // Load receipts linked to this project
+  useEffect(() => {
+    axiom.from("receipts").select("*").eq("project_id", project.id).order("receipt_date", { ascending: false }).then(({ data }) => {
+      if (data) setLinkedReceipts(data);
+    });
+  }, [project.id]);
+
+  const receiptTotal = linkedReceipts.reduce((s, r) => s + (r.total || 0), 0);
   const materialTotal = materials.reduce((s, m) => s + (m.cost || 0), 0);
   const laborTotal = labor.reduce((s, l) => s + (l.cost || 0), 0);
-  const actualCost = materialTotal + laborTotal;
+  const actualCost = materialTotal + laborTotal + receiptTotal;
   const margin = quoted > 0 ? ((quoted - actualCost) / quoted) * 100 : 0;
 
   function markDirty() { setDirty(true); setSaved(false); }
@@ -678,6 +688,49 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         </div>
       </div>
 
+      {/* Receipts */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Receipts</h3>
+        </div>
+        {linkedReceipts.length === 0 ? (
+          <p className="text-muted text-sm">No receipts linked to this project</p>
+        ) : (
+          <div className="space-y-2">
+            {linkedReceipts.map((r) => (
+              <div key={r.id} className="border border-border rounded overflow-hidden">
+                <button
+                  onClick={() => setReceiptsExpanded((p) => ({ ...p, [r.id]: !p[r.id] }))}
+                  className="w-full flex items-center justify-between bg-card px-3 py-2 hover:bg-card/80 transition-colors"
+                >
+                  <div className="flex items-center gap-3 text-sm">
+                    <span className="font-medium text-foreground">{r.vendor || "Receipt"}</span>
+                    {r.receipt_date && <span className="text-muted text-xs">{new Date(r.receipt_date + "T12:00:00").toLocaleDateString()}</span>}
+                    <span className="text-muted text-xs">{r.line_items?.length || 0} items</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-mono text-foreground">{money(r.total || 0)}</span>
+                    <span className="text-muted text-xs">{receiptsExpanded[r.id] ? "▲" : "▼"}</span>
+                  </div>
+                </button>
+                {receiptsExpanded[r.id] && (
+                  <div className="divide-y divide-border border-t border-border">
+                    {(r.line_items || []).map((li, i) => (
+                      <div key={i} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+                        <span className="flex-1 text-foreground truncate">{li.description}</span>
+                        <button onClick={() => setPoItem({ description: li.description, qty: li.qty, unit_price: li.unit_price, vendor_name: r.vendor })} className="text-muted hover:text-accent shrink-0" title="Add to P.O."><ShoppingCart size={12} /></button>
+                        <span className="font-mono text-muted shrink-0">{money(li.total)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+            <p className="text-right text-sm font-mono text-muted">Total: {money(receiptTotal)}</p>
+          </div>
+        )}
+      </div>
+
       {/* Materials */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -687,52 +740,15 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         {materials.length === 0 ? (
           <p className="text-muted text-sm">No materials added</p>
         ) : (
-          <div className="space-y-3">
-            {/* Receipt groups */}
-            {Array.from(new Set(materials.filter(m => m.receipt_id).map(m => m.receipt_id))).map((rid) => {
-              const group = materials.filter(m => m.receipt_id === rid);
-              const groupTotal = group.reduce((s, m) => s + (m.cost || 0), 0);
-              const vendor = group[0]?.vendor || "Receipt";
-              return (
-                <div key={rid} className="border border-border rounded overflow-hidden">
-                  <div className="flex items-center justify-between bg-card px-3 py-2 border-b border-border">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-foreground">{vendor}</span>
-                      <span className="text-xs text-muted">· {group.length} item{group.length !== 1 ? "s" : ""}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-mono text-muted">{money(groupTotal)}</span>
-                      <button onClick={() => { setMaterials(materials.filter(m => m.receipt_id !== rid)); markDirty(); }} className="text-muted hover:text-red-500"><Trash2 size={13} /></button>
-                    </div>
-                  </div>
-                  <div className="divide-y divide-border">
-                    {group.map((m, gi) => {
-                      const globalIdx = materials.findIndex((x, xi) => x.receipt_id === rid && materials.filter((y, yi) => y.receipt_id === rid && yi < xi).length === gi);
-                      return (
-                        <div key={gi} className="flex items-center gap-2 px-3 py-1.5 text-sm">
-                          <span className="flex-1 text-foreground truncate">{m.description || <span className="text-muted italic">No description</span>}</span>
-                          <button onClick={() => setPoItem({ description: m.description, qty: 1, unit_price: m.cost || 0, vendor_name: m.vendor })} className="text-muted hover:text-accent shrink-0" title="Add to P.O."><ShoppingCart size={12} /></button>
-                          <span className="font-mono text-muted shrink-0">{money(m.cost || 0)}</span>
-                          <button onClick={() => removeMaterial(globalIdx)} className="text-muted hover:text-red-500 shrink-0"><X size={12} /></button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-            {/* Manual materials */}
-            {materials.filter(m => !m.receipt_id).map((m, i) => {
-              const globalIdx = materials.findIndex((x, xi) => !x.receipt_id && materials.filter((y, yi) => !y.receipt_id && yi < xi).length === i);
-              return (
-                <div key={globalIdx} className="grid grid-cols-[1fr_1fr_100px_32px] gap-2 items-center">
-                  <input value={m.description} onChange={(e) => updateMaterial(globalIdx, "description", e.target.value)} placeholder="Description" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
-                  <input value={m.vendor} onChange={(e) => updateMaterial(globalIdx, "vendor", e.target.value)} placeholder="Vendor" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
-                  <input type="number" value={m.cost || ""} onChange={(e) => updateMaterial(globalIdx, "cost", Number(e.target.value))} placeholder="Cost" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
-                  <button onClick={() => removeMaterial(globalIdx)} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
-                </div>
-              );
-            })}
+          <div className="space-y-2">
+            {materials.map((m, i) => (
+              <div key={i} className="grid grid-cols-[1fr_1fr_100px_32px] gap-2 items-center">
+                <input value={m.description} onChange={(e) => updateMaterial(i, "description", e.target.value)} placeholder="Description" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
+                <input value={m.vendor} onChange={(e) => updateMaterial(i, "vendor", e.target.value)} placeholder="Vendor" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
+                <input type="number" value={m.cost || ""} onChange={(e) => updateMaterial(i, "cost", Number(e.target.value))} placeholder="Cost" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
+                <button onClick={() => removeMaterial(i)} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
+              </div>
+            ))}
             <p className="text-right text-sm font-mono text-muted">Total: {money(materialTotal)}</p>
           </div>
         )}
