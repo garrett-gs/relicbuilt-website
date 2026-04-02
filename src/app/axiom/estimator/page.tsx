@@ -8,7 +8,8 @@ import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Ve
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, FileText } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 const STATUS_COLORS: Record<Estimate["status"], string> = {
   draft: "#888",
@@ -303,6 +304,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [pendingEstimate, setPendingEstimate] = useState<{ line_items: EstimateLineItem[]; labor_items: EstimateLaborItem[]; markup_percent: number; notes?: string } | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  const router = useRouter();
   function markDirty() { setDirty(true); setSaved(false); }
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [vendorId, setVendorId] = useState(estimate.vendor_id || "");
@@ -415,6 +417,60 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     });
     setDirty(false);
     setSaved(true);
+  }
+
+  async function createQuote() {
+    save();
+    const invNum = `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    // Map materials
+    const invoiceLineItems = [
+      ...lineItems.map((li) => ({
+        category: "Materials",
+        description: li.description,
+        quantity: li.quantity,
+        unit_price: li.unit_price,
+      })),
+      ...laborItems.map((li) => ({
+        category: "Labor",
+        description: li.description,
+        quantity: li.hours,
+        unit_price: li.rate,
+      })),
+    ] as { category: string; description: string; quantity: number; unit_price: number }[];
+
+    // Markup as its own line item
+    if (markupPct > 0) {
+      const base = lineItems.reduce((s, li) => s + li.quantity * li.unit_price, 0) +
+        laborItems.reduce((s, li) => s + li.cost, 0);
+      invoiceLineItems.push({ category: "Markup", description: `${markupPct}% Markup`, quantity: 1, unit_price: base * markupPct / 100 });
+    }
+
+    // Pull customer email/phone if we have a customer_id
+    let clientEmail = "";
+    let clientPhone = "";
+    if (customerId) {
+      const { data: cust } = await axiom.from("customers").select("email,phone").eq("id", customerId).single();
+      if (cust) { clientEmail = cust.email || ""; clientPhone = cust.phone || ""; }
+    }
+
+    const { data } = await axiom.from("invoices").insert({
+      invoice_number: invNum,
+      client_name: clientName || "",
+      client_email: clientEmail,
+      client_phone: clientPhone,
+      description: projectName,
+      reference_number: estimate.estimate_number,
+      subtotal: 0,
+      delivery_fee: 0,
+      discount: 0,
+      tax_rate: 8.75,
+      issued_date: new Date().toISOString().split("T")[0],
+      line_items: invoiceLineItems,
+      custom_work_id: estimate.custom_work_id || undefined,
+    }).select().single();
+
+    if (data) router.push("/axiom/invoices");
   }
 
   // Auto-scroll chat to bottom
@@ -690,6 +746,9 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
         <SaveButton dirty={dirty} saved={saved} onClick={save} />
         <Button variant="outline" onClick={() => { save(); setShowLoadQuote(true); }}>
           <CheckCircle2 size={14} className="mr-1" /> Load into Quote
+        </Button>
+        <Button variant="outline" onClick={createQuote}>
+          <FileText size={14} className="mr-1" /> Create Invoice
         </Button>
         <button
           onClick={() => setChatOpen(true)}
