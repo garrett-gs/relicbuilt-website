@@ -36,6 +36,7 @@ const navSections = [
   {
     label: "Projects",
     items: [
+      { href: "/axiom/estimator", icon: Calculator, label: "Estimator" },
       { href: "/axiom/projects", icon: Hammer, label: "Projects" },
       { href: "/axiom/timeclock", icon: Clock, label: "Time Clock" },
       { href: "/axiom/calendar", icon: CalendarDays, label: "Build Calendar" },
@@ -50,7 +51,6 @@ const navSections = [
   {
     label: "Finance",
     items: [
-      { href: "/axiom/estimator", icon: Calculator, label: "Estimator" },
       { href: "/axiom/invoices", icon: FileText, label: "Invoices" },
       { href: "/axiom/purchase-orders", icon: ShoppingCart, label: "Purchase Orders" },
       { href: "/axiom/expenses", icon: Receipt, label: "Expenses" },
