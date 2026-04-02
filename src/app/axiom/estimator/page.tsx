@@ -283,6 +283,8 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
 }) {
   const [customerId, setCustomerId] = useState(estimate.customer_id || "");
   const [customerName, setCustomerName] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientPhone, setClientPhone] = useState("");
   const [projectName, setProjectName] = useState(estimate.project_name || "");
   const [clientName, setClientName] = useState(estimate.client_name || "");
   const [status, setStatus] = useState<Estimate["status"]>(estimate.status);
@@ -396,10 +398,14 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     if (!c.id) {
       setCustomerId("");
       setCustomerName("");
+      setClientEmail("");
+      setClientPhone("");
     } else {
       setCustomerId(c.id);
       setCustomerName(c.name);
       setClientName(c.name);
+      setClientEmail(c.email || "");
+      setClientPhone(c.phone || "");
     }
     markDirty();
   }
@@ -448,19 +454,22 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       invoiceLineItems.push({ category: "Markup", description: `${markupPct}% Markup`, quantity: 1, unit_price: base * markupPct / 100 });
     }
 
-    // Pull customer email/phone if we have a customer_id
-    let clientEmail = "";
-    let clientPhone = "";
-    if (customerId) {
+    // Use captured email/phone, fall back to DB lookup if missing
+    let resolvedEmail = clientEmail;
+    let resolvedPhone = clientPhone;
+    if (customerId && (!resolvedEmail || !resolvedPhone)) {
       const { data: cust } = await axiom.from("customers").select("email,phone").eq("id", customerId).single();
-      if (cust) { clientEmail = cust.email || ""; clientPhone = cust.phone || ""; }
+      if (cust) {
+        if (!resolvedEmail) resolvedEmail = cust.email || "";
+        if (!resolvedPhone) resolvedPhone = cust.phone || "";
+      }
     }
 
     const { data } = await axiom.from("invoices").insert({
       invoice_number: invNum,
       client_name: clientName || "",
-      client_email: clientEmail,
-      client_phone: clientPhone,
+      client_email: resolvedEmail,
+      client_phone: resolvedPhone,
       description: projectName,
       reference_number: estimate.estimate_number,
       subtotal: 0,
