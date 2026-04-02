@@ -566,7 +566,10 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
                     <input value={li.item_number} onChange={(e) => updateLine(i, "item_number", e.target.value)} placeholder="—" className="bg-card border border-border px-2 py-2 text-xs text-foreground focus:outline-none focus:border-accent font-mono" />
                     <input value={li.description} onChange={(e) => updateLine(i, "description", e.target.value)} placeholder="Description" className="bg-card border border-border px-2 py-2 text-xs text-foreground focus:outline-none focus:border-accent" />
                     <input type="number" value={li.quantity || ""} onChange={(e) => updateLine(i, "quantity", Number(e.target.value))} className="bg-card border border-border px-2 py-2 text-xs text-foreground focus:outline-none focus:border-accent text-right" />
-                    <input type="number" value={li.unit_price || ""} onChange={(e) => updateLine(i, "unit_price", Number(e.target.value))} className="bg-card border border-border px-2 py-2 text-xs text-foreground focus:outline-none focus:border-accent text-right" />
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted pointer-events-none">$</span>
+                      <input type="number" value={li.unit_price || ""} onChange={(e) => updateLine(i, "unit_price", Number(e.target.value))} className="bg-card border border-border pl-4 pr-2 py-2 text-xs text-foreground focus:outline-none focus:border-accent text-right w-full" />
+                    </div>
                     <input value={li.unit} onChange={(e) => updateLine(i, "unit", e.target.value)} placeholder="ea" className="bg-card border border-border px-2 py-2 text-xs text-foreground focus:outline-none focus:border-accent" />
                     <span className="text-xs font-mono text-right">{money((li.quantity || 0) * (li.unit_price || 0))}</span>
                     <button onClick={() => removeLine(i)} className="text-muted hover:text-red-500"><Trash2 size={13} /></button>

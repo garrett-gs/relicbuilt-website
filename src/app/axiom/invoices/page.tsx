@@ -440,7 +440,10 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
                     <input type="number" value={li.quantity} onChange={(e) => updateLine(i, "quantity", Number(e.target.value))} className="w-full bg-background border border-border px-2 py-1.5 text-sm text-right font-mono text-foreground focus:outline-none focus:border-accent" />
                   </td>
                   <td className="px-2 py-1.5">
-                    <input type="number" value={li.unit_price} onChange={(e) => updateLine(i, "unit_price", Number(e.target.value))} className="w-full bg-background border border-border px-2 py-1.5 text-sm text-right font-mono text-foreground focus:outline-none focus:border-accent" />
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">$</span>
+                      <input type="number" value={li.unit_price} onChange={(e) => updateLine(i, "unit_price", Number(e.target.value))} className="w-full bg-background border border-border pl-5 pr-2 py-1.5 text-sm text-right font-mono text-foreground focus:outline-none focus:border-accent" />
+                    </div>
                   </td>
                   <td className="px-3 py-1.5 text-right font-mono font-bold text-sm">{money((li.quantity || 0) * (li.unit_price || 0))}</td>
                   <td className="px-2 py-1.5"><button onClick={() => removeLine(i)} className="text-muted hover:text-red-500"><X size={14} /></button></td>

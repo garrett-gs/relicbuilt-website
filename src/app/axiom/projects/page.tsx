@@ -745,7 +745,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             {STATUS_COLUMNS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
         </div>
-        <Field label="Quoted Amount" type="number" value={String(quoted)} onChange={(v) => { setQuoted(Number(v)); markDirty(); }} />
+        <Field label="Quoted Amount" type="number" prefix="$" value={String(quoted)} onChange={(v) => { setQuoted(Number(v)); markDirty(); }} />
       </div>
 
       {/* Profit box */}
@@ -1155,15 +1155,18 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 
 // ── Reusable field ───────────────────────────────────────────
 
-function Field({ label, value, onChange, type = "text", required }: {
-  label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean;
+function Field({ label, value, onChange, type = "text", required, prefix }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean; prefix?: string;
 }) {
   return (
     <div>
       <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">
         {label}{required && <span className="text-accent ml-1">*</span>}
       </label>
-      <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
+      <div className="relative">
+        {prefix && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">{prefix}</span>}
+        <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className={`w-full bg-card border border-border py-3 text-foreground text-sm focus:outline-none focus:border-accent ${prefix ? "pl-7 pr-4" : "px-4"}`} />
+      </div>
     </div>
   );
 }
