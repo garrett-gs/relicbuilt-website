@@ -1178,36 +1178,41 @@ function SendPOModal({ po, vendorEmail, onClose, onSent, userEmail }: {
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-50" onClick={onClose} />
-      <div className="fixed top-8 bottom-8 right-8 left-8 md:left-[30%] z-50 bg-background border border-border overflow-y-auto">
-        <div className="sticky top-0 bg-background border-b border-border px-6 py-4 flex items-center justify-between z-10">
+      <div className="fixed inset-4 z-50 bg-background border border-border flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
           <h2 className="text-lg font-heading font-bold">Send {po.po_number}</h2>
           <button onClick={onClose} className="text-muted hover:text-foreground"><X size={20} /></button>
         </div>
-        <div className="p-6 space-y-5">
-          <div>
-            <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">To *</label>
-            <input type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="vendor@email.com" className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
-          </div>
-          <div>
-            <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Message</label>
-            <textarea value={message} onChange={(e) => setMessage(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[120px] resize-y" />
+
+        {/* Split body */}
+        <div className="flex flex-1 min-h-0">
+          {/* Left — compose */}
+          <div className="w-full md:w-[360px] shrink-0 border-r border-border flex flex-col overflow-y-auto p-6 space-y-5">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">To *</label>
+              <input type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="vendor@email.com" className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Message</label>
+              <textarea value={message} onChange={(e) => setMessage(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[180px] resize-y" />
+            </div>
+
+            <div className="flex gap-3">
+              <Button onClick={send} disabled={!to || sending}>
+                <Send size={14} className="mr-1" /> {sending ? "Sending..." : "Send PO"}
+              </Button>
+              <Button variant="outline" onClick={onClose}>Cancel</Button>
+            </div>
+
+            {status === "sent" && <p className="text-green-500 text-sm">PO sent successfully!</p>}
+            {status === "error" && <p className="text-red-500 text-sm">Failed to send. Check that RESEND_API_KEY is configured.</p>}
           </div>
 
-          {/* Preview */}
-          <div>
-            <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">PO Preview</label>
-            <div className="bg-white border border-border p-4 rounded overflow-auto max-h-[300px]" dangerouslySetInnerHTML={{ __html: generatePOHtml(po, true) }} />
+          {/* Right — PO preview */}
+          <div className="flex-1 overflow-y-auto bg-white">
+            <div dangerouslySetInnerHTML={{ __html: generatePOHtml(po, true) }} />
           </div>
-
-          <div className="flex gap-3">
-            <Button onClick={send} disabled={!to || sending}>
-              <Send size={14} className="mr-1" /> {sending ? "Sending..." : "Send PO"}
-            </Button>
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-          </div>
-
-          {status === "sent" && <p className="text-green-500 text-sm">PO sent successfully!</p>}
-          {status === "error" && <p className="text-red-500 text-sm">Failed to send. Check that RESEND_API_KEY is configured in .env.local.</p>}
         </div>
       </div>
     </>
