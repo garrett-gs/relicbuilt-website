@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
-import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, BuildComment, ApprovalRequest, ProjectChecklist } from "@/types/axiom";
+import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, ProposalScope, ProposalCostSection, ProposalCostItem, BuildComment, ApprovalRequest, ProjectChecklist } from "@/types/axiom";
 import ChecklistPanel from "@/components/axiom/ChecklistPanel";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
@@ -500,6 +500,8 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [dueDate, setDueDate] = useState(project.due_date || "");
   const [portalStage, setPortalStage] = useState(project.portal_stage || "consultation");
   const [proposalHighlights, setProposalHighlights] = useState<ProposalHighlight[]>(project.proposal_highlights || []);
+  const [proposalScope, setProposalScope] = useState<ProposalScope>(project.proposal_scope || { body: "", included: true });
+  const [proposalCostSection, setProposalCostSection] = useState<ProposalCostSection>(project.proposal_cost_section || { items: [], show_total: true, included: true });
   const [proposalImages, setProposalImages] = useState<string[]>(project.proposal_images || []);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -641,6 +643,22 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   }
   function removeHighlight(i: number) { setProposalHighlights(proposalHighlights.filter((_, idx) => idx !== i)); markDirty(); }
 
+  function updateScope(value: string) { setProposalScope((prev) => ({ ...prev, body: value })); markDirty(); }
+  function toggleScopeIncluded() { setProposalScope((prev) => ({ ...prev, included: prev.included === false ? true : false })); markDirty(); }
+
+  function addCostItem() { setProposalCostSection((prev) => ({ ...prev, items: [...prev.items, { description: "", cost: 0 }] })); markDirty(); }
+  function updateCostItem(i: number, field: keyof ProposalCostItem, value: string | number) {
+    setProposalCostSection((prev) => {
+      const items = [...prev.items];
+      items[i] = { ...items[i], [field]: value };
+      return { ...prev, items };
+    });
+    markDirty();
+  }
+  function removeCostItem(i: number) { setProposalCostSection((prev) => ({ ...prev, items: prev.items.filter((_, idx) => idx !== i) })); markDirty(); }
+  function toggleCostIncluded() { setProposalCostSection((prev) => ({ ...prev, included: prev.included === false ? true : false })); markDirty(); }
+  function toggleCostShowTotal() { setProposalCostSection((prev) => ({ ...prev, show_total: !prev.show_total })); markDirty(); }
+
   function toggleProposalImage(url: string) {
     setProposalImages(proposalImages.includes(url)
       ? proposalImages.filter((u) => u !== url)
@@ -702,6 +720,8 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       due_date: dueDate || undefined,
       portal_stage: portalStage as CustomWork["portal_stage"],
       proposal_highlights: proposalHighlights,
+      proposal_scope: proposalScope,
+      proposal_cost_section: proposalCostSection,
       proposal_images: proposalImages,
     });
     setDirty(false);
@@ -953,6 +973,100 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+
+        {/* Scope */}
+        <div className="p-4 border-b border-border">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleScopeIncluded}
+                title={proposalScope.included !== false ? "Included — click to exclude" : "Excluded — click to include"}
+                className={cn(
+                  "shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors",
+                  proposalScope.included !== false ? "bg-accent border-accent" : "bg-transparent border-muted hover:border-accent"
+                )}
+              >
+                {proposalScope.included !== false && <CheckCircle size={10} className="text-background" />}
+              </button>
+              <p className="text-xs uppercase tracking-wider text-muted">Scope of Work</p>
+            </div>
+          </div>
+          <textarea
+            value={proposalScope.body}
+            onChange={(e) => updateScope(e.target.value)}
+            placeholder="Describe the full scope of work for this project..."
+            rows={5}
+            className={cn(
+              "w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent resize-y transition-opacity",
+              proposalScope.included === false && "opacity-40"
+            )}
+          />
+        </div>
+
+        {/* Cost Line Items */}
+        <div className="p-4 border-b border-border">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={toggleCostIncluded}
+                title={proposalCostSection.included !== false ? "Included — click to exclude" : "Excluded — click to include"}
+                className={cn(
+                  "shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors",
+                  proposalCostSection.included !== false ? "bg-accent border-accent" : "bg-transparent border-muted hover:border-accent"
+                )}
+              >
+                {proposalCostSection.included !== false && <CheckCircle size={10} className="text-background" />}
+              </button>
+              <p className="text-xs uppercase tracking-wider text-muted">Cost Line Items</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-1.5 text-xs text-muted cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={proposalCostSection.show_total !== false}
+                  onChange={toggleCostShowTotal}
+                  className="accent-accent"
+                />
+                Show total
+              </label>
+              <button onClick={addCostItem} className="text-accent text-xs flex items-center gap-1"><Plus size={12} /> Add Item</button>
+            </div>
+          </div>
+          {proposalCostSection.items.length === 0 ? (
+            <p className="text-sm text-muted">No cost items — add line items to show a pricing breakdown in the proposal.</p>
+          ) : (
+            <div className={cn("space-y-2", proposalCostSection.included === false && "opacity-40")}>
+              {proposalCostSection.items.map((item, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    value={item.description}
+                    onChange={(e) => updateCostItem(i, "description", e.target.value)}
+                    placeholder="Description..."
+                    className="flex-1 bg-background border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
+                  />
+                  <div className="relative w-28 shrink-0">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">$</span>
+                    <input
+                      type="number"
+                      value={item.cost || ""}
+                      onChange={(e) => updateCostItem(i, "cost", parseFloat(e.target.value) || 0)}
+                      placeholder="0.00"
+                      className="w-full bg-background border border-border pl-7 pr-3 py-1.5 text-sm text-right text-foreground focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                  <button onClick={() => removeCostItem(i)} className="text-muted hover:text-red-500 shrink-0"><Trash2 size={14} /></button>
+                </div>
+              ))}
+              {proposalCostSection.show_total !== false && proposalCostSection.items.length > 0 && (
+                <div className="flex justify-end pt-2 border-t border-border">
+                  <span className="text-sm font-semibold text-foreground font-mono">
+                    Total: ${proposalCostSection.items.reduce((s, it) => s + (it.cost || 0), 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>

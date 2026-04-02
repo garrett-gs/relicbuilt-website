@@ -46,6 +46,8 @@ export function generateProposalHtml(
   const materials = project.materials || [];
   const laborLog = project.labor_log || [];
   const highlights: ProposalHighlight[] = (project.proposal_highlights || []).filter((h) => h.included !== false);
+  const scope = project.proposal_scope?.included !== false ? (project.proposal_scope?.body || "") : "";
+  const costSection = project.proposal_cost_section?.included !== false ? project.proposal_cost_section : null;
   const images: string[] = project.proposal_images || [];
   const stripeColor = "#8b6914";
   const logoUrl = "https://relicbuilt.com/logo-full.png";
@@ -114,6 +116,30 @@ export function generateProposalHtml(
     ${project.project_description ? `<p style="margin:8px 0 0;font-size:13px;color:#555;line-height:1.6;">${esc(project.project_description).replace(/\n/g, "<br>")}</p>` : ""}
     ${project.timeline ? `<p style="margin:10px 0 0;font-size:12px;color:#888;">Timeline: ${esc(project.timeline)}</p>` : ""}
   </div>
+
+  <!-- Scope of Work -->
+  ${scope ? `
+  <div style="background:${stripeColor};padding:10px 20px;margin-top:0;">
+    <p style="margin:0;font-size:11px;font-weight:bold;color:#fff;text-transform:uppercase;letter-spacing:0.14em;">Scope of Work</p>
+  </div>
+  <div style="padding:18px 20px;border-bottom:1px solid #f0f0f0;">
+    <p style="margin:0;font-size:13px;color:#555;line-height:1.7;white-space:pre-wrap;">${esc(scope)}</p>
+  </div>` : ""}
+
+  <!-- Cost Line Items -->
+  ${costSection && costSection.items.length > 0 ? `
+  <div style="background:${stripeColor};padding:10px 20px;margin-top:0;">
+    <p style="margin:0;font-size:11px;font-weight:bold;color:#fff;text-transform:uppercase;letter-spacing:0.14em;">Pricing</p>
+  </div>
+  ${costSection.items.map((item) => `
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid #f5f5f5;">
+    <span style="font-size:13px;color:#333;">${esc(item.description)}</span>
+    <span style="font-size:13px;font-weight:bold;font-family:monospace;white-space:nowrap;margin-left:20px;">${money(item.cost || 0)}</span>
+  </div>`).join("")}
+  ${costSection.show_total !== false ? `
+  <div style="display:flex;justify-content:flex-end;padding:10px 20px;background:#f9f9f9;border-bottom:1px solid #f0f0f0;">
+    <span style="font-size:13px;font-weight:bold;font-family:monospace;">${money(costSection.items.reduce((s, it) => s + (it.cost || 0), 0))}</span>
+  </div>` : ""}` : ""}
 
   <!-- Project Highlights -->
   ${highlights.length > 0 ? `

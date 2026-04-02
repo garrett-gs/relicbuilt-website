@@ -6,6 +6,22 @@ export interface ProposalHighlight {
   included?: boolean;
 }
 
+export interface ProposalScope {
+  body: string;
+  included?: boolean;
+}
+
+export interface ProposalCostItem {
+  description: string;
+  cost: number;
+}
+
+export interface ProposalCostSection {
+  items: ProposalCostItem[];
+  show_total?: boolean;
+  included?: boolean;
+}
+
 // ── Project Checklist ────────────────────────────────────────
 
 export interface ChecklistItem {
@@ -63,6 +79,8 @@ export interface CustomWork {
   image_url?: string;
   inspiration_images: string[];
   proposal_highlights?: ProposalHighlight[];
+  proposal_scope?: ProposalScope;
+  proposal_cost_section?: ProposalCostSection;
   proposal_images?: string[];
   portal_enabled: boolean;
   portal_token?: string;
