@@ -538,6 +538,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     });
     setApprovalDesc("");
     setApprovalImages([]);
+    setNewApprovalImage("");
     const { data } = await axiom.from("approval_requests").select("*").eq("custom_work_id", project.id).order("created_at", { ascending: false });
     if (data) setApprovals(data);
     notifyPortal({
