@@ -81,7 +81,12 @@ export default function ProjectsPage() {
   }
 
   async function updateProject(id: string, updates: Partial<CustomWork>) {
-    await axiom.from("custom_work").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
+    const { error } = await axiom.from("custom_work").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) {
+      console.error("updateProject failed:", error.message, error.details, error.hint);
+      alert(`Save failed: ${error.message}${error.hint ? `\nHint: ${error.hint}` : ""}`);
+      return;
+    }
     load();
     if (selected?.id === id) {
       setSelected((prev) => prev ? { ...prev, ...updates } : prev);

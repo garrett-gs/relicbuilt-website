@@ -37,10 +37,15 @@ export default function ChecklistPanel({ projectId, initial }: Props) {
   // ── Persistence ──────────────────────────────────────────────
   async function persist(updated: ProjectChecklist) {
     setChecklist(updated);
-    await axiom
+    const { error } = await axiom
       .from("custom_work")
       .update({ checklist: updated, updated_at: new Date().toISOString() })
       .eq("id", projectId);
+    if (error) {
+      console.error("Checklist save failed:", error.message, error.hint);
+      // Surface the error — most likely the checklist column doesn't exist yet (run migration v18)
+      alert(`Checklist save failed: ${error.message}\n\nRun migration v18 in Supabase to fix this.`);
+    }
   }
 
   function clone() {

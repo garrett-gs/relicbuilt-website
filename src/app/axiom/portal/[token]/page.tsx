@@ -156,8 +156,17 @@ export default function ClientPortalPage() {
               <div className="bg-accent/10 border border-accent/30 p-6">
                 <h3 className="text-sm uppercase tracking-wider text-accent mb-3">Approval Required</h3>
                 {approvals.filter((a) => a.status === "pending").map((a) => (
-                  <div key={a.id} className="mb-4">
+                  <div key={a.id} className="mb-6">
                     <p className="text-sm mb-3">{a.description}</p>
+                    {a.images && (a.images as string[]).length > 0 && (
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {(a.images as string[]).map((url, i) => (
+                          <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                            <img src={url} alt="" className="h-32 w-32 object-cover border border-accent/30 rounded hover:border-accent transition-colors" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex gap-3">
                       <Button size="sm" onClick={() => respondToApproval(a.id, "approved")}>Approve</Button>
                       <Button size="sm" variant="outline" onClick={() => {
@@ -196,7 +205,12 @@ export default function ClientPortalPage() {
                 {comments.map((c) => (
                   <div key={c.id} className={cn("border p-3 text-sm", c.is_change_request ? "bg-amber-500/5 border-amber-500/30" : "bg-card border-border")}>
                     {c.is_change_request && <span className="text-[10px] uppercase tracking-wider text-amber-500 block mb-1">Change Request</span>}
-                    <p>{c.body}</p>
+                    {c.body.trim() && <p>{c.body}</p>}
+                    {c.image_url && (
+                      <a href={c.image_url} target="_blank" rel="noopener noreferrer" className="block mt-2">
+                        <img src={c.image_url} alt="Attachment" className="max-h-48 max-w-full object-contain border border-border rounded" />
+                      </a>
+                    )}
                     <p className="text-xs text-muted mt-1">{c.author} &middot; {new Date(c.created_at).toLocaleDateString()}</p>
                   </div>
                 ))}
