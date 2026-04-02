@@ -344,29 +344,65 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (r: ClientSearchR
   );
 }
 
-// ── Company dropdown ──────────────────────────────────────────
+// ── Contact selector ──────────────────────────────────────────
+// When a company is selected: dropdown of people linked to that company.
+// When an individual is selected: read-only badge showing their name.
+// When nothing is selected: plain text field for manual entry.
 
-function CompanySelect({ value, onChange }: { value: string; onChange: (id: string, name: string) => void }) {
-  const [companies, setCompanies] = useState<Company[]>([]);
+function ContactSelect({ companyId, selectedId, value, onChange, onSelect }: {
+  companyId: string;
+  selectedId: string;
+  value: string;
+  onChange: (name: string) => void;
+  onSelect: (c: { id: string; name: string; email?: string; phone?: string }) => void;
+}) {
+  const [contacts, setContacts] = useState<Customer[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    axiom.from("companies").select("*").order("name").then(({ data }) => { if (data) setCompanies(data); });
-  }, []);
+    if (!companyId) { setContacts([]); return; }
+    setLoading(true);
+    axiom.from("customers").select("id,name,email,phone,title").eq("company_id", companyId).order("name").then(({ data }) => {
+      setLoading(false);
+      if (data) setContacts(data as Customer[]);
+    });
+  }, [companyId]);
 
   return (
     <div>
-      <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Company</label>
-      <select
-        value={value}
-        onChange={(e) => {
-          const selected = companies.find((c) => c.id === e.target.value);
-          onChange(e.target.value, selected?.name || "");
-        }}
-        className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
-      >
-        <option value="">None</option>
-        {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-      </select>
+      <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Contact</label>
+      {companyId ? (
+        contacts.length > 0 ? (
+          <select
+            value={selectedId}
+            onChange={(e) => {
+              if (!e.target.value) { onSelect({ id: "", name: "", email: "", phone: "" }); return; }
+              const c = contacts.find((c) => c.id === e.target.value);
+              if (c) onSelect({ id: c.id, name: c.name, email: c.email, phone: c.phone });
+            }}
+            className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+          >
+            <option value="">Select a contact...</option>
+            {contacts.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}{c.title ? ` — ${c.title}` : ""}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={loading ? "Loading contacts…" : "No contacts linked — type manually"}
+            className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+          />
+        )
+      ) : (
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Contact name"
+          className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+        />
+      )}
     </div>
   );
 }
@@ -396,16 +432,18 @@ function CreateProjectForm({ onSubmit, onCancel }: { onSubmit: (form: Record<str
 
       <CustomerSearch onSelect={handleCustomerSelect} />
 
+      <ContactSelect
+        companyId={form.company_id}
+        selectedId={form.customer_id}
+        value={form.client_name}
+        onChange={(v) => set("client_name", v)}
+        onSelect={(c) => setForm((f) => ({ ...f, customer_id: c.id, client_name: c.name, client_email: c.email || "", client_phone: formatPhone(c.phone || "") }))}
+      />
+
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Client Name" value={form.client_name} onChange={(v) => set("client_name", v)} />
+        <Field label="Client Email" value={form.client_email} onChange={(v) => set("client_email", v)} type="email" />
         <Field label="Client Phone" value={form.client_phone} onChange={(v) => set("client_phone", formatPhone(v))} />
       </div>
-      <Field label="Client Email" value={form.client_email} onChange={(v) => set("client_email", v)} type="email" />
-
-      <CompanySelect
-        value={form.company_id}
-        onChange={(id, name) => setForm((f) => ({ ...f, company_id: id, company_name: name }))}
-      />
 
       <div>
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Budget Range</label>
@@ -653,23 +691,31 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 
   return (
     <div className="space-y-8">
-      {/* Customer + Company */}
+      {/* Customer / Contact */}
       <div className="space-y-4">
         <CustomerSearch
           onSelect={handleCustomerSelect}
           initialName={customerName}
         />
-        <CompanySelect
-          value={companyId}
-          onChange={(id, name) => { setCompanyId(id); setCompanyName(name); }}
+        <ContactSelect
+          companyId={companyId}
+          selectedId={customerId}
+          value={clientName}
+          onChange={(v) => { setClientName(v); markDirty(); }}
+          onSelect={(c) => {
+            setCustomerId(c.id);
+            setClientName(c.name);
+            setClientEmail(c.email || "");
+            setClientPhone(formatPhone(c.phone || ""));
+            markDirty();
+          }}
         />
       </div>
 
-      {/* Client info — editable */}
+      {/* Contact info */}
       <div className="grid grid-cols-2 gap-4">
-        <Field label="Client Name" value={clientName} onChange={(v) => { setClientName(v); markDirty(); }} />
-        <Field label="Client Email" value={clientEmail} onChange={(v) => { setClientEmail(v); markDirty(); }} type="email" />
-        <Field label="Client Phone" value={clientPhone} onChange={(v) => { setClientPhone(formatPhone(v)); markDirty(); }} />
+        <Field label="Contact Email" value={clientEmail} onChange={(v) => { setClientEmail(v); markDirty(); }} type="email" />
+        <Field label="Contact Phone" value={clientPhone} onChange={(v) => { setClientPhone(formatPhone(v)); markDirty(); }} />
         <div>
           <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Budget Range</label>
           <select value={budgetRange} onChange={(e) => { setBudgetRange(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">
