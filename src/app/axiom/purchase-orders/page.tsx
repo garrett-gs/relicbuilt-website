@@ -160,7 +160,6 @@ function OrdersTab() {
       delivery_method: deliveryMethod || null,
       delivery_date: deliveryDate || null,
       ship_to_address: shipToAddress || null,
-      updated_at: new Date().toISOString(),
     }).eq("id", id);
     await logActivity({ action: "updated", entity: "purchase_order", entity_id: id, label: `Updated PO: ${pos.find((p) => p.id === id)?.po_number} — ${vendorName}`, user_name: userEmail });
     setEditPO(null);
