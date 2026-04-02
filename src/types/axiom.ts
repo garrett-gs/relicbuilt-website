@@ -3,6 +3,7 @@
 export interface ProposalHighlight {
   title: string;
   body: string;
+  included?: boolean;
 }
 
 // ── Project Checklist ────────────────────────────────────────

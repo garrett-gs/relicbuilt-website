@@ -628,10 +628,15 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   }
   function removeLabor(i: number) { setLabor(labor.filter((_, idx) => idx !== i)); markDirty(); }
 
-  function addHighlight() { setProposalHighlights([...proposalHighlights, { title: "", body: "" }]); markDirty(); }
-  function updateHighlight(i: number, field: keyof ProposalHighlight, value: string) {
+  function addHighlight() { setProposalHighlights([...proposalHighlights, { title: "", body: "", included: true }]); markDirty(); }
+  function updateHighlight(i: number, field: "title" | "body", value: string) {
     const updated = [...proposalHighlights];
     updated[i] = { ...updated[i], [field]: value };
+    setProposalHighlights(updated); markDirty();
+  }
+  function toggleHighlightIncluded(i: number) {
+    const updated = [...proposalHighlights];
+    updated[i] = { ...updated[i], included: updated[i].included === false ? true : false };
     setProposalHighlights(updated); markDirty();
   }
   function removeHighlight(i: number) { setProposalHighlights(proposalHighlights.filter((_, idx) => idx !== i)); markDirty(); }
@@ -915,26 +920,39 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             <p className="text-muted text-sm">No highlights added — use these to call out key features or selling points of the project.</p>
           ) : (
             <div className="space-y-3">
-              {proposalHighlights.map((h, i) => (
-                <div key={i} className="bg-background border border-border p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <input
-                      value={h.title}
-                      onChange={(e) => updateHighlight(i, "title", e.target.value)}
-                      placeholder="Highlight title..."
-                      className="flex-1 bg-transparent border-b border-border px-0 py-1 text-sm font-semibold text-foreground focus:outline-none focus:border-accent"
+              {proposalHighlights.map((h, i) => {
+                const isIncluded = h.included !== false;
+                return (
+                  <div key={i} className={cn("bg-background border p-3 transition-opacity", isIncluded ? "border-border" : "border-border opacity-50")}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <button
+                        onClick={() => toggleHighlightIncluded(i)}
+                        title={isIncluded ? "Included in proposal — click to exclude" : "Excluded from proposal — click to include"}
+                        className={cn(
+                          "shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors",
+                          isIncluded ? "bg-accent border-accent" : "bg-transparent border-muted hover:border-accent"
+                        )}
+                      >
+                        {isIncluded && <CheckCircle size={10} className="text-background" />}
+                      </button>
+                      <input
+                        value={h.title}
+                        onChange={(e) => updateHighlight(i, "title", e.target.value)}
+                        placeholder="Highlight title..."
+                        className="flex-1 bg-transparent border-b border-border px-0 py-1 text-sm font-semibold text-foreground focus:outline-none focus:border-accent"
+                      />
+                      <button onClick={() => removeHighlight(i)} className="text-muted hover:text-red-500 shrink-0"><Trash2 size={12} /></button>
+                    </div>
+                    <textarea
+                      value={h.body}
+                      onChange={(e) => updateHighlight(i, "body", e.target.value)}
+                      placeholder="Describe this highlight..."
+                      rows={2}
+                      className="w-full bg-transparent text-sm text-muted focus:outline-none resize-none border border-transparent focus:border-border px-1 py-0.5"
                     />
-                    <button onClick={() => removeHighlight(i)} className="text-muted hover:text-red-500 shrink-0"><Trash2 size={12} /></button>
                   </div>
-                  <textarea
-                    value={h.body}
-                    onChange={(e) => updateHighlight(i, "body", e.target.value)}
-                    placeholder="Describe this highlight..."
-                    rows={2}
-                    className="w-full bg-transparent text-sm text-muted focus:outline-none resize-none border border-transparent focus:border-border px-1 py-0.5"
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
