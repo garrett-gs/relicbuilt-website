@@ -8,7 +8,7 @@ import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Ve
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles } from "lucide-react";
 
 const STATUS_COLORS: Record<Estimate["status"], string> = {
   draft: "#888",
@@ -295,6 +295,14 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // ── Claude chat ───────────────────────────────────────────────
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [pendingEstimate, setPendingEstimate] = useState<{ line_items: EstimateLineItem[]; labor_items: EstimateLaborItem[]; markup_percent: number; notes?: string } | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
   function markDirty() { setDirty(true); setSaved(false); }
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [vendorId, setVendorId] = useState(estimate.vendor_id || "");
@@ -407,6 +415,51 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     });
     setDirty(false);
     setSaved(true);
+  }
+
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, chatLoading]);
+
+  async function sendChat() {
+    const text = chatInput.trim();
+    if (!text || chatLoading) return;
+    const newMessages = [...chatMessages, { role: "user" as const, content: text }];
+    setChatMessages(newMessages);
+    setChatInput("");
+    setChatLoading(true);
+    setPendingEstimate(null);
+    try {
+      const res = await fetch("/api/estimate-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: newMessages,
+          estimate: { project_name: projectName, client_name: clientName, line_items: lineItems, labor_items: laborItems, markup_percent: markupPct },
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setChatMessages([...newMessages, { role: "assistant", content: data.message }]);
+      if (data.estimateData) setPendingEstimate(data.estimateData);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Something went wrong";
+      setChatMessages([...newMessages, { role: "assistant", content: `Error: ${msg}` }]);
+    } finally {
+      setChatLoading(false);
+    }
+  }
+
+  function applyEstimate() {
+    if (!pendingEstimate) return;
+    setLineItems(pendingEstimate.line_items || []);
+    setLaborItems(pendingEstimate.labor_items || []);
+    setMarkupPct(pendingEstimate.markup_percent || 0);
+    if (pendingEstimate.notes) setNotes(pendingEstimate.notes);
+    setPendingEstimate(null);
+    markDirty();
+    setChatMessages((prev) => [...prev, { role: "assistant", content: "✓ Estimate applied. Review the numbers and make any adjustments, then hit Save." }]);
   }
 
   return (
@@ -638,6 +691,12 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
         <Button variant="outline" onClick={() => { save(); setShowLoadQuote(true); }}>
           <CheckCircle2 size={14} className="mr-1" /> Load into Quote
         </Button>
+        <button
+          onClick={() => setChatOpen(true)}
+          className="flex items-center gap-2 px-3 py-2 border border-accent/50 text-accent text-sm hover:bg-accent/10 transition-colors"
+        >
+          <Sparkles size={14} /> Ask Claude
+        </button>
         {confirmDelete ? (
           <div className="flex items-center gap-2 ml-auto">
             <span className="text-red-500 text-sm">Delete this estimate?</span>
@@ -663,6 +722,96 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
             setShowLoadQuote(false);
           }}
         />
+      )}
+
+      {/* ── Claude chat drawer ── */}
+      {chatOpen && (
+        <>
+          <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setChatOpen(false)} />
+          <div className="fixed right-0 top-0 h-full w-full max-w-md bg-background border-l border-border z-50 flex flex-col shadow-2xl">
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Sparkles size={16} className="text-accent" />
+                <span className="font-semibold text-sm">Claude — AI Estimator</span>
+              </div>
+              <button onClick={() => setChatOpen(false)} className="text-muted hover:text-foreground"><X size={18} /></button>
+            </div>
+
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+              {chatMessages.length === 0 && (
+                <div className="text-center py-12 space-y-3">
+                  <Sparkles size={32} className="text-accent/40 mx-auto" />
+                  <p className="text-muted text-sm">Describe the project and I&apos;ll build the estimate.</p>
+                  <div className="space-y-1 text-xs text-muted/60">
+                    <p>Try: &quot;Steel and walnut dining table, 8ft, powder coat base&quot;</p>
+                    <p>Or: &quot;Built-in bookcase, white oak, 10ft wide, floor to ceiling&quot;</p>
+                  </div>
+                </div>
+              )}
+              {chatMessages.map((msg, i) => (
+                <div key={i} className={cn("flex", msg.role === "user" ? "justify-end" : "justify-start")}>
+                  <div className={cn(
+                    "max-w-[85%] px-3 py-2 text-sm rounded",
+                    msg.role === "user"
+                      ? "bg-accent text-white"
+                      : "bg-card border border-border text-foreground"
+                  )}>
+                    <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  </div>
+                </div>
+              ))}
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-card border border-border px-3 py-2 rounded flex items-center gap-2">
+                    <Loader2 size={14} className="animate-spin text-accent" />
+                    <span className="text-sm text-muted">Thinking…</span>
+                  </div>
+                </div>
+              )}
+              {/* Apply estimate button */}
+              {pendingEstimate && (
+                <div className="bg-accent/10 border border-accent/30 rounded p-3 space-y-2">
+                  <p className="text-sm font-medium text-accent">Estimate ready</p>
+                  <p className="text-xs text-muted">
+                    {pendingEstimate.line_items?.length || 0} materials · {pendingEstimate.labor_items?.length || 0} labor items · {pendingEstimate.markup_percent || 0}% markup
+                  </p>
+                  <button
+                    onClick={applyEstimate}
+                    className="w-full bg-accent text-white py-2 text-sm font-medium hover:bg-accent/80 transition-colors"
+                  >
+                    Apply to Estimate
+                  </button>
+                </div>
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* Input */}
+            <div className="border-t border-border p-3">
+              <div className="flex gap-2">
+                <textarea
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+                  placeholder="Describe the project…"
+                  className="flex-1 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent resize-none min-h-[42px] max-h-32"
+                  rows={1}
+                  disabled={chatLoading}
+                />
+                <button
+                  onClick={sendChat}
+                  disabled={chatLoading || !chatInput.trim()}
+                  className="bg-accent text-white px-3 py-2 hover:bg-accent/80 disabled:opacity-40 transition-colors shrink-0"
+                >
+                  <Send size={16} />
+                </button>
+              </div>
+              <p className="text-xs text-muted mt-1.5">Enter to send · Shift+Enter for new line</p>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
