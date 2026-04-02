@@ -2,83 +2,107 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
-import { CustomWork } from "@/types/axiom";
-import { Camera, Check, Plus, X, Loader2, Trash2, Delete, ShoppingCart } from "lucide-react";
+import { CustomWork, TeamMember } from "@/types/axiom";
+import { Camera, Check, Plus, X, Loader2, Trash2, Delete, ShoppingCart, ChevronLeft } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 
 // ── PIN Gate ─────────────────────────────────────────────────
 
-const PIN_SESSION_KEY = "relic_receipts_pin_ok";
+type GateStep = "select_member" | "enter_pin";
 
-function PinGate({ onUnlock }: { onUnlock: () => void }) {
-  const [entry, setEntry] = useState("");
-  const [shake, setShake] = useState(false);
-  const [checking, setChecking] = useState(false);
-  const [hint, setHint] = useState("");
+function PinGate({ onUnlock }: { onUnlock: (memberName: string) => void }) {
+  const [members, setMembers] = useState<TeamMember[]>([]);
+  const [step, setStep] = useState<GateStep>("select_member");
+  const [selected, setSelected] = useState<TeamMember | null>(null);
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState(false);
 
-  async function checkPin(pin: string) {
-    setChecking(true);
-    setHint("");
-    const { data, error } = await axiom.from("settings").select("receipts_pin").limit(1).single();
-    setChecking(false);
+  useEffect(() => {
+    axiom.from("settings").select("team_members").limit(1).single().then(({ data }) => {
+      if (data?.team_members) setMembers(data.team_members.filter((m: TeamMember) => m.name && m.pin));
+    });
+  }, []);
 
-    if (error) {
-      setHint(`DB error: ${error.message}`);
-      setEntry("");
-      return;
-    }
-    if (!data?.receipts_pin) {
-      setHint("No PIN set — go to Settings → General to set one.");
-      setEntry("");
-      return;
-    }
-    if (pin === data.receipts_pin) {
-      sessionStorage.setItem(PIN_SESSION_KEY, "1");
-      onUnlock();
-    } else {
-      setHint("Incorrect PIN");
-      setShake(true);
-      setTimeout(() => { setShake(false); setEntry(""); setHint(""); }, 1000);
+  function selectMember(member: TeamMember) {
+    setSelected(member);
+    setPin("");
+    setPinError(false);
+    setStep("enter_pin");
+  }
+
+  function pressDigit(digit: string) {
+    if (pinError) { setPin(""); setPinError(false); }
+    const next = pin + digit;
+    setPin(next);
+    if (next.length === 4) {
+      if (next !== selected?.pin) {
+        setPinError(true);
+        setTimeout(() => { setPin(""); setPinError(false); }, 1000);
+      } else {
+        onUnlock(selected.name);
+      }
     }
   }
 
-  function press(val: string) {
-    if (entry.length >= 4) return;
-    const next = entry + val;
-    setEntry(next);
-    if (next.length === 4) checkPin(next);
-  }
-
-  function del() { setEntry((e) => e.slice(0, -1)); }
+  function del() { setPin((p) => p.slice(0, -1)); setPinError(false); }
 
   const pad = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
 
+  // ── Member selection ──
+  if (step === "select_member") {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 gap-8">
+        <div className="text-center">
+          <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center mx-auto mb-4">
+            <Camera size={22} className="text-accent" />
+          </div>
+          <h1 className="text-2xl font-heading font-bold">RELIC Receipts</h1>
+          <p className="text-muted text-sm mt-1">Select your name to continue</p>
+        </div>
+        {members.length === 0 ? (
+          <p className="text-muted text-sm">No team members with PINs found — add them in Settings.</p>
+        ) : (
+          <div className="flex flex-col gap-3 w-72">
+            {members.map((m) => (
+              <button
+                key={m.name}
+                onClick={() => selectMember(m)}
+                className="bg-card border border-border px-5 py-4 text-left hover:border-accent hover:text-accent transition-colors"
+              >
+                <p className="font-medium">{m.name}</p>
+                {m.role && <p className="text-xs text-muted mt-0.5">{m.role}</p>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── PIN entry ──
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 gap-8">
       <div className="text-center">
         <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center mx-auto mb-4">
           <Camera size={22} className="text-accent" />
         </div>
-        <h1 className="text-2xl font-heading font-bold">RELIC Receipts</h1>
-        <p className="text-muted text-sm mt-1">Enter your PIN to continue</p>
+        <h1 className="text-2xl font-heading font-bold">{selected?.name}</h1>
+        <p className="text-muted text-sm mt-1">Enter your PIN</p>
       </div>
 
       {/* Dots */}
       <div className="flex flex-col items-center gap-3">
-        <div className={cn("flex gap-4 transition-transform", shake && "animate-[shake_0.4s_ease-in-out]")}>
+        <div className={cn("flex gap-4", pinError && "animate-[shake_0.4s_ease-in-out]")}>
           {[0,1,2,3].map((i) => (
-            <div
-              key={i}
-              className={cn(
-                "w-4 h-4 rounded-full border-2 transition-colors",
-                i < entry.length ? "bg-accent border-accent" : "border-border bg-transparent"
-              )}
-            />
+            <div key={i} className={cn(
+              "w-4 h-4 rounded-full border-2 transition-colors",
+              pinError ? "bg-red-500 border-red-500" : i < pin.length ? "bg-accent border-accent" : "border-border bg-transparent"
+            )} />
           ))}
         </div>
-        {hint && <p className="text-xs text-amber-400 text-center max-w-xs">{hint}</p>}
+        {pinError && <p className="text-xs text-red-400">Incorrect PIN</p>}
       </div>
 
       {/* Numpad */}
@@ -90,16 +114,16 @@ function PinGate({ onUnlock }: { onUnlock: () => void }) {
             <Delete size={20} />
           </button>
         ) : (
-          <button
-            key={i}
-            onPointerDown={() => press(k)}
-            disabled={checking}
-            className="h-16 rounded-lg bg-card border border-border text-xl font-medium text-foreground hover:border-accent hover:text-accent active:scale-95 transition-all"
-          >
-            {checking && entry.length === 4 ? <Loader2 size={18} className="animate-spin mx-auto text-accent" /> : k}
+          <button key={i} onPointerDown={() => pressDigit(k)}
+            className="h-16 rounded-lg bg-card border border-border text-xl font-medium text-foreground hover:border-accent hover:text-accent active:scale-95 transition-all">
+            {k}
           </button>
         ))}
       </div>
+
+      <button onClick={() => { setStep("select_member"); setPin(""); }} className="flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors">
+        <ChevronLeft size={14} /> Back
+      </button>
     </div>
   );
 }
@@ -139,18 +163,12 @@ const money = (n: number) => `$${(n || 0).toFixed(2)}`;
 type Step = "capture" | "parsing" | "review" | "saving" | "saved";
 
 export default function ReceiptsPage() {
-  const [pinOk, setPinOk] = useState(false);
-
-  useEffect(() => {
-    if (sessionStorage.getItem(PIN_SESSION_KEY) === "1") setPinOk(true);
-  }, []);
-
-  if (!pinOk) return <PinGate onUnlock={() => setPinOk(true)} />;
-
-  return <ReceiptsMain />;
+  const [member, setMember] = useState<string | null>(null);
+  if (!member) return <PinGate onUnlock={(name) => setMember(name)} />;
+  return <ReceiptsMain memberName={member} onSignOut={() => setMember(null)} />;
 }
 
-function ReceiptsMain() {
+function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut: () => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("capture");
   const [imageUrl, setImageUrl] = useState("");
@@ -260,6 +278,7 @@ function ReceiptsMain() {
       project_id: selectedProjectId || null,
       project_name: linkedProject?.project_name || null,
       notes: notes || null,
+      submitted_by: memberName,
     });
 
     setStep("saved");
@@ -282,9 +301,12 @@ function ReceiptsMain() {
 
   return (
     <div className="max-w-lg mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-heading font-bold">Receipts</h1>
-        <p className="text-muted text-sm">Photograph a receipt — AI reads it, you link it to a project.</p>
+      <div className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-heading font-bold">Receipts</h1>
+          <p className="text-muted text-sm">Logged in as <span className="text-foreground font-medium">{memberName}</span></p>
+        </div>
+        <button onClick={onSignOut} className="text-xs text-muted hover:text-foreground transition-colors mt-1">Switch user</button>
       </div>
 
       {/* ── Step 1: Capture ── */}
