@@ -247,11 +247,19 @@ function Modal({ title, onClose, children, wide }: { title: string; onClose: () 
   );
 }
 
-// ── Customer search dropdown ──────────────────────────────────
+// ── Customer / Company unified search ────────────────────────
 
-function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => void; initialName?: string }) {
+type ClientSearchResult = {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  type: "customer" | "company";
+};
+
+function CustomerSearch({ onSelect, initialName }: { onSelect: (r: ClientSearchResult | null) => void; initialName?: string }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Customer[]>([]);
+  const [results, setResults] = useState<ClientSearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [selectedName, setSelectedName] = useState(initialName || "");
   const ref = useRef<HTMLDivElement>(null);
@@ -271,25 +279,33 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => 
   async function search(q: string) {
     setQuery(q);
     if (!q.trim()) { setResults([]); setOpen(false); return; }
-    const { data } = await axiom.from("customers").select("*").ilike("name", `%${q}%`).limit(8);
-    if (data) { setResults(data); setOpen(true); }
+    const [cust, comp] = await Promise.all([
+      axiom.from("customers").select("id,name,email,phone").ilike("name", `%${q}%`).limit(6),
+      axiom.from("companies").select("id,name,phone").ilike("name", `%${q}%`).limit(6),
+    ]);
+    const combined: ClientSearchResult[] = [
+      ...((cust.data || []).map((c) => ({ ...c, type: "customer" as const }))),
+      ...((comp.data || []).map((c) => ({ ...c, type: "company" as const }))),
+    ];
+    setResults(combined);
+    setOpen(true);
   }
 
-  function pick(c: Customer) {
-    setSelectedName(c.name);
+  function pick(r: ClientSearchResult) {
+    setSelectedName(r.name);
     setQuery("");
     setOpen(false);
-    onSelect(c);
+    onSelect(r);
   }
 
   return (
     <div ref={ref} className="relative">
-      <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Customer</label>
+      <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Customer / Company</label>
       <div className="flex items-center gap-2">
         {selectedName && (
           <span className="flex items-center gap-1 bg-accent/10 text-accent text-sm px-3 py-2 border border-accent/30 flex-1 truncate">
             {selectedName}
-            <button onClick={() => { setSelectedName(""); onSelect({} as Customer); }} className="ml-1 hover:text-foreground"><X size={12} /></button>
+            <button onClick={() => { setSelectedName(""); onSelect(null); }} className="ml-1 hover:text-foreground"><X size={12} /></button>
           </span>
         )}
         {!selectedName && (
@@ -298,25 +314,30 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => 
             <input
               value={query}
               onChange={(e) => search(e.target.value)}
-              placeholder="Search customers..."
+              placeholder="Search customers or companies..."
               className="w-full bg-card border border-border pl-9 pr-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
             />
           </div>
         )}
       </div>
       {open && results.length > 0 && (
-        <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border shadow-lg mt-0.5 max-h-48 overflow-y-auto">
-          {results.map((c) => (
-            <button key={c.id} onMouseDown={() => pick(c)} className="w-full text-left px-4 py-2.5 text-sm hover:bg-background flex items-center justify-between">
-              <span>{c.name}</span>
-              <span className="text-xs text-muted">{c.email || c.phone || ""}</span>
+        <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border shadow-lg mt-0.5 max-h-56 overflow-y-auto">
+          {results.map((r) => (
+            <button key={`${r.type}-${r.id}`} onMouseDown={() => pick(r)} className="w-full text-left px-4 py-2.5 text-sm hover:bg-background flex items-center justify-between gap-3">
+              <span className="truncate">{r.name}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs text-muted">{r.email || r.phone || ""}</span>
+                <span className={cn("text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider font-medium", r.type === "company" ? "bg-blue-500/15 text-blue-400" : "bg-accent/15 text-accent")}>
+                  {r.type === "company" ? "Co." : "Client"}
+                </span>
+              </div>
             </button>
           ))}
         </div>
       )}
       {open && results.length === 0 && query && (
         <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border mt-0.5 px-4 py-3 text-sm text-muted">
-          No customers found — <a href="/axiom/customers" className="text-accent underline">add one first</a>
+          No results — <a href="/axiom/customers" className="text-accent underline">add a customer</a>
         </div>
       )}
     </div>
@@ -359,17 +380,13 @@ function CreateProjectForm({ onSubmit, onCancel }: { onSubmit: (form: Record<str
   });
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-  function handleCustomerSelect(c: Customer) {
-    if (!c.id) {
-      setForm((f) => ({ ...f, customer_id: "", client_name: "", client_email: "", client_phone: "" }));
+  function handleCustomerSelect(r: ClientSearchResult | null) {
+    if (!r) {
+      setForm((f) => ({ ...f, customer_id: "", client_name: "", client_email: "", client_phone: "", company_id: "", company_name: "" }));
+    } else if (r.type === "company") {
+      setForm((f) => ({ ...f, customer_id: "", client_name: r.name, client_phone: formatPhone(r.phone || ""), company_id: r.id, company_name: r.name }));
     } else {
-      setForm((f) => ({
-        ...f,
-        customer_id: c.id,
-        client_name: c.name,
-        client_email: c.email || "",
-        client_phone: formatPhone(c.phone || ""),
-      }));
+      setForm((f) => ({ ...f, customer_id: r.id, client_name: r.name, client_email: r.email || "", client_phone: formatPhone(r.phone || "") }));
     }
   }
 
@@ -584,16 +601,23 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   }
   function removeProposalImage(i: number) { setProposalImages(proposalImages.filter((_, idx) => idx !== i)); markDirty(); }
 
-  function handleCustomerSelect(c: Customer) {
-    if (!c.id) {
+  function handleCustomerSelect(r: ClientSearchResult | null) {
+    if (!r) {
       setCustomerId("");
       setCustomerName("");
+    } else if (r.type === "company") {
+      setCustomerId("");
+      setCustomerName(r.name);
+      setClientName(r.name);
+      setClientPhone(formatPhone(r.phone || ""));
+      setCompanyId(r.id);
+      setCompanyName(r.name);
     } else {
-      setCustomerId(c.id);
-      setCustomerName(c.name);
-      setClientName(c.name);
-      setClientEmail(c.email || "");
-      setClientPhone(formatPhone(c.phone || ""));
+      setCustomerId(r.id);
+      setCustomerName(r.name);
+      setClientName(r.name);
+      setClientEmail(r.email || "");
+      setClientPhone(formatPhone(r.phone || ""));
     }
     markDirty();
   }
