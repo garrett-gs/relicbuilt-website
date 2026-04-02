@@ -15,12 +15,15 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
     ? 'style="max-width:640px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;"'
     : 'style="max-width:700px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;padding:40px;"';
 
+  const logoSrc = forEmail
+    ? "https://relicbuilt.com/logo-full.png"
+    : "/logo-full.png";
+
   return `
     <div ${wrapper}>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;border-bottom:2px solid #c4a24d;padding-bottom:20px;">
         <div>
-          <h1 style="margin:0;font-size:28px;letter-spacing:0.15em;color:#111;">R&ensp;E&ensp;L&ensp;I&ensp;C</h1>
-          <p style="margin:4px 0 0;font-size:11px;letter-spacing:0.2em;color:#c4a24d;text-transform:uppercase;">Custom Fabrications</p>
+          <img src="${logoSrc}" alt="RELIC Custom Fabrications" style="height:64px;width:auto;display:block;" />
         </div>
         <div style="text-align:right;">
           <h2 style="margin:0;font-size:20px;color:#111;">PURCHASE ORDER</h2>
