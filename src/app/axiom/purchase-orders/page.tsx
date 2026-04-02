@@ -1211,7 +1211,7 @@ function SendPOModal({ po, vendorEmail, onClose, onSent, userEmail }: {
 
           {/* Right — PO preview */}
           <div className="flex-1 overflow-y-auto bg-white">
-            <div dangerouslySetInnerHTML={{ __html: generatePOHtml(po, true) }} />
+            <div className="min-h-full" dangerouslySetInnerHTML={{ __html: generatePOHtml(po, true) }} />
           </div>
         </div>
       </div>

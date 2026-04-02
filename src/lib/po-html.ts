@@ -12,7 +12,7 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
   const total = lines.reduce((s, li) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
 
   const wrapper = forEmail
-    ? 'style="max-width:640px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;"'
+    ? 'style="max-width:640px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;padding:40px;"'
     : 'style="max-width:700px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;padding:40px;"';
 
   const logoSrc = forEmail
