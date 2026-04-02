@@ -23,8 +23,8 @@ function buildHtml(opts: {
   const ev = EVENTS[event];
   return `
     <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111">
-      <div style="background:#111;padding:24px 32px;margin-bottom:24px">
-        <p style="color:#c4a24d;letter-spacing:6px;font-size:13px;margin:0">R &nbsp; E &nbsp; L &nbsp; I &nbsp; C</p>
+      <div style="background:#111;padding:20px 32px;margin-bottom:24px">
+        <img src="https://relicbuilt.com/logo-full.png" alt="RELIC" style="height:48px;width:auto;display:block;" />
       </div>
       <div style="padding:0 32px 32px">
         <h2 style="font-size:18px;margin:0 0 8px">${project_name}</h2>
