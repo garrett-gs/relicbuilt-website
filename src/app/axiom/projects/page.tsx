@@ -420,7 +420,8 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   onGenerateProposal: () => void;
 }) {
   const [customerId, setCustomerId] = useState(project.customer_id || "");
-  const [customerName, setCustomerName] = useState("");
+  // Seed with client_name so the badge shows immediately; async lookup will refine it
+  const [customerName, setCustomerName] = useState(project.customer_id ? (project.client_name || "") : "");
   const [clientName, setClientName] = useState(project.client_name || "");
   const [clientEmail, setClientEmail] = useState(project.client_email || "");
   const [clientPhone, setClientPhone] = useState(project.client_phone || "");
@@ -516,13 +517,20 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     });
   }
 
-  // Resolve customer name for display if we have a customer_id
+  // Resolve full customer name from customers table
   useEffect(() => {
     if (project.customer_id) {
-      axiom.from("customers").select("name").eq("id", project.customer_id).single().then(({ data }) => {
-        if (data) setCustomerName(data.name);
+      axiom.from("customers").select("name,email,phone").eq("id", project.customer_id).single().then(({ data, error }) => {
+        if (data) {
+          setCustomerName(data.name);
+          // Backfill contact fields if they're empty on the project
+          if (!clientEmail && data.email) setClientEmail(data.email);
+          if (!clientPhone && data.phone) setClientPhone(data.phone);
+        }
+        if (error) console.error("Customer lookup failed:", error.message);
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.customer_id]);
 
   // Load receipts linked to this project
