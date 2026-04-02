@@ -88,8 +88,8 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
         ${inv.due_date ? `<tr><td style="padding:3px 0;color:#666;font-weight:600;">Payment Due:</td><td style="padding:3px 0;text-align:right;">${fmtDate(inv.due_date)}</td></tr>` : ""}
       </table>
       <div style="background:#f0f0f0;padding:10px 14px;display:flex;justify-content:space-between;margin-top:12px;">
-        <span style="font-size:13px;font-weight:bold;">Amount Due (USD):</span>
-        <span style="font-size:14px;font-weight:bold;font-family:monospace;">${money(amountDue)}</span>
+        <span style="font-size:13px;font-weight:bold;color:#000;">Amount Due (USD):</span>
+        <span style="font-size:14px;font-weight:bold;font-family:monospace;color:#000;">${money(amountDue)}</span>
       </div>
     </div>
   </div>
