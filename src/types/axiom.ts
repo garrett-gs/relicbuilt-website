@@ -5,6 +5,40 @@ export interface ProposalHighlight {
   body: string;
 }
 
+// ── Project Checklist ────────────────────────────────────────
+
+export interface ChecklistItem {
+  id: string;
+  label: string;
+  completed: boolean;
+  type?: string;
+}
+
+export interface ChecklistGroup {
+  id: string;
+  label: string;
+  items: ChecklistItem[];
+}
+
+export interface ChecklistStep {
+  id: string;
+  label: string;
+  completed: boolean;
+}
+
+export interface ChecklistSection {
+  id: string;
+  title: string;
+  groups: ChecklistGroup[];
+  steps: ChecklistStep[];
+}
+
+export interface ProjectChecklist {
+  sections: ChecklistSection[];
+}
+
+// ── Custom Work ──────────────────────────────────────────────
+
 export interface CustomWork {
   id: string;
   project_name: string;
@@ -32,6 +66,7 @@ export interface CustomWork {
   portal_enabled: boolean;
   portal_token?: string;
   portal_stage: PortalStage;
+  checklist?: ProjectChecklist;
   created_at: string;
   updated_at: string;
 }

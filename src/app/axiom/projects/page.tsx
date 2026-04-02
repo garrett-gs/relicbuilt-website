@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
-import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, BuildComment, ApprovalRequest } from "@/types/axiom";
+import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, BuildComment, ApprovalRequest, ProjectChecklist } from "@/types/axiom";
+import ChecklistPanel from "@/components/axiom/ChecklistPanel";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import ImageUpload from "@/components/ui/ImageUpload";
@@ -784,6 +785,9 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Internal Notes</label>
         <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
       </div>
+
+      {/* Checklist */}
+      <ChecklistPanel projectId={project.id} initial={project.checklist || { sections: [] }} />
 
       {/* Proposal Content */}
       <div className="border border-border">
