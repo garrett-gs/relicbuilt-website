@@ -36,7 +36,7 @@ const navSections = [
   {
     label: "Projects",
     items: [
-      { href: "/axiom/projects", icon: Hammer, label: "Custom Work" },
+      { href: "/axiom/projects", icon: Hammer, label: "Projects" },
       { href: "/axiom/timeclock", icon: Clock, label: "Time Clock" },
       { href: "/axiom/calendar", icon: CalendarDays, label: "Build Calendar" },
     ],

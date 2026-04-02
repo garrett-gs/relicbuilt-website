@@ -8,7 +8,7 @@ import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Ve
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, FileText } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const STATUS_COLORS: Record<Estimate["status"], string> = {
@@ -294,8 +294,6 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [notes, setNotes] = useState(estimate.notes || "");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showLoadQuote, setShowLoadQuote] = useState(false);
-  const [sendToQuoteOpen, setSendToQuoteOpen] = useState(false);
-  const sendToQuoteRef = useRef<HTMLDivElement>(null);
   const [laborOpen, setLaborOpen] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -427,32 +425,14 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     setSaved(true);
   }
 
-  async function createQuote() {
+  async function createProject() {
     save();
-    const invNum = `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-    // Map materials
-    const invoiceLineItems = [
-      ...lineItems.map((li) => ({
-        category: "Materials",
-        description: li.description,
-        quantity: li.quantity,
-        unit_price: li.unit_price,
-      })),
-      ...laborItems.map((li) => ({
-        category: "Labor",
-        description: li.description,
-        quantity: li.hours,
-        unit_price: li.rate,
-      })),
-    ] as { category: string; description: string; quantity: number; unit_price: number }[];
-
-    // Markup as its own line item
-    if (markupPct > 0) {
-      const base = lineItems.reduce((s, li) => s + li.quantity * li.unit_price, 0) +
-        laborItems.reduce((s, li) => s + li.cost, 0);
-      invoiceLineItems.push({ category: "Markup", description: `${markupPct}% Markup`, quantity: 1, unit_price: base * markupPct / 100 });
-    }
+    // Calculate quoted total from estimate
+    const materialsTotal = lineItems.reduce((s, li) => s + li.quantity * li.unit_price, 0);
+    const laborTotal = laborItems.reduce((s, li) => s + li.cost, 0);
+    const markup = markupPct > 0 ? (materialsTotal + laborTotal) * markupPct / 100 : 0;
+    const quotedAmount = materialsTotal + laborTotal + markup;
 
     // Use captured email/phone, fall back to DB lookup if missing
     let resolvedEmail = clientEmail;
@@ -465,35 +445,24 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       }
     }
 
-    const { data } = await axiom.from("invoices").insert({
-      invoice_number: invNum,
+    const { data } = await axiom.from("custom_work").insert({
+      project_name: projectName || "Untitled Project",
       client_name: clientName || "",
       client_email: resolvedEmail,
       client_phone: resolvedPhone,
-      description: projectName,
-      reference_number: estimate.estimate_number,
-      subtotal: 0,
-      delivery_fee: 0,
-      discount: 0,
-      tax_rate: 8.75,
-      issued_date: new Date().toISOString().split("T")[0],
-      line_items: invoiceLineItems,
-      custom_work_id: estimate.custom_work_id || undefined,
+      customer_id: customerId || undefined,
+      quoted_amount: quotedAmount,
+      project_description: notes || undefined,
+      status: "quoted",
     }).select().single();
 
-    if (data) router.push("/axiom/invoices");
+    if (data) {
+      // Link the estimate to the new project
+      await axiom.from("estimates").update({ custom_work_id: data.id }).eq("id", estimate.id);
+      router.push("/axiom/projects");
+    }
   }
 
-  // Close "Send to Quote" dropdown on outside click
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (sendToQuoteRef.current && !sendToQuoteRef.current.contains(e.target as Node)) {
-        setSendToQuoteOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
 
   // Auto-scroll chat to bottom
   useEffect(() => {
@@ -766,38 +735,9 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t border-border flex-wrap items-center">
         <SaveButton dirty={dirty} saved={saved} onClick={save} />
-        {/* Send to Quote dropdown */}
-        <div ref={sendToQuoteRef} className="relative">
-          <Button variant="outline" onClick={() => { save(); setSendToQuoteOpen((o) => !o); }}>
-            <FileText size={14} className="mr-1" /> Send to Quote
-            <ChevronDown size={12} className="ml-1" />
-          </Button>
-          {sendToQuoteOpen && (
-            <div className="absolute top-full left-0 mt-1 w-52 bg-card border border-border shadow-lg z-30">
-              <button
-                className="w-full text-left px-4 py-3 text-sm hover:bg-accent/10 flex items-center gap-2"
-                onClick={() => { setSendToQuoteOpen(false); createQuote(); }}
-              >
-                <FileText size={14} className="text-accent" />
-                <div>
-                  <p className="font-medium">New Quote</p>
-                  <p className="text-xs text-muted">Create invoice from estimate</p>
-                </div>
-              </button>
-              <div className="border-t border-border" />
-              <button
-                className="w-full text-left px-4 py-3 text-sm hover:bg-accent/10 flex items-center gap-2"
-                onClick={() => { setSendToQuoteOpen(false); setShowLoadQuote(true); }}
-              >
-                <CheckCircle2 size={14} className="text-accent" />
-                <div>
-                  <p className="font-medium">Apply to Project</p>
-                  <p className="text-xs text-muted">Set quoted amount on a project</p>
-                </div>
-              </button>
-            </div>
-          )}
-        </div>
+        <Button variant="outline" onClick={createProject}>
+          <Hammer size={14} className="mr-1" /> Send to Project
+        </Button>
         <button
           onClick={() => setChatOpen(true)}
           className="flex items-center gap-2 px-3 py-2 border border-accent/50 text-accent text-sm hover:bg-accent/10 transition-colors"
