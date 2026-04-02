@@ -453,7 +453,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       customer_id: customerId || undefined,
       quoted_amount: quotedAmount,
       project_description: notes || undefined,
-      status: "quoted",
+      status: "new",
     }).select().single();
 
     if (data) {
@@ -735,9 +735,14 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t border-border flex-wrap items-center">
         <SaveButton dirty={dirty} saved={saved} onClick={save} />
-        <Button variant="outline" onClick={createProject}>
-          <Hammer size={14} className="mr-1" /> Send to Project
-        </Button>
+        <div className="flex flex-col gap-0.5">
+          <Button variant="outline" onClick={createProject} disabled={status !== "accepted"}>
+            <Hammer size={14} className="mr-1" /> Send to Project
+          </Button>
+          {status !== "accepted" && (
+            <p className="text-[10px] text-muted text-center">Mark as Accepted to enable</p>
+          )}
+        </div>
         <button
           onClick={() => setChatOpen(true)}
           className="flex items-center gap-2 px-3 py-2 border border-accent/50 text-accent text-sm hover:bg-accent/10 transition-colors"

@@ -147,7 +147,7 @@ export default function ProjectsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-heading font-bold">Custom Work</h1>
+          <h1 className="text-2xl font-heading font-bold">Projects</h1>
           <p className="text-muted text-sm mt-1">{projects.length} projects</p>
         </div>
         <Button onClick={() => setShowCreate(true)} size="sm">
