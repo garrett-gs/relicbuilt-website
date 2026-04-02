@@ -1188,7 +1188,7 @@ function SendPOModal({ po, vendorEmail, onClose, onSent, userEmail }: {
         {/* Split body */}
         <div className="flex flex-1 min-h-0">
           {/* Left — compose */}
-          <div className="w-full md:w-[360px] shrink-0 border-r border-border flex flex-col overflow-y-auto p-6 space-y-5">
+          <div className="w-full md:w-1/2 shrink-0 border-r border-border flex flex-col overflow-y-auto p-6 space-y-5">
             <div>
               <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">To *</label>
               <input type="email" value={to} onChange={(e) => setTo(e.target.value)} placeholder="vendor@email.com" className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
