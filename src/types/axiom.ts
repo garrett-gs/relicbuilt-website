@@ -19,6 +19,7 @@ export interface ProposalCostItem {
 export interface ProposalCostSection {
   items: ProposalCostItem[];
   show_total?: boolean;
+  deposit_amount?: number;
   included?: boolean;
 }
 

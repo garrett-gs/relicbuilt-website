@@ -129,10 +129,25 @@ export function generateProposalHtml(
     <span style="font-size:13px;color:#333;">${esc(item.description)}</span>
     <span style="font-size:13px;font-weight:bold;font-family:monospace;white-space:nowrap;margin-left:20px;">${money(item.cost || 0)}</span>
   </div>`).join("")}
-  ${costSection.show_total !== false ? `
-  <div style="display:flex;justify-content:flex-end;padding:10px 20px;background:#f9f9f9;border-bottom:1px solid #f0f0f0;">
-    <span style="font-size:13px;font-weight:bold;font-family:monospace;">${money(costSection.items.reduce((s, it) => s + (it.cost || 0), 0))}</span>
-  </div>` : ""}` : ""}
+  ${costSection.show_total !== false ? (() => {
+    const costTotal = costSection.items.reduce((s, it) => s + (it.cost || 0), 0);
+    const deposit = costSection.deposit_amount || 0;
+    const balance = costTotal - deposit;
+    return `
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 20px;background:#f0f0f0;border-bottom:1px solid #e5e5e5;">
+    <span style="font-size:13px;font-weight:bold;color:#111;">Total:</span>
+    <span style="font-size:13px;font-weight:bold;font-family:monospace;color:#111;">${money(costTotal)}</span>
+  </div>
+  ${deposit > 0 ? `
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 20px;border-bottom:1px solid #f0f0f0;">
+    <span style="font-size:13px;font-weight:bold;color:#333;">Deposit Due:</span>
+    <span style="font-size:13px;font-weight:bold;font-family:monospace;color:#333;">${money(deposit)}</span>
+  </div>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 20px;border-bottom:1px solid #f0f0f0;">
+    <span style="font-size:12px;color:#888;">Balance Due at Completion:</span>
+    <span style="font-size:12px;font-family:monospace;color:#888;">${money(balance)}</span>
+  </div>` : ""}`;
+  })() : ""}` : ""}
 
   <!-- Project Highlights -->
   ${highlights.length > 0 ? `

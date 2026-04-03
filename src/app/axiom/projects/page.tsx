@@ -659,6 +659,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   function removeCostItem(i: number) { setProposalCostSection((prev) => ({ ...prev, items: prev.items.filter((_, idx) => idx !== i) })); markDirty(); }
   function toggleCostIncluded() { setProposalCostSection((prev) => ({ ...prev, included: prev.included === false ? true : false })); markDirty(); }
   function toggleCostShowTotal() { setProposalCostSection((prev) => ({ ...prev, show_total: !prev.show_total })); markDirty(); }
+  function updateDeposit(value: number) { setProposalCostSection((prev) => ({ ...prev, deposit_amount: value || undefined })); markDirty(); }
 
   function toggleProposalImage(url: string) {
     setProposalImages(proposalImages.includes(url)
@@ -1066,6 +1067,27 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                 <div className="flex justify-end pt-2 border-t border-border">
                   <span className="text-sm font-semibold text-foreground font-mono">
                     Total: ${proposalCostSection.items.reduce((s, it) => s + (it.cost || 0), 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
+              {/* Deposit */}
+              <div className="flex items-center gap-2 pt-2 border-t border-border">
+                <label className="text-xs text-muted shrink-0">Deposit Due</label>
+                <div className="relative ml-auto w-36">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">$</span>
+                  <input
+                    type="number"
+                    value={proposalCostSection.deposit_amount || ""}
+                    onChange={(e) => updateDeposit(parseFloat(e.target.value) || 0)}
+                    placeholder="0.00"
+                    className="w-full bg-background border border-border pl-7 pr-3 py-1.5 text-sm text-right text-foreground focus:outline-none focus:border-accent"
+                  />
+                </div>
+              </div>
+              {proposalCostSection.deposit_amount && proposalCostSection.show_total !== false && proposalCostSection.items.length > 0 && (
+                <div className="flex justify-end">
+                  <span className="text-xs text-muted font-mono">
+                    Balance Due: ${(proposalCostSection.items.reduce((s, it) => s + (it.cost || 0), 0) - (proposalCostSection.deposit_amount || 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
               )}
@@ -1561,14 +1583,33 @@ function ProposalPreview({ project, onClose, userEmail }: {
                 <span className="font-bold font-mono text-gray-900 ml-8 shrink-0">{money(item.cost || 0)}</span>
               </div>
             ))}
-            {costSection.show_total !== false && (
-              <div className="flex justify-end px-10 py-4 print:px-8">
-                <div className="bg-gray-100 px-4 py-3 flex justify-between font-bold text-sm text-gray-900 w-80">
-                  <span>Total:</span>
-                  <span className="font-mono">{money(costSection.items.reduce((s, it) => s + (it.cost || 0), 0))}</span>
+            {costSection.show_total !== false && (() => {
+              const costTotal = costSection.items.reduce((s, it) => s + (it.cost || 0), 0);
+              const deposit = costSection.deposit_amount || 0;
+              const balance = costTotal - deposit;
+              return (
+                <div className="flex justify-end px-10 py-4 print:px-8">
+                  <div className="w-80 space-y-1 text-sm">
+                    <div className="bg-gray-100 px-4 py-3 flex justify-between font-bold text-gray-900">
+                      <span>Total:</span>
+                      <span className="font-mono">{money(costTotal)}</span>
+                    </div>
+                    {deposit > 0 && (
+                      <>
+                        <div className="flex justify-between px-4 py-2 text-gray-700 border border-gray-200">
+                          <span className="font-semibold">Deposit Due:</span>
+                          <span className="font-mono font-semibold">{money(deposit)}</span>
+                        </div>
+                        <div className="flex justify-between px-4 py-1 text-gray-500 text-xs">
+                          <span>Balance Due at Completion:</span>
+                          <span className="font-mono">{money(balance)}</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </>
         )}
 
