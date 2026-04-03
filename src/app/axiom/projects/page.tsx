@@ -1707,7 +1707,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
       </div>
 
       {/* Proposal document */}
-      <div className="max-w-4xl mx-auto my-8 bg-white print:my-0 print:max-w-none print:shadow-none shadow-sm">
+      <div className="max-w-5xl mx-auto my-8 bg-white print:my-0 print:max-w-none print:shadow-none shadow-sm">
 
         {/* Header */}
         <div className="flex justify-between items-start px-10 pt-10 pb-8 print:px-8 print:pt-8">
@@ -1751,7 +1751,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
         </div>
 
         {/* Project stripe */}
-        <div className="px-10 py-3 print:px-8" style={{ background: stripeColor }}>
+        <div className="px-10 py-1.5 print:px-8" style={{ background: stripeColor }}>
           <p className="text-sm font-bold text-white uppercase tracking-widest">Project</p>
         </div>
         <div className="px-10 py-6 border-b border-gray-100 print:px-8">
@@ -1765,7 +1765,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
         {/* Highlights */}
         {highlights.length > 0 && (
           <>
-            <div className="px-10 py-3 print:px-8" style={{ background: stripeColor }}>
+            <div className="px-10 py-1.5 print:px-8" style={{ background: stripeColor }}>
               <p className="text-sm font-bold text-white uppercase tracking-widest">Project Highlights</p>
             </div>
             <div className="px-10 py-6 border-b border-gray-100 print:px-8">
@@ -1784,7 +1784,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
         {/* Scope of Work */}
         {proposalScope && (
           <>
-            <div className="px-10 py-3 print:px-8" style={{ background: stripeColor }}>
+            <div className="px-10 py-1.5 print:px-8" style={{ background: stripeColor }}>
               <p className="text-sm font-bold text-white uppercase tracking-widest">Scope of Work</p>
             </div>
             <div className="px-10 py-6 border-b border-gray-100 print:px-8">
@@ -1796,7 +1796,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
         {/* Cost Line Items */}
         {costSection && costSection.items.length > 0 && (
           <>
-            <div className="px-10 py-3 print:px-8" style={{ background: stripeColor }}>
+            <div className="px-10 py-1.5 print:px-8" style={{ background: stripeColor }}>
               <p className="text-sm font-bold text-white uppercase tracking-widest">Pricing</p>
             </div>
             {costSection.items.map((item, i) => (
@@ -1838,7 +1838,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
         {/* Gallery */}
         {proposalImages.length > 0 && (
           <>
-            <div className="px-10 py-3 print:px-8" style={{ background: stripeColor }}>
+            <div className="px-10 py-1.5 print:px-8" style={{ background: stripeColor }}>
               <p className="text-sm font-bold text-white uppercase tracking-widest">Gallery</p>
             </div>
             <div className="px-10 py-6 border-b border-gray-100 print:px-8">

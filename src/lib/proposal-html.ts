@@ -106,7 +106,7 @@ export function generateProposalHtml(
   </table>
 
   <!-- Project stripe -->
-  <div style="background:${stripeColor};padding:10px 20px;">
+  <div style="background:${stripeColor};padding:6px 20px;">
     <p style="margin:0;font-size:11px;font-weight:bold;color:#fff;text-transform:uppercase;letter-spacing:0.14em;">Project</p>
   </div>
   <div style="padding:18px 20px;border-bottom:1px solid #f0f0f0;">
@@ -117,7 +117,7 @@ export function generateProposalHtml(
 
   <!-- Scope of Work -->
   ${scope ? `
-  <div style="background:${stripeColor};padding:10px 20px;margin-top:0;">
+  <div style="background:${stripeColor};padding:6px 20px;margin-top:0;">
     <p style="margin:0;font-size:11px;font-weight:bold;color:#fff;text-transform:uppercase;letter-spacing:0.14em;">Scope of Work</p>
   </div>
   <div style="padding:18px 20px;border-bottom:1px solid #f0f0f0;">
@@ -126,7 +126,7 @@ export function generateProposalHtml(
 
   <!-- Cost Line Items -->
   ${costSection && costSection.items.length > 0 ? `
-  <div style="background:${stripeColor};padding:10px 20px;margin-top:0;">
+  <div style="background:${stripeColor};padding:6px 20px;margin-top:0;">
     <p style="margin:0;font-size:11px;font-weight:bold;color:#fff;text-transform:uppercase;letter-spacing:0.14em;">Pricing</p>
   </div>
   ${costSection.items.map((item) => `
@@ -156,7 +156,7 @@ export function generateProposalHtml(
 
   <!-- Project Highlights -->
   ${highlights.length > 0 ? `
-  <div style="background:${stripeColor};padding:10px 20px;margin-top:0;">
+  <div style="background:${stripeColor};padding:6px 20px;margin-top:0;">
     <p style="margin:0;font-size:11px;font-weight:bold;color:#fff;text-transform:uppercase;letter-spacing:0.14em;">Project Highlights</p>
   </div>
   <div style="padding:20px;border-bottom:1px solid #f0f0f0;">
@@ -185,7 +185,7 @@ export function generateProposalHtml(
 
   <!-- Gallery -->
   ${images.length > 0 ? `
-  <div style="background:${stripeColor};padding:10px 20px;margin-top:0;">
+  <div style="background:${stripeColor};padding:6px 20px;margin-top:0;">
     <p style="margin:0;font-size:11px;font-weight:bold;color:#fff;text-transform:uppercase;letter-spacing:0.14em;">Gallery</p>
   </div>
   <div style="padding:16px 20px 20px;border-bottom:1px solid #f0f0f0;">
