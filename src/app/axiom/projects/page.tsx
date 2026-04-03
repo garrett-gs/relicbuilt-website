@@ -1073,15 +1073,41 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
               {/* Deposit */}
               <div className="flex items-center gap-2 pt-2 border-t border-border">
                 <label className="text-xs text-muted shrink-0">Deposit Due</label>
-                <div className="relative ml-auto w-36">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">$</span>
-                  <input
-                    type="number"
-                    value={proposalCostSection.deposit_amount || ""}
-                    onChange={(e) => updateDeposit(parseFloat(e.target.value) || 0)}
-                    placeholder="0.00"
-                    className="w-full bg-background border border-border pl-7 pr-3 py-1.5 text-sm text-right text-foreground focus:outline-none focus:border-accent"
-                  />
+                <div className="flex items-center gap-2 ml-auto">
+                  {/* Percentage input */}
+                  <div className="relative w-24">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={(() => {
+                        const total = proposalCostSection.items.reduce((s, it) => s + (it.cost || 0), 0);
+                        if (!proposalCostSection.deposit_amount || !total) return "";
+                        const pct = (proposalCostSection.deposit_amount / total) * 100;
+                        return Number.isInteger(pct) ? pct : parseFloat(pct.toFixed(1));
+                      })()}
+                      onChange={(e) => {
+                        const pct = parseFloat(e.target.value);
+                        const total = proposalCostSection.items.reduce((s, it) => s + (it.cost || 0), 0);
+                        updateDeposit(pct > 0 && total > 0 ? parseFloat(((pct / 100) * total).toFixed(2)) : 0);
+                      }}
+                      placeholder="0"
+                      className="w-full bg-background border border-border pl-3 pr-6 py-1.5 text-sm text-right text-foreground focus:outline-none focus:border-accent"
+                    />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">%</span>
+                  </div>
+                  <span className="text-xs text-muted">or</span>
+                  {/* Dollar input */}
+                  <div className="relative w-32">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">$</span>
+                    <input
+                      type="number"
+                      value={proposalCostSection.deposit_amount || ""}
+                      onChange={(e) => updateDeposit(parseFloat(e.target.value) || 0)}
+                      placeholder="0.00"
+                      className="w-full bg-background border border-border pl-7 pr-3 py-1.5 text-sm text-right text-foreground focus:outline-none focus:border-accent"
+                    />
+                  </div>
                 </div>
               </div>
               {proposalCostSection.deposit_amount && proposalCostSection.show_total !== false && proposalCostSection.items.length > 0 && (
