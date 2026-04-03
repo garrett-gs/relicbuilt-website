@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
-import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, ProposalScope, ProposalCostSection, ProposalCostItem, BuildComment, ApprovalRequest, ProjectChecklist } from "@/types/axiom";
+import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, ProposalScope, ProposalCostSection, ProposalCostItem, BuildComment, ApprovalRequest, ProjectChecklist, Invoice } from "@/types/axiom";
 import ChecklistPanel from "@/components/axiom/ChecklistPanel";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
@@ -539,6 +539,11 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // Proposal & Invoices
+  const [projectInvoices, setProjectInvoices] = useState<Invoice[]>([]);
+  const [creatingInvoices, setCreatingInvoices] = useState(false);
+  const [markingApproved, setMarkingApproved] = useState(false);
+
   // Communication state
   const [comments, setComments] = useState<BuildComment[]>([]);
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
@@ -635,6 +640,13 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     });
   }, [project.id]);
 
+  // Load deposit/final invoices for this project
+  useEffect(() => {
+    axiom.from("invoices").select("*").eq("custom_work_id", project.id).in("invoice_type", ["deposit", "final"]).order("created_at").then(({ data }) => {
+      if (data) setProjectInvoices(data as Invoice[]);
+    });
+  }, [project.id]);
+
   const receiptTotal = linkedReceipts.reduce((s, r) => s + (r.total || 0), 0);
   const materialTotal = materials.reduce((s, m) => s + (m.cost || 0), 0);
   const laborTotal = labor.reduce((s, l) => s + (l.cost || 0), 0);
@@ -700,6 +712,57 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     markDirty();
   }
   function removeProposalImage(i: number) { setProposalImages(proposalImages.filter((_, idx) => idx !== i)); markDirty(); }
+
+  async function loadProjectInvoices() {
+    const { data } = await axiom.from("invoices").select("*").eq("custom_work_id", project.id).in("invoice_type", ["deposit", "final"]).order("created_at");
+    if (data) setProjectInvoices(data as Invoice[]);
+  }
+
+  async function createProposalInvoices() {
+    setCreatingInvoices(true);
+    const y = new Date().getFullYear();
+    const savedCost = project.proposal_cost_section;
+    const depositAmt = savedCost?.deposit_amount || 0;
+    const totalAmt = project.quoted_amount || 0;
+    const balanceAmt = depositAmt > 0 ? totalAmt - depositAmt : 0;
+    const now = new Date().toISOString().split("T")[0];
+    const n1 = Math.floor(1000 + Math.random() * 9000);
+    const n2 = Math.floor(1000 + Math.random() * 9000);
+    await axiom.from("invoices").insert([
+      {
+        invoice_number: `INV-${y}-${n1}`,
+        custom_work_id: project.id,
+        client_name: clientName,
+        client_email: clientEmail,
+        description: `Deposit — ${project.project_name}`,
+        subtotal: depositAmt > 0 ? depositAmt : totalAmt,
+        issued_date: now,
+        tax_rate: 0, delivery_fee: 0, discount: 0, reminders_sent: 0, payments: [], status: "unpaid",
+        invoice_type: "deposit",
+      },
+      {
+        invoice_number: `INV-${y}-${n2}`,
+        custom_work_id: project.id,
+        client_name: clientName,
+        client_email: clientEmail,
+        description: `Balance — ${project.project_name}`,
+        subtotal: depositAmt > 0 ? balanceAmt : 0,
+        issued_date: now,
+        tax_rate: 0, delivery_fee: 0, discount: 0, reminders_sent: 0, payments: [], status: "unpaid",
+        invoice_type: "final",
+      },
+    ]);
+    await loadProjectInvoices();
+    setCreatingInvoices(false);
+  }
+
+  async function manualMarkApproved() {
+    setMarkingApproved(true);
+    onUpdate({ proposal_status: "approved", proposal_approved_at: new Date().toISOString() });
+    const hasDeposit = projectInvoices.some((inv) => inv.invoice_type === "deposit");
+    if (!hasDeposit) await createProposalInvoices();
+    setMarkingApproved(false);
+  }
 
   function handleCustomerSelect(r: ClientSearchResult | null) {
     if (!r) {
@@ -983,6 +1046,80 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 
       {/* Checklist */}
       <ChecklistPanel projectId={project.id} initial={project.checklist || { sections: [] }} />
+
+      {/* Proposal & Invoices */}
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
+        <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3 mb-4">Proposal &amp; Invoices</h3>
+
+        {/* Proposal status row */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-muted">Proposal:</span>
+            <span className={cn(
+              "text-xs px-2 py-0.5 font-medium",
+              project.proposal_status === "approved" ? "bg-green-500/20 text-green-400" :
+              project.proposal_status === "sent" ? "bg-accent/20 text-accent" :
+              "bg-border text-muted"
+            )}>
+              {project.proposal_status === "approved" ? "Approved" :
+               project.proposal_status === "sent" ? "Sent" : "Draft"}
+            </span>
+            {project.proposal_approved_at && (
+              <span className="text-xs text-muted">{new Date(project.proposal_approved_at).toLocaleDateString()}</span>
+            )}
+          </div>
+          {project.proposal_status === "sent" && (
+            <button
+              onClick={manualMarkApproved}
+              disabled={markingApproved}
+              className="text-xs px-3 py-1.5 bg-green-500/10 text-green-400 border border-green-500/30 hover:bg-green-500/20 transition-colors disabled:opacity-50"
+            >
+              {markingApproved ? "Marking…" : "✓ Mark Approved"}
+            </button>
+          )}
+        </div>
+
+        {/* Invoice rows */}
+        {projectInvoices.length > 0 ? (
+          <div className="space-y-2 mb-3">
+            {projectInvoices.map((inv) => (
+              <div key={inv.id} className="flex items-center justify-between border border-border px-3 py-2.5 text-sm">
+                <div>
+                  <span className="font-medium text-foreground">
+                    {inv.invoice_type === "deposit" ? "Deposit Invoice" : "Final Invoice"}
+                  </span>
+                  <span className="text-muted ml-2 text-xs">{inv.invoice_number}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono text-sm">{money(inv.subtotal)}</span>
+                  <span className={cn(
+                    "text-xs px-2 py-0.5 capitalize",
+                    inv.status === "paid" ? "bg-green-500/20 text-green-400" :
+                    inv.status === "partial" ? "bg-yellow-500/20 text-yellow-400" :
+                    "bg-border text-muted"
+                  )}>
+                    {inv.status}
+                  </span>
+                  <a href="/axiom/invoices" className="text-xs text-accent hover:underline">View</a>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted mb-3">No deposit or final invoices yet.</p>
+        )}
+
+        {/* Create invoices button */}
+        {projectInvoices.length === 0 && (
+          <button
+            onClick={createProposalInvoices}
+            disabled={creatingInvoices}
+            className="text-xs px-3 py-1.5 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50 flex items-center gap-1"
+          >
+            <Plus size={11} /> {creatingInvoices ? "Creating…" : "Create Deposit & Final Invoices"}
+          </button>
+        )}
+      </div>
 
       {/* Proposal Content */}
       <div className="border border-border">
@@ -1475,8 +1612,18 @@ function ProposalPreview({ project, onClose, userEmail }: {
     if (!sendTo || !biz) return;
     setSending(true); setSendResult(null);
     try {
+      // Generate or reuse approval token
+      const token = project.proposal_token || crypto.randomUUID().replace(/-/g, "");
+      const approveUrl = `${window.location.origin}/approve/${token}`;
+
+      // Save token + mark as sent
+      await axiom.from("custom_work").update({
+        proposal_token: token,
+        proposal_status: "sent",
+      }).eq("id", project.id);
+
       const html = generateProposalHtml(project, biz, {
-        proposalNum, validUntil, forEmail: true,
+        proposalNum, validUntil, forEmail: true, approveUrl,
       });
       const res = await fetch("/api/send-po", {
         method: "POST",

@@ -85,6 +85,9 @@ export interface CustomWork {
   proposal_cost_section?: ProposalCostSection;
   proposal_images?: string[];
   proposal_images_included?: boolean;
+  proposal_token?: string;
+  proposal_status?: "draft" | "sent" | "approved";
+  proposal_approved_at?: string;
   portal_enabled: boolean;
   portal_token?: string;
   portal_stage: PortalStage;
@@ -266,6 +269,7 @@ export interface Invoice {
   reminders_sent: number;
   last_reminder_sent?: string;
   next_reminder_date?: string;
+  invoice_type?: "standard" | "deposit" | "final";
   created_at: string;
   updated_at: string;
 }
