@@ -23,6 +23,7 @@ import {
   LogOut,
   Menu,
   X,
+  ExternalLink,
 } from "lucide-react";
 
 const navSections = [
@@ -55,6 +56,7 @@ const navSections = [
       { href: "/axiom/purchase-orders", icon: ShoppingCart, label: "Purchase Orders" },
       { href: "/axiom/expenses", icon: Receipt, label: "Expenses" },
       { href: "/axiom/receipts", icon: Camera, label: "Receipts" },
+      { href: "/receipts", icon: Camera, label: "Receipt App", external: true, sub: true },
     ],
   },
   {
@@ -98,6 +100,26 @@ export default function Sidebar() {
             </p>
             {section.items.map((item) => {
               const active = pathname === item.href;
+              const isSub = "sub" in item && item.sub;
+              const isExternal = "external" in item && item.external;
+              if (isExternal) {
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => setMobileOpen(false)}
+                    className={cn(
+                      "flex items-center gap-2 py-1.5 rounded text-xs transition-colors text-muted hover:text-accent",
+                      isSub ? "pl-9 pr-3" : "px-3"
+                    )}
+                  >
+                    <ExternalLink size={11} className="shrink-0" />
+                    {item.label}
+                  </a>
+                );
+              }
               return (
                 <Link
                   key={item.href}
