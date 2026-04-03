@@ -36,19 +36,19 @@ const navSections = [
     ],
   },
   {
+    label: "Clients",
+    items: [
+      { href: "/axiom/leads", icon: UserPlus, label: "Leads" },
+      { href: "/axiom/customers", icon: Users, label: "Customers" },
+    ],
+  },
+  {
     label: "Projects",
     items: [
       { href: "/axiom/estimator", icon: Calculator, label: "Estimator" },
       { href: "/axiom/projects", icon: Hammer, label: "Projects" },
       { href: "/axiom/timeclock", icon: Clock, label: "Time Clock" },
       { href: "/axiom/calendar", icon: CalendarDays, label: "Build Calendar" },
-    ],
-  },
-  {
-    label: "Clients",
-    items: [
-      { href: "/axiom/leads", icon: UserPlus, label: "Leads" },
-      { href: "/axiom/customers", icon: Users, label: "Customers" },
     ],
   },
   {
