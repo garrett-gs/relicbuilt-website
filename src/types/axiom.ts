@@ -82,6 +82,7 @@ export interface CustomWork {
   proposal_scope?: ProposalScope;
   proposal_cost_section?: ProposalCostSection;
   proposal_images?: string[];
+  proposal_images_included?: boolean;
   portal_enabled: boolean;
   portal_token?: string;
   portal_stage: PortalStage;

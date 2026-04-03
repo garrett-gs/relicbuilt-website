@@ -48,7 +48,7 @@ export function generateProposalHtml(
   const highlights: ProposalHighlight[] = (project.proposal_highlights || []).filter((h) => h.included !== false);
   const scope = project.proposal_scope?.included !== false ? (project.proposal_scope?.body || "") : "";
   const costSection = project.proposal_cost_section?.included !== false ? project.proposal_cost_section : null;
-  const images: string[] = project.proposal_images || [];
+  const images: string[] = project.proposal_images_included !== false ? (project.proposal_images || []) : [];
   const stripeColor = "#8b6914";
   const logoUrl = "https://relicbuilt.com/logo-full.png";
 

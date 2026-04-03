@@ -503,6 +503,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [proposalScope, setProposalScope] = useState<ProposalScope>(project.proposal_scope || { body: "", included: true });
   const [proposalCostSection, setProposalCostSection] = useState<ProposalCostSection>(project.proposal_cost_section || { items: [], show_total: true, included: true });
   const [proposalImages, setProposalImages] = useState<string[]>(project.proposal_images || []);
+  const [proposalImagesIncluded, setProposalImagesIncluded] = useState<boolean>(project.proposal_images_included !== false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -723,6 +724,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       proposal_scope: proposalScope,
       proposal_cost_section: proposalCostSection,
       proposal_images: proposalImages,
+      proposal_images_included: proposalImagesIncluded,
     });
     setDirty(false);
     setSaved(true);
@@ -1074,6 +1076,16 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         {/* Images */}
         <div className="p-4">
           <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={() => { setProposalImagesIncluded((v) => !v); markDirty(); }}
+              title={proposalImagesIncluded ? "Included — click to exclude" : "Excluded — click to include"}
+              className={cn(
+                "shrink-0 w-4 h-4 rounded border flex items-center justify-center transition-colors",
+                proposalImagesIncluded ? "bg-accent border-accent" : "bg-transparent border-muted hover:border-accent"
+              )}
+            >
+              {proposalImagesIncluded && <CheckCircle size={10} className="text-background" />}
+            </button>
             <ImageIcon size={12} className="text-muted" />
             <p className="text-xs uppercase tracking-wider text-muted">Proposal Images</p>
           </div>
