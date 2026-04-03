@@ -499,6 +499,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [startDate, setStartDate] = useState(project.start_date || "");
   const [dueDate, setDueDate] = useState(project.due_date || "");
   const [portalStage, setPortalStage] = useState(project.portal_stage || "consultation");
+  const [folderUrl, setFolderUrl] = useState(project.folder_url || "");
   const [proposalHighlights, setProposalHighlights] = useState<ProposalHighlight[]>(project.proposal_highlights || []);
   const [proposalScope, setProposalScope] = useState<ProposalScope>(project.proposal_scope || { body: "", included: true });
   const [proposalCostSection, setProposalCostSection] = useState<ProposalCostSection>(project.proposal_cost_section || { items: [], show_total: true, included: true });
@@ -717,6 +718,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       actual_cost: actualCost,
       materials,
       labor_log: labor,
+      folder_url: folderUrl || undefined,
       internal_notes: notes,
       start_date: startDate || undefined,
       due_date: dueDate || undefined,
@@ -786,6 +788,29 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
           </select>
         </div>
         <Field label="Quoted Amount" type="number" prefix="$" value={String(quoted)} onChange={(v) => { setQuoted(Number(v)); markDirty(); }} />
+      </div>
+
+      {/* File Folder */}
+      <div>
+        <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">File Folder</label>
+        <div className="flex gap-2">
+          <input
+            value={folderUrl}
+            onChange={(e) => { setFolderUrl(e.target.value); markDirty(); }}
+            placeholder="Paste Dropbox (or any) folder link…"
+            className="flex-1 bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+          />
+          {folderUrl && (
+            <a
+              href={folderUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-4 py-3 bg-accent text-background text-sm font-medium hover:bg-accent/90 transition-colors shrink-0"
+            >
+              <ExternalLink size={14} /> Open
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Profit box */}

@@ -151,7 +151,7 @@ interface ReceiptRecord {
   created_at: string;
 }
 
-const money = (n: number) => `$${(n || 0).toFixed(2)}`;
+const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
 
 type Step = "capture" | "parsing" | "review" | "saving" | "saved";
 

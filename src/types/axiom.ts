@@ -79,6 +79,7 @@ export interface CustomWork {
   due_date?: string;
   image_url?: string;
   inspiration_images: string[];
+  folder_url?: string;
   proposal_highlights?: ProposalHighlight[];
   proposal_scope?: ProposalScope;
   proposal_cost_section?: ProposalCostSection;

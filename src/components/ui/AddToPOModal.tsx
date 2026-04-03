@@ -19,7 +19,7 @@ interface Props {
   onAdded?: (poNumber: string) => void;
 }
 
-const money = (n: number) => `$${(n || 0).toFixed(2)}`;
+const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
 
 export default function AddToPOModal({ item, onClose, onAdded }: Props) {
   const [vendors, setVendors] = useState<Vendor[]>([]);
