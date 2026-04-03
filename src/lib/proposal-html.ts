@@ -78,28 +78,32 @@ export function generateProposalHtml(
   <div style="border-top:1px solid #e5e5e5;margin-bottom:28px;"></div>
 
   <!-- Prepared For / Proposal Meta -->
-  <div style="display:flex;gap:40px;margin-bottom:28px;">
-    <div style="flex:1;">
-      <p style="margin:0 0 10px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.14em;color:#c4a24d;">Prepared For</p>
-      <p style="margin:0;font-size:15px;font-weight:bold;color:#111;">${esc(project.client_name)}</p>
-      ${project.company_name ? `<p style="margin:3px 0 0;font-size:13px;color:#555;">${esc(project.company_name)}</p>` : ""}
-      ${project.client_phone ? `<p style="margin:4px 0 0;font-size:13px;color:#555;">${esc(project.client_phone)}</p>` : ""}
-      ${project.client_email ? `<p style="margin:2px 0 0;font-size:13px;color:#555;">${esc(project.client_email)}</p>` : ""}
-    </div>
-    <div style="flex:1;">
-      <table style="width:100%;font-size:13px;border-collapse:collapse;">
-        <tr><td style="padding:3px 0;color:#666;font-weight:600;">Proposal #:</td><td style="padding:3px 0;text-align:right;font-weight:bold;">${esc(proposalNum)}</td></tr>
-        <tr><td style="padding:3px 0;color:#666;font-weight:600;">Prepared:</td><td style="padding:3px 0;text-align:right;">${fmtDate(new Date().toISOString().split("T")[0])}</td></tr>
-        ${validUntil ? `<tr><td style="padding:3px 0;color:#666;font-weight:600;">Valid Until:</td><td style="padding:3px 0;text-align:right;">${fmtDate(validUntil)}</td></tr>` : ""}
-        ${project.start_date ? `<tr><td style="padding:3px 0;color:#666;font-weight:600;">Est. Start:</td><td style="padding:3px 0;text-align:right;">${fmtDate(project.start_date)}</td></tr>` : ""}
-        ${project.due_date ? `<tr><td style="padding:3px 0;color:#666;font-weight:600;">Est. Completion:</td><td style="padding:3px 0;text-align:right;">${fmtDate(project.due_date)}</td></tr>` : ""}
-      </table>
-      <div style="background:#f0f0f0;padding:10px 14px;display:flex;justify-content:space-between;margin-top:12px;">
-        <span style="font-size:13px;font-weight:bold;color:#111;">Quoted Amount:</span>
-        <span style="font-size:14px;font-weight:bold;font-family:monospace;color:#111;">${money(quotedAmount)}</span>
-      </div>
-    </div>
-  </div>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:28px;">
+    <tr>
+      <td style="width:50%;vertical-align:top;padding-right:24px;">
+        <p style="margin:0 0 10px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.14em;color:#c4a24d;">Prepared For</p>
+        <p style="margin:0;font-size:15px;font-weight:bold;color:#111;">${esc(project.client_name)}</p>
+        ${project.company_name ? `<p style="margin:4px 0 0;font-size:13px;color:#555;">${esc(project.company_name)}</p>` : ""}
+        ${project.client_phone ? `<p style="margin:4px 0 0;font-size:13px;color:#555;">${esc(project.client_phone)}</p>` : ""}
+        ${project.client_email ? `<p style="margin:4px 0 0;font-size:13px;color:#555;">${esc(project.client_email)}</p>` : ""}
+      </td>
+      <td style="width:50%;vertical-align:top;padding-left:24px;">
+        <table style="width:100%;font-size:13px;border-collapse:collapse;">
+          <tr><td style="padding:4px 0;color:#666;font-weight:600;">Proposal #:</td><td style="padding:4px 0;text-align:right;font-weight:bold;">${esc(proposalNum)}</td></tr>
+          <tr><td style="padding:4px 0;color:#666;font-weight:600;">Prepared:</td><td style="padding:4px 0;text-align:right;">${fmtDate(new Date().toISOString().split("T")[0])}</td></tr>
+          ${validUntil ? `<tr><td style="padding:4px 0;color:#666;font-weight:600;">Valid Until:</td><td style="padding:4px 0;text-align:right;">${fmtDate(validUntil)}</td></tr>` : ""}
+          ${project.start_date ? `<tr><td style="padding:4px 0;color:#666;font-weight:600;">Est. Start:</td><td style="padding:4px 0;text-align:right;">${fmtDate(project.start_date)}</td></tr>` : ""}
+          ${project.due_date ? `<tr><td style="padding:4px 0;color:#666;font-weight:600;">Est. Completion:</td><td style="padding:4px 0;text-align:right;">${fmtDate(project.due_date)}</td></tr>` : ""}
+        </table>
+        <table style="width:100%;border-collapse:collapse;margin-top:12px;background:#f0f0f0;">
+          <tr>
+            <td style="padding:10px 14px;font-size:13px;font-weight:bold;color:#111;">Quoted Amount:</td>
+            <td style="padding:10px 14px;text-align:right;font-size:14px;font-weight:bold;font-family:monospace;color:#111;">${money(quotedAmount)}</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 
   <!-- Project stripe -->
   <div style="background:${stripeColor};padding:10px 20px;">
