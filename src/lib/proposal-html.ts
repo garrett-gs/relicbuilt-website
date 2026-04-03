@@ -101,8 +101,8 @@ export function generateProposalHtml(
         ${project.due_date ? `<tr><td style="padding:3px 0;color:#666;font-weight:600;">Est. Completion:</td><td style="padding:3px 0;text-align:right;">${fmtDate(project.due_date)}</td></tr>` : ""}
       </table>
       <div style="background:#f0f0f0;padding:10px 14px;display:flex;justify-content:space-between;margin-top:12px;">
-        <span style="font-size:13px;font-weight:bold;">Quoted Amount:</span>
-        <span style="font-size:14px;font-weight:bold;font-family:monospace;">${money(quotedAmount)}</span>
+        <span style="font-size:13px;font-weight:bold;color:#111;">Quoted Amount:</span>
+        <span style="font-size:14px;font-weight:bold;font-family:monospace;color:#111;">${money(quotedAmount)}</span>
       </div>
     </div>
   </div>
@@ -203,8 +203,8 @@ export function generateProposalHtml(
       <tr>
         <td colspan="2" style="padding-top:8px;">
           <div style="background:#f0f0f0;padding:10px 14px;display:flex;justify-content:space-between;">
-            <span style="font-size:13px;font-weight:bold;">Total Quoted Amount:</span>
-            <span style="font-size:14px;font-weight:bold;font-family:monospace;">${money(quotedAmount)}</span>
+            <span style="font-size:13px;font-weight:bold;color:#111;">Total Quoted Amount:</span>
+            <span style="font-size:14px;font-weight:bold;font-family:monospace;color:#111;">${money(quotedAmount)}</span>
           </div>
         </td>
       </tr>
