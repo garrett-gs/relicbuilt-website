@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
     const now = new Date().toISOString().split("T")[0];
 
     // Create deposit invoice
-    const { data: depositInvoice } = await supabase.from("invoices").insert({
+    const { data: depositInvoice, error: depositError } = await supabase.from("invoices").insert({
       invoice_number: depositInvoiceNum,
       custom_work_id: project.id,
       client_name: project.client_name || "",
@@ -159,16 +159,17 @@ export async function POST(req: NextRequest) {
       subtotal: depositAmount > 0 ? depositAmount : totalAmount,
       issued_date: now,
       tax_rate: 0,
-      delivery_fee: 0,
-      discount: 0,
-      reminders_sent: 0,
-      payments: [],
       status: "unpaid",
       invoice_type: "deposit",
-    }).select("id,invoice_number").single();
+    }).select().single();
+
+    if (depositError) {
+      console.error("Deposit invoice creation failed:", depositError.message, depositError.details);
+      return NextResponse.json({ error: `Failed to create deposit invoice: ${depositError.message}` }, { status: 500 });
+    }
 
     // Create final invoice (not emailed — admin sends manually when ready)
-    const { data: finalInvoice } = await supabase.from("invoices").insert({
+    const { data: finalInvoice, error: finalError } = await supabase.from("invoices").insert({
       invoice_number: finalInvoiceNum,
       custom_work_id: project.id,
       client_name: project.client_name || "",
@@ -177,13 +178,13 @@ export async function POST(req: NextRequest) {
       subtotal: depositAmount > 0 ? balanceAmount : totalAmount,
       issued_date: now,
       tax_rate: 0,
-      delivery_fee: 0,
-      discount: 0,
-      reminders_sent: 0,
-      payments: [],
       status: "unpaid",
       invoice_type: "final",
-    }).select("id,invoice_number").single();
+    }).select().single();
+
+    if (finalError) {
+      console.error("Final invoice creation failed:", finalError.message, finalError.details);
+    }
 
     // Mark proposal approved
     await supabase.from("custom_work").update({
