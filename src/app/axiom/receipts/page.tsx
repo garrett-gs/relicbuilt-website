@@ -34,7 +34,6 @@ export default function ReceiptsPage() {
   const [projects, setProjects] = useState<CustomWork[]>([]);
   const [search, setSearch] = useState("");
   const [filterProject, setFilterProject] = useState("");
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [addingTo, setAddingTo] = useState<Record<string, "materials" | "labor" | "done">>({});
   const [poItem, setPoItem] = useState<AddToPOItem | null>(null);
 
@@ -129,7 +128,7 @@ export default function ReceiptsPage() {
         </select>
       </div>
 
-      {/* Receipt list */}
+      {/* Receipt cards */}
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-muted text-sm">
           {receipts.length === 0 ? (
@@ -141,115 +140,105 @@ export default function ReceiptsPage() {
           ) : "No receipts match your filters."}
         </div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map((r) => {
-            const isOpen = expanded[r.id];
-            return (
-              <div key={r.id} className="bg-card border border-border">
-                {/* Row header */}
-                <div
-                  className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-background/50 transition-colors"
-                  onClick={() => setExpanded((prev) => ({ ...prev, [r.id]: !prev[r.id] }))}
-                >
-                  {r.image_url ? (
-                    <img src={r.image_url} alt="" className="w-10 h-10 object-cover border border-border rounded shrink-0" />
-                  ) : (
-                    <div className="w-10 h-10 bg-border/20 border border-border rounded shrink-0 flex items-center justify-center">
-                      <Camera size={14} className="text-muted" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{r.vendor || "Unknown vendor"}</p>
-                    <p className="text-xs text-muted">
-                      {r.receipt_date ? new Date(r.receipt_date + "T12:00:00").toLocaleDateString() : new Date(r.created_at).toLocaleDateString()}
-                      {r.project_name && <span> · {r.project_name}</span>}
-                      {r.submitted_by && <span className="text-muted/60"> · {r.submitted_by}</span>}
-                    </p>
-                  </div>
-                  <p className="text-sm font-mono font-medium shrink-0">{money(r.total || 0)}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filtered.map((r) => (
+            <div key={r.id} className="bg-card border border-border flex flex-col">
+
+              {/* Receipt image */}
+              {r.image_url ? (
+                <a href={r.image_url} target="_blank" rel="noopener noreferrer" className="block shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={r.image_url} alt="" className="w-full h-40 object-cover border-b border-border hover:opacity-90 transition-opacity" />
+                </a>
+              ) : (
+                <div className="w-full h-40 bg-border/10 border-b border-border flex items-center justify-center shrink-0">
+                  <Camera size={28} className="text-muted/40" />
+                </div>
+              )}
+
+              {/* Card body */}
+              <div className="p-3 flex flex-col gap-2.5 flex-1">
+
+                {/* Vendor + total */}
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold leading-snug">{r.vendor || "Unknown vendor"}</p>
+                  <p className="text-sm font-mono font-bold text-accent shrink-0">{money(r.total || 0)}</p>
                 </div>
 
-                {/* Expanded detail */}
-                {isOpen && (
-                  <div className="border-t border-border px-4 py-3 space-y-3">
-                    {/* Image full view */}
-                    {r.image_url && (
-                      <a href={r.image_url} target="_blank" rel="noopener noreferrer">
-                        <img src={r.image_url} alt="" className="max-h-48 object-contain border border-border rounded" />
-                      </a>
-                    )}
+                {/* Date + submitted by */}
+                <p className="text-xs text-muted">
+                  {r.receipt_date ? new Date(r.receipt_date + "T12:00:00").toLocaleDateString() : new Date(r.created_at).toLocaleDateString()}
+                  {r.submitted_by && <span className="text-muted/60"> · {r.submitted_by}</span>}
+                </p>
 
-                    {/* Line items */}
-                    {r.line_items?.length > 0 && (
-                      <div className="space-y-1">
-                        {r.line_items.map((li, i) => (
-                          <div key={i} className="flex items-center gap-2 text-xs">
-                            <span className="flex-1 text-muted">{li.description}</span>
-                            <span className="font-mono text-muted shrink-0">{money(li.total)}</span>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setPoItem({ description: li.description, qty: li.qty, unit_price: li.unit_price, vendor_name: r.vendor }); }}
-                              className="text-muted hover:text-accent transition-colors shrink-0" title="Add to P.O."
-                            >
-                              <ShoppingCart size={11} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {r.notes && <p className="text-xs text-muted italic">{r.notes}</p>}
-
-                    {/* Project link */}
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={r.project_id || ""}
-                        onChange={(e) => linkProject(r, e.target.value)}
-                        className="flex-1 bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent"
-                      >
-                        <option value="">— No project —</option>
-                        {projects.map((p) => <option key={p.id} value={p.id}>{p.project_name}</option>)}
-                      </select>
-                    </div>
-
-                    {/* Add to project */}
-                    {r.project_id && (
-                      <div className="flex gap-2">
+                {/* Line items */}
+                {r.line_items?.length > 0 && (
+                  <div className="space-y-0.5 border-t border-border pt-2">
+                    {r.line_items.map((li, i) => (
+                      <div key={i} className="flex items-center gap-1.5 text-xs">
+                        <span className="flex-1 text-muted truncate">{li.description}</span>
+                        <span className="font-mono text-muted shrink-0">{money(li.total)}</span>
                         <button
-                          onClick={() => addToProject(r, "materials")}
-                          disabled={addingTo[r.id + "materials"] !== undefined}
-                          className="text-xs px-3 py-1.5 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50"
+                          onClick={() => setPoItem({ description: li.description, qty: li.qty, unit_price: li.unit_price, vendor_name: r.vendor })}
+                          className="text-muted hover:text-accent transition-colors shrink-0" title="Add to P.O."
                         >
-                          {addingTo[r.id + "materials"] === "done" ? "✓ Added to Materials" : "+ Add to Materials"}
-                        </button>
-                        <button
-                          onClick={() => addToProject(r, "labor")}
-                          disabled={addingTo[r.id + "labor"] !== undefined}
-                          className="text-xs px-3 py-1.5 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50"
-                        >
-                          {addingTo[r.id + "labor"] === "done" ? "✓ Added to Labor" : "+ Add to Labor"}
+                          <ShoppingCart size={10} />
                         </button>
                       </div>
-                    )}
-
-                    {/* Delete */}
-                    <div className="flex justify-end pt-1">
-                      <button
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (!confirm("Delete this receipt?")) return;
-                          await axiom.from("receipts").delete().eq("id", r.id);
-                          setReceipts((prev) => prev.filter((x) => x.id !== r.id));
-                        }}
-                        className="flex items-center gap-1.5 text-xs text-muted hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 size={12} /> Delete
-                      </button>
-                    </div>
+                    ))}
                   </div>
                 )}
+
+                {r.notes && <p className="text-xs text-muted/60 italic">{r.notes}</p>}
+
+                {/* Project dropdown */}
+                <div className="mt-auto pt-2 border-t border-border space-y-2">
+                  <select
+                    value={r.project_id || ""}
+                    onChange={(e) => linkProject(r, e.target.value)}
+                    className="w-full bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent"
+                  >
+                    <option value="">— No project —</option>
+                    {projects.map((p) => <option key={p.id} value={p.id}>{p.project_name}</option>)}
+                  </select>
+
+                  {/* Add to project buttons */}
+                  {r.project_id && (
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => addToProject(r, "materials")}
+                        disabled={addingTo[r.id + "materials"] !== undefined}
+                        className="flex-1 text-[11px] py-1 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50"
+                      >
+                        {addingTo[r.id + "materials"] === "done" ? "✓ Materials" : "+ Materials"}
+                      </button>
+                      <button
+                        onClick={() => addToProject(r, "labor")}
+                        disabled={addingTo[r.id + "labor"] !== undefined}
+                        className="flex-1 text-[11px] py-1 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50"
+                      >
+                        {addingTo[r.id + "labor"] === "done" ? "✓ Labor" : "+ Labor"}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Delete */}
+                  <div className="flex justify-end">
+                    <button
+                      onClick={async () => {
+                        if (!confirm("Delete this receipt?")) return;
+                        await axiom.from("receipts").delete().eq("id", r.id);
+                        setReceipts((prev) => prev.filter((x) => x.id !== r.id));
+                      }}
+                      className="flex items-center gap-1 text-[11px] text-muted hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={11} /> Delete
+                    </button>
+                  </div>
+                </div>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
 
