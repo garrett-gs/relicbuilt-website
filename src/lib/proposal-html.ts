@@ -150,15 +150,6 @@ export function generateProposalHtml(
   </div>` : ""}`;
   })() : ""}` : ""}
 
-  <!-- Approve CTA after pricing (email only) -->
-  ${forEmail && approveUrl ? `
-  <div style="padding:28px 20px;background:#faf8f3;border-top:3px solid #c4a24d;border-bottom:3px solid #c4a24d;text-align:center;">
-    <p style="margin:0 0 6px;font-size:15px;font-weight:bold;color:#111;">Ready to move forward?</p>
-    <p style="margin:0 0 20px;font-size:13px;color:#555;">Click the button below to approve this proposal.</p>
-    <a href="${approveUrl}" style="display:inline-block;background:#c4a24d;color:#fff;text-decoration:none;padding:16px 40px;font-size:16px;font-weight:bold;letter-spacing:0.04em;">✓ &nbsp;Approve This Proposal</a>
-    <p style="margin:14px 0 0;font-size:11px;color:#aaa;">By approving, you agree to the terms of this proposal.</p>
-  </div>` : ""}
-
   <!-- Project Highlights -->
   ${highlights.length > 0 ? `
   <div style="background:${stripeColor};padding:10px 20px;margin-top:0;">
@@ -210,10 +201,13 @@ export function generateProposalHtml(
     </table>
   </div>` : ""}
 
-  <!-- Approve CTA reminder at bottom (email only) -->
+  <!-- Approve CTA at bottom (email only) -->
   ${forEmail && approveUrl ? `
-  <div style="padding:20px;text-align:center;border-top:1px solid #f0f0f0;">
-    <a href="${approveUrl}" style="display:inline-block;background:#c4a24d;color:#fff;text-decoration:none;padding:13px 32px;font-size:14px;font-weight:bold;">✓ &nbsp;Approve This Proposal</a>
+  <div style="padding:28px 20px;background:#faf8f3;border-top:3px solid #c4a24d;border-bottom:3px solid #c4a24d;text-align:center;">
+    <p style="margin:0 0 6px;font-size:15px;font-weight:bold;color:#111;">Ready to move forward?</p>
+    <p style="margin:0 0 20px;font-size:13px;color:#555;">Click the button below to approve this proposal.</p>
+    <a href="${approveUrl}" style="display:inline-block;background:#c4a24d;color:#fff;text-decoration:none;padding:16px 40px;font-size:16px;font-weight:bold;letter-spacing:0.04em;">✓ &nbsp;Approve This Proposal</a>
+    <p style="margin:14px 0 0;font-size:11px;color:#aaa;">By approving, you agree to the terms of this proposal.</p>
   </div>` : ""}
 
   <!-- Terms -->
