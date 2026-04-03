@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
-import { Lead } from "@/types/axiom";
+import { Lead, Customer } from "@/types/axiom";
+import { formatPhone } from "@/lib/utils";
 import {
   Search,
   User,
@@ -20,25 +21,26 @@ import {
   Check,
 } from "lucide-react";
 
-const STATUSES: { key: Lead["status"]; label: string; color: string }[] = [
-  { key: "new", label: "New", color: "#6366f1" },
-  { key: "contacted", label: "Contacted", color: "#f59e0b" },
-  { key: "quoted", label: "Quoted", color: "#3b82f6" },
-  { key: "converted", label: "Converted", color: "#22c55e" },
-  { key: "lost", label: "Lost", color: "#9ca3af" },
+const STATUSES: { key: Lead["status"]; label: string }[] = [
+  { key: "new",       label: "New"       },
+  { key: "contacted", label: "Contacted" },
+  { key: "quoted",    label: "Quoted"    },
+  { key: "converted", label: "Converted" },
+  { key: "lost",      label: "Lost"      },
+];
+
+const BUDGET_RANGES = [
+  "Under $500", "$500 – $1,000", "$1,000 – $2,500", "$2,500 – $5,000",
+  "$5,000 – $10,000", "$10,000 – $25,000", "$25,000+", "Not sure yet",
 ];
 
 const inp = "w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent";
 const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
 
 function statusBadge(status: Lead["status"]) {
-  const s = STATUSES.find((x) => x.key === status);
   return (
-    <span
-      className="text-xs font-semibold px-2 py-0.5 rounded-sm"
-      style={{ background: (s?.color ?? "#9ca3af") + "22", color: s?.color ?? "#9ca3af" }}
-    >
-      {s?.label ?? status}
+    <span className="text-xs font-semibold px-2 py-0.5 bg-muted/20 text-muted">
+      {STATUSES.find((s) => s.key === status)?.label ?? status}
     </span>
   );
 }
@@ -47,32 +49,139 @@ function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+// ── Customer Search ──────────────────────────────────────────────────────────
+
+function CustomerSearch({
+  onSelect,
+  initialName,
+}: {
+  onSelect: (c: Customer | null) => void;
+  initialName?: string;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Customer[]>([]);
+  const [open, setOpen] = useState(false);
+  const [selectedName, setSelectedName] = useState(initialName || "");
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (initialName !== undefined) setSelectedName(initialName);
+  }, [initialName]);
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  async function search(q: string) {
+    setQuery(q);
+    if (!q.trim()) { setResults([]); setOpen(false); return; }
+    const { data } = await axiom.from("customers").select("*").ilike("name", `%${q}%`).limit(8);
+    if (data) { setResults(data); setOpen(true); }
+  }
+
+  function pick(c: Customer) {
+    setSelectedName(c.name);
+    setQuery("");
+    setOpen(false);
+    onSelect(c);
+  }
+
+  function clear() {
+    setSelectedName("");
+    onSelect(null);
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <label className={lbl}>Name *</label>
+      <div className="flex items-center gap-2">
+        {selectedName ? (
+          <span className="flex items-center gap-1 bg-accent/10 text-accent text-sm px-3 py-2.5 border border-accent/30 flex-1 truncate">
+            {selectedName}
+            <button type="button" onClick={clear} className="ml-1 hover:text-foreground shrink-0">
+              <X size={12} />
+            </button>
+          </span>
+        ) : (
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+            <input
+              value={query}
+              onChange={(e) => search(e.target.value)}
+              placeholder="Search customers or type name…"
+              className="w-full bg-card border border-border pl-9 pr-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+            />
+          </div>
+        )}
+      </div>
+      {open && results.length > 0 && (
+        <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border shadow-lg mt-0.5 max-h-48 overflow-y-auto">
+          {results.map((c) => (
+            <button key={c.id} type="button" onMouseDown={() => pick(c)}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-background flex items-center justify-between">
+              <span>{c.name}</span>
+              <span className="text-xs text-muted">{c.email || c.phone || ""}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {open && results.length === 0 && query && (
+        <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border mt-0.5 px-4 py-3 text-sm text-muted flex items-center justify-between">
+          <span>No match — will add as new</span>
+          <button type="button" onMouseDown={() => {
+            setSelectedName(query);
+            setOpen(false);
+            onSelect({ name: query } as Customer);
+          }} className="text-accent text-xs underline">Use &quot;{query}&quot;</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Create Lead Modal ────────────────────────────────────────────────────────
 
 function CreateLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: (l: Lead) => void }) {
-  const [form, setForm] = useState({ name: "", email: "", phone: "", description: "", budget_range: "", notes: "" });
+  const [name, setName] = useState("");
+  const [customerId, setCustomerId] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [description, setDescription] = useState("");
+  const [budgetRange, setBudgetRange] = useState("");
+  const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
 
-  const BUDGET_RANGES = [
-    "Under $500", "$500 – $1,000", "$1,000 – $2,500", "$2,500 – $5,000",
-    "$5,000 – $10,000", "$10,000 – $25,000", "$25,000+", "Not sure yet",
-  ];
-
-  function set(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })); }
+  function handleCustomerSelect(c: Customer | null) {
+    if (!c) {
+      setCustomerId("");
+      setName("");
+      setEmail("");
+      setPhone("");
+    } else {
+      setCustomerId(c.id ?? "");
+      setName(c.name ?? "");
+      setEmail(c.email ?? "");
+      setPhone(c.phone ?? "");
+    }
+  }
 
   async function save() {
-    if (!form.name.trim()) { setErr("Name is required."); return; }
+    if (!name.trim()) { setErr("Name is required."); return; }
     setSaving(true);
     const { data, error } = await axiom.from("leads").insert({
-      name: form.name.trim(),
-      email: form.email.trim() || null,
-      phone: form.phone.trim() || null,
-      description: form.description.trim() || null,
-      budget_range: form.budget_range || null,
-      notes: form.notes.trim() || null,
+      name: name.trim(),
+      email: email.trim() || null,
+      phone: phone.trim() || null,
+      description: description.trim() || null,
+      budget_range: budgetRange || null,
+      notes: notes.trim() || null,
       status: "new",
-      source: "manual",
+      source: customerId ? "crm" : "manual",
       inspiration_photos: [],
     }).select().single();
     if (error || !data) { setErr("Failed to create lead."); setSaving(false); return; }
@@ -87,34 +196,37 @@ function CreateLeadModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <button onClick={onClose} className="text-muted hover:text-foreground"><X size={18} /></button>
         </div>
         <div className="space-y-4">
-          <div>
-            <label className={lbl}>Name *</label>
-            <input value={form.name} onChange={(e) => set("name", e.target.value)} className={inp} placeholder="Client name" />
-          </div>
+          <CustomerSearch onSelect={handleCustomerSelect} initialName={name} />
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={lbl}>Email</label>
-              <input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inp} />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inp} />
             </div>
             <div>
               <label className={lbl}>Phone</label>
-              <input type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} className={inp} />
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(formatPhone(e.target.value))}
+                placeholder="(402) 000-0000"
+                className={inp}
+              />
             </div>
           </div>
           <div>
             <label className={lbl}>Budget Range</label>
-            <select value={form.budget_range} onChange={(e) => set("budget_range", e.target.value)} className={inp}>
+            <select value={budgetRange} onChange={(e) => setBudgetRange(e.target.value)} className={inp}>
               <option value="">Select…</option>
               {BUDGET_RANGES.map((b) => <option key={b} value={b}>{b}</option>)}
             </select>
           </div>
           <div>
             <label className={lbl}>Description</label>
-            <textarea value={form.description} onChange={(e) => set("description", e.target.value)} className={inp + " min-h-[80px] resize-y"} />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} className={inp + " min-h-[80px] resize-y"} />
           </div>
           <div>
             <label className={lbl}>Notes</label>
-            <textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} className={inp + " min-h-[60px] resize-y"} />
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className={inp + " min-h-[60px] resize-y"} />
           </div>
         </div>
         {err && <p className="text-xs text-red-500 mt-3">{err}</p>}
@@ -137,42 +249,44 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
   onDelete: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState<Partial<Lead>>({});
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editDesc, setEditDesc] = useState("");
+  const [editBudget, setEditBudget] = useState("");
   const [saving, setSaving] = useState(false);
   const [notes, setNotes] = useState(lead.notes ?? "");
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesDirty, setNotesDirty] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const BUDGET_RANGES = [
-    "Under $500", "$500 – $1,000", "$1,000 – $2,500", "$2,500 – $5,000",
-    "$5,000 – $10,000", "$10,000 – $25,000", "$25,000+", "Not sure yet",
-  ];
-
-  // Reset when lead changes
   useEffect(() => {
     setEditing(false);
-    setForm({});
     setNotes(lead.notes ?? "");
     setNotesDirty(false);
     setConfirmDelete(false);
   }, [lead.id]);
 
   function startEdit() {
-    setForm({
-      name: lead.name,
-      email: lead.email ?? "",
-      phone: lead.phone ?? "",
-      description: lead.description ?? "",
-      budget_range: lead.budget_range ?? "",
-    });
+    setEditName(lead.name);
+    setEditEmail(lead.email ?? "");
+    setEditPhone(lead.phone ?? "");
+    setEditDesc(lead.description ?? "");
+    setEditBudget(lead.budget_range ?? "");
     setEditing(true);
   }
 
   async function saveEdit() {
     setSaving(true);
     const { data, error } = await axiom.from("leads")
-      .update({ ...form, updated_at: new Date().toISOString() })
+      .update({
+        name: editName.trim(),
+        email: editEmail.trim() || null,
+        phone: editPhone.trim() || null,
+        description: editDesc.trim() || null,
+        budget_range: editBudget || null,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", lead.id)
       .select()
       .single();
@@ -207,11 +321,6 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
     onDelete(lead.id);
   }
 
-  function fld(k: keyof Lead) {
-    return (form[k] ?? "") as string;
-  }
-  function setFld(k: string, v: string) { setForm((f) => ({ ...f, [k]: v })); }
-
   return (
     <div className="flex-1 overflow-y-auto">
       {/* Header */}
@@ -224,9 +333,6 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
               <Clock size={11} className="inline mr-1" />
               {fmtDate(lead.created_at)}
             </span>
-            {lead.source && lead.source !== "web" && (
-              <span className="text-xs text-muted capitalize">{lead.source}</span>
-            )}
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -259,11 +365,11 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
               <button
                 key={s.key}
                 onClick={() => updateStatus(s.key)}
-                className="text-xs px-3 py-1.5 border transition-colors font-medium"
-                style={lead.status === s.key
-                  ? { background: s.color, borderColor: s.color, color: "#fff" }
-                  : { borderColor: "#e5e7eb", color: "#6b7280" }
-                }
+                className={`text-xs px-3 py-1.5 font-medium transition-colors ${
+                  lead.status === s.key
+                    ? "bg-accent text-background"
+                    : "bg-muted/20 text-muted hover:bg-muted/40 hover:text-foreground"
+                }`}
               >
                 {s.label}
               </button>
@@ -276,28 +382,34 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
           <div className="space-y-3 border border-border p-4">
             <div>
               <label className={lbl}>Name</label>
-              <input value={fld("name")} onChange={(e) => setFld("name", e.target.value)} className={inp} />
+              <input value={editName} onChange={(e) => setEditName(e.target.value)} className={inp} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className={lbl}>Email</label>
-                <input type="email" value={fld("email")} onChange={(e) => setFld("email", e.target.value)} className={inp} />
+                <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className={inp} />
               </div>
               <div>
                 <label className={lbl}>Phone</label>
-                <input type="tel" value={fld("phone")} onChange={(e) => setFld("phone", e.target.value)} className={inp} />
+                <input
+                  type="tel"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(formatPhone(e.target.value))}
+                  placeholder="(402) 000-0000"
+                  className={inp}
+                />
               </div>
             </div>
             <div>
               <label className={lbl}>Budget Range</label>
-              <select value={fld("budget_range")} onChange={(e) => setFld("budget_range", e.target.value)} className={inp}>
+              <select value={editBudget} onChange={(e) => setEditBudget(e.target.value)} className={inp}>
                 <option value="">Select…</option>
                 {BUDGET_RANGES.map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
             <div>
               <label className={lbl}>Description</label>
-              <textarea value={fld("description")} onChange={(e) => setFld("description", e.target.value)} className={inp + " min-h-[80px] resize-y"} />
+              <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} className={inp + " min-h-[80px] resize-y"} />
             </div>
             <div className="flex gap-2">
               <button onClick={() => setEditing(false)} className="flex-1 border border-border px-4 py-2 text-sm text-muted hover:text-foreground">Cancel</button>
@@ -387,12 +499,9 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
           />
         </div>
 
-        {/* Convert to Project link */}
+        {/* Convert to Project */}
         <div className="pt-2 border-t border-border">
-          <a
-            href="/axiom/projects"
-            className="flex items-center gap-2 text-sm text-accent hover:underline"
-          >
+          <a href="/axiom/projects" className="flex items-center gap-2 text-sm text-accent hover:underline">
             <Plus size={14} />
             Convert to Project (go to Projects)
           </a>
@@ -457,7 +566,6 @@ export default function LeadsPage() {
 
       {/* Left: List */}
       <div className="w-72 shrink-0 border-r border-border flex flex-col bg-card">
-        {/* Header */}
         <div className="px-4 pt-5 pb-3 border-b border-border">
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-sm font-semibold text-foreground uppercase tracking-wider">Leads</h1>
@@ -484,7 +592,11 @@ export default function LeadsPage() {
           <div className="flex flex-wrap gap-1 mt-2.5">
             <button
               onClick={() => setStatusFilter("all")}
-              className={`text-xs px-2 py-0.5 border transition-colors ${statusFilter === "all" ? "bg-accent border-accent text-background" : "border-border text-muted hover:text-foreground"}`}
+              className={`text-xs px-2 py-0.5 transition-colors ${
+                statusFilter === "all"
+                  ? "bg-accent text-background"
+                  : "bg-muted/20 text-muted hover:bg-muted/40 hover:text-foreground"
+              }`}
             >
               All
             </button>
@@ -492,11 +604,11 @@ export default function LeadsPage() {
               <button
                 key={s.key}
                 onClick={() => setStatusFilter(s.key)}
-                className="text-xs px-2 py-0.5 border transition-colors"
-                style={statusFilter === s.key
-                  ? { background: s.color, borderColor: s.color, color: "#fff" }
-                  : { borderColor: "#e5e7eb", color: "#6b7280" }
-                }
+                className={`text-xs px-2 py-0.5 transition-colors ${
+                  statusFilter === s.key
+                    ? "bg-accent text-background"
+                    : "bg-muted/20 text-muted hover:bg-muted/40 hover:text-foreground"
+                }`}
               >
                 {s.label}
               </button>
@@ -514,25 +626,25 @@ export default function LeadsPage() {
             </div>
           ) : (
             filtered.map((lead) => {
-              const s = STATUSES.find((x) => x.key === lead.status);
               const active = selectedId === lead.id;
               return (
                 <button
                   key={lead.id}
                   onClick={() => setSelectedId(lead.id)}
-                  className={`w-full text-left px-4 py-3.5 border-b border-border flex items-start gap-3 transition-colors ${active ? "bg-accent/10 border-l-2 border-l-accent" : "hover:bg-background"}`}
+                  className={`w-full text-left px-4 py-3.5 border-b border-border flex items-start gap-3 transition-colors ${
+                    active ? "bg-accent/10 border-l-2 border-l-accent" : "hover:bg-background"
+                  }`}
                 >
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5"
-                    style={{ background: (s?.color ?? "#9ca3af") + "22" }}
-                  >
-                    <User size={13} style={{ color: s?.color ?? "#9ca3af" }} />
+                  <div className="w-7 h-7 rounded-full bg-muted/20 flex items-center justify-center shrink-0 mt-0.5">
+                    <User size={13} className="text-muted" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className={`text-sm font-medium truncate ${active ? "text-accent" : "text-foreground"}`}>{lead.name}</p>
                     <p className="text-xs text-muted truncate mt-0.5">{lead.email || lead.phone || "No contact info"}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] font-semibold" style={{ color: s?.color ?? "#9ca3af" }}>{s?.label}</span>
+                      <span className="text-[10px] text-muted font-medium">
+                        {STATUSES.find((s) => s.key === lead.status)?.label}
+                      </span>
                       {lead.budget_range && <span className="text-[10px] text-muted truncate">{lead.budget_range}</span>}
                       {(lead.inspiration_photos?.length ?? 0) > 0 && (
                         <span className="text-[10px] text-muted flex items-center gap-0.5">
@@ -548,7 +660,6 @@ export default function LeadsPage() {
           )}
         </div>
 
-        {/* Count */}
         <div className="px-4 py-2.5 border-t border-border">
           <p className="text-xs text-muted">{filtered.length} lead{filtered.length !== 1 ? "s" : ""}</p>
         </div>
