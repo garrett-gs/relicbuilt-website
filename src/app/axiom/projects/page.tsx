@@ -43,6 +43,36 @@ function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
+function fmt(n: number) {
+  return n ? n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
+}
+
+function CurrencyInput({ value, onChange, placeholder = "0.00", className }: {
+  value: number;
+  onChange: (v: number) => void;
+  placeholder?: string;
+  className?: string;
+}) {
+  const [focused, setFocused] = useState(false);
+  const [raw, setRaw] = useState("");
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={focused ? raw : fmt(value)}
+      onFocus={() => { setFocused(true); setRaw(value ? String(value) : ""); }}
+      onChange={(e) => setRaw(e.target.value)}
+      onBlur={() => {
+        setFocused(false);
+        const parsed = parseFloat(raw.replace(/,/g, ""));
+        onChange(isNaN(parsed) ? 0 : parsed);
+      }}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
+
 export default function ProjectsPage() {
   const { userEmail } = useAuth();
   const router = useRouter();
@@ -787,7 +817,13 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             {STATUS_COLUMNS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
         </div>
-        <Field label="Quoted Amount" type="number" prefix="$" value={String(quoted)} onChange={(v) => { setQuoted(Number(v)); markDirty(); }} />
+        <div>
+          <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Quoted Amount</label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">$</span>
+            <CurrencyInput value={quoted} onChange={(v) => { setQuoted(v); markDirty(); }} className="w-full bg-card border border-border pl-7 pr-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent text-right" />
+          </div>
+        </div>
       </div>
 
       {/* File Folder */}
@@ -905,7 +941,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
               <div key={i} className="grid grid-cols-[1fr_1fr_100px_32px] gap-2 items-center">
                 <input value={m.description} onChange={(e) => updateMaterial(i, "description", e.target.value)} placeholder="Description" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
                 <input value={m.vendor} onChange={(e) => updateMaterial(i, "vendor", e.target.value)} placeholder="Vendor" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
-                <input type="number" value={m.cost || ""} onChange={(e) => updateMaterial(i, "cost", Number(e.target.value))} placeholder="Cost" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
+                <CurrencyInput value={m.cost || 0} onChange={(v) => updateMaterial(i, "cost", v)} placeholder="Cost" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right w-28" />
                 <button onClick={() => removeMaterial(i)} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
               </div>
             ))}
@@ -1075,15 +1111,9 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                     placeholder="Description..."
                     className="flex-1 bg-background border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
                   />
-                  <div className="relative w-28 shrink-0">
+                  <div className="relative w-36 shrink-0">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">$</span>
-                    <input
-                      type="number"
-                      value={item.cost || ""}
-                      onChange={(e) => updateCostItem(i, "cost", parseFloat(e.target.value) || 0)}
-                      placeholder="0.00"
-                      className="w-full bg-background border border-border pl-7 pr-3 py-1.5 text-sm text-right text-foreground focus:outline-none focus:border-accent"
-                    />
+                    <CurrencyInput value={item.cost || 0} onChange={(v) => updateCostItem(i, "cost", v)} className="w-full bg-background border border-border pl-7 pr-3 py-1.5 text-sm text-right text-foreground focus:outline-none focus:border-accent" />
                   </div>
                   <button onClick={() => removeCostItem(i)} className="text-muted hover:text-red-500 shrink-0"><Trash2 size={14} /></button>
                 </div>
@@ -1125,13 +1155,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                   {/* Dollar input */}
                   <div className="relative w-32">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">$</span>
-                    <input
-                      type="number"
-                      value={proposalCostSection.deposit_amount || ""}
-                      onChange={(e) => updateDeposit(parseFloat(e.target.value) || 0)}
-                      placeholder="0.00"
-                      className="w-full bg-background border border-border pl-7 pr-3 py-1.5 text-sm text-right text-foreground focus:outline-none focus:border-accent"
-                    />
+                    <CurrencyInput value={proposalCostSection.deposit_amount || 0} onChange={updateDeposit} className="w-full bg-background border border-border pl-7 pr-3 py-1.5 text-sm text-right text-foreground focus:outline-none focus:border-accent" />
                   </div>
                 </div>
               </div>
