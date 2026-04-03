@@ -1504,13 +1504,13 @@ function ProposalPreview({ project, onClose, userEmail }: {
           </div>
           <div>
             <div className="space-y-2 text-sm mb-5">
-              <div className="flex justify-between"><span className="font-semibold text-gray-500">Proposal #:</span><span className="font-bold">{proposalNum}</span></div>
-              <div className="flex justify-between"><span className="font-semibold text-gray-500">Prepared:</span><span>{fmtDate(new Date().toISOString().split("T")[0])}</span></div>
-              {validUntil && <div className="flex justify-between"><span className="font-semibold text-gray-500">Valid Until:</span><span>{fmtDate(validUntil)}</span></div>}
-              {project.start_date && <div className="flex justify-between"><span className="font-semibold text-gray-500">Est. Start:</span><span>{fmtDate(project.start_date)}</span></div>}
-              {project.due_date && <div className="flex justify-between"><span className="font-semibold text-gray-500">Est. Completion:</span><span>{fmtDate(project.due_date)}</span></div>}
+              <div className="flex justify-between"><span className="font-semibold text-gray-500">Proposal #:</span><span className="font-bold text-gray-900">{proposalNum}</span></div>
+              <div className="flex justify-between"><span className="font-semibold text-gray-500">Prepared:</span><span className="text-gray-900">{fmtDate(new Date().toISOString().split("T")[0])}</span></div>
+              {validUntil && <div className="flex justify-between"><span className="font-semibold text-gray-500">Valid Until:</span><span className="text-gray-900">{fmtDate(validUntil)}</span></div>}
+              {project.start_date && <div className="flex justify-between"><span className="font-semibold text-gray-500">Est. Start:</span><span className="text-gray-900">{fmtDate(project.start_date)}</span></div>}
+              {project.due_date && <div className="flex justify-between"><span className="font-semibold text-gray-500">Est. Completion:</span><span className="text-gray-900">{fmtDate(project.due_date)}</span></div>}
             </div>
-            <div className="bg-gray-100 px-4 py-3 flex justify-between font-bold text-sm">
+            <div className="bg-gray-100 px-4 py-3 flex justify-between font-bold text-sm text-gray-900">
               <span>Quoted Amount:</span>
               <span className="font-mono">{money(quotedAmount)}</span>
             </div>
@@ -1586,7 +1586,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
             {includeLabor && laborLog.length > 0 && (
               <div className="flex justify-between text-gray-500"><span>Labor:</span><span className="font-mono">{money(laborTotal)}</span></div>
             )}
-            <div className="bg-gray-100 px-4 py-3 flex justify-between font-bold mt-1">
+            <div className="bg-gray-100 px-4 py-3 flex justify-between font-bold mt-1 text-gray-900">
               <span>Total Quoted Amount:</span>
               <span className="font-mono">{money(quotedAmount)}</span>
             </div>
