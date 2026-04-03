@@ -457,6 +457,23 @@ export interface TimeEntry {
   created_at: string;
 }
 
+// ── Leads ────────────────────────────────────────────────────
+
+export interface Lead {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  description?: string;
+  budget_range?: string;
+  inspiration_photos: string[];
+  status: "new" | "contacted" | "quoted" | "converted" | "lost";
+  source?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Axiom Navigation ────────────────────────────────────────
 
 export type AxiomPage =

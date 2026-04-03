@@ -13,6 +13,7 @@ import {
   Clock,
   CalendarDays,
   Users,
+  UserPlus,
   FileText,
   Calculator,
   ShoppingCart,
@@ -47,6 +48,7 @@ const navSections = [
     label: "Clients",
     items: [
       { href: "/axiom/customers", icon: Users, label: "Customers" },
+      { href: "/axiom/leads", icon: UserPlus, label: "Leads" },
     ],
   },
   {
