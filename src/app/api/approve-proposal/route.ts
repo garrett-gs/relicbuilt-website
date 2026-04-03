@@ -116,9 +116,10 @@ export async function POST(req: NextRequest) {
     const resendKey = process.env.RESEND_API_KEY;
     if (!resendKey) return NextResponse.json({ error: "RESEND_API_KEY not set" }, { status: 500 });
 
+    // Use service role key to bypass RLS for invoice creation
     const supabase = createClient(
       process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
     );
 
     // Find project by token
