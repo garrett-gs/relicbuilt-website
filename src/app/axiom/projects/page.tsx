@@ -1346,8 +1346,6 @@ function ProposalPreview({ project, onClose, userEmail }: {
 }) {
   const [biz, setBiz] = useState<Partial<Settings> | null>(null);
   const [validUntil, setValidUntil] = useState("");
-  const [includeMaterials, setIncludeMaterials] = useState(true);
-  const [includeLabor, setIncludeLabor] = useState(true);
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [sendTo, setSendTo] = useState(project.client_email || "");
   const [sending, setSending] = useState(false);
@@ -1362,12 +1360,11 @@ function ProposalPreview({ project, onClose, userEmail }: {
       .then(({ data }) => setBiz(data || {}));
   }, []);
 
-  const materials = project.materials || [];
-  const laborLog = project.labor_log || [];
-  const materialTotal = materials.reduce((s, m) => s + (m.cost || 0), 0);
-  const laborTotal = laborLog.reduce((s, l) => s + (l.cost || 0), 0);
-  const totalHours = laborLog.reduce((s, l) => s + (l.hours || 0), 0);
   const quotedAmount = project.quoted_amount || 0;
+  const proposalScope = project.proposal_scope?.included !== false ? (project.proposal_scope?.body || "") : "";
+  const costSection = project.proposal_cost_section?.included !== false ? project.proposal_cost_section : null;
+  const proposalImages = project.proposal_images_included !== false ? (project.proposal_images || []) : [];
+  const highlights = (project.proposal_highlights || []).filter((h) => h.included !== false);
 
   const fmtDate = (d?: string) => d
     ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
@@ -1382,7 +1379,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
     setSending(true); setSendResult(null);
     try {
       const html = generateProposalHtml(project, biz, {
-        proposalNum, validUntil, includeMaterials, includeLabor, forEmail: true,
+        proposalNum, validUntil, forEmail: true,
       });
       const res = await fetch("/api/send-po", {
         method: "POST",
@@ -1418,14 +1415,6 @@ function ProposalPreview({ project, onClose, userEmail }: {
 
         {/* Options */}
         <div className="flex items-center gap-4 text-sm text-gray-600 border-l border-gray-200 pl-3">
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input type="checkbox" checked={includeMaterials} onChange={(e) => setIncludeMaterials(e.target.checked)} className="accent-[#c4a24d]" />
-            Materials
-          </label>
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input type="checkbox" checked={includeLabor} onChange={(e) => setIncludeLabor(e.target.checked)} className="accent-[#c4a24d]" />
-            Labor
-          </label>
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-400 uppercase tracking-wider">Valid Until</span>
             <input
@@ -1530,14 +1519,14 @@ function ProposalPreview({ project, onClose, userEmail }: {
         </div>
 
         {/* Highlights */}
-        {(project.proposal_highlights || []).length > 0 && (
+        {highlights.length > 0 && (
           <>
             <div className="px-10 py-3 print:px-8" style={{ background: stripeColor }}>
               <p className="text-sm font-bold text-white uppercase tracking-widest">Project Highlights</p>
             </div>
             <div className="px-10 py-6 border-b border-gray-100 print:px-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
-                {(project.proposal_highlights || []).map((h, i) => (
+                {highlights.map((h, i) => (
                   <div key={i} className="border-l-4 pl-4 py-1" style={{ borderColor: "#c4a24d" }}>
                     <p className="font-semibold text-gray-900 text-sm mb-1">{h.title}</p>
                     <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{h.body}</p>
@@ -1549,59 +1538,49 @@ function ProposalPreview({ project, onClose, userEmail }: {
         )}
 
         {/* Scope of Work */}
-        {((includeMaterials && materials.length > 0) || (includeLabor && laborLog.length > 0)) && (
+        {proposalScope && (
           <>
             <div className="px-10 py-3 print:px-8" style={{ background: stripeColor }}>
               <p className="text-sm font-bold text-white uppercase tracking-widest">Scope of Work</p>
             </div>
-            {includeMaterials && materials.map((m, i) => (
+            <div className="px-10 py-6 border-b border-gray-100 print:px-8">
+              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{proposalScope}</p>
+            </div>
+          </>
+        )}
+
+        {/* Cost Line Items */}
+        {costSection && costSection.items.length > 0 && (
+          <>
+            <div className="px-10 py-3 print:px-8" style={{ background: stripeColor }}>
+              <p className="text-sm font-bold text-white uppercase tracking-widest">Pricing</p>
+            </div>
+            {costSection.items.map((item, i) => (
               <div key={i} className="flex items-center justify-between px-10 py-4 border-b border-gray-100 print:px-8">
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="text-gray-800">{m.description}</span>
-                  {m.vendor && <span className="text-xs text-gray-400">{m.vendor}</span>}
-                </div>
-                <span className="font-bold font-mono text-gray-900 ml-8 shrink-0">{money(m.cost)}</span>
+                <span className="text-gray-800">{item.description}</span>
+                <span className="font-bold font-mono text-gray-900 ml-8 shrink-0">{money(item.cost || 0)}</span>
               </div>
             ))}
-            {includeLabor && laborLog.length > 0 && (
-              <div className="flex items-center justify-between px-10 py-4 border-b border-gray-100 print:px-8">
-                <div className="flex items-center gap-3">
-                  <span className="text-gray-800">Labor</span>
-                  <span className="text-xs text-gray-400">{totalHours.toFixed(1)} hrs</span>
+            {costSection.show_total !== false && (
+              <div className="flex justify-end px-10 py-4 print:px-8">
+                <div className="bg-gray-100 px-4 py-3 flex justify-between font-bold text-sm text-gray-900 w-80">
+                  <span>Total:</span>
+                  <span className="font-mono">{money(costSection.items.reduce((s, it) => s + (it.cost || 0), 0))}</span>
                 </div>
-                <span className="font-bold font-mono text-gray-900 ml-8">{money(laborTotal)}</span>
               </div>
             )}
           </>
         )}
 
-        <div className="mx-10 border-t border-gray-200 mt-2 print:mx-8" />
-
-        {/* Totals */}
-        <div className="flex justify-end px-10 py-8 print:px-8">
-          <div className="w-80 text-sm space-y-2">
-            {includeMaterials && materials.length > 0 && (
-              <div className="flex justify-between text-gray-500"><span>Materials:</span><span className="font-mono">{money(materialTotal)}</span></div>
-            )}
-            {includeLabor && laborLog.length > 0 && (
-              <div className="flex justify-between text-gray-500"><span>Labor:</span><span className="font-mono">{money(laborTotal)}</span></div>
-            )}
-            <div className="bg-gray-100 px-4 py-3 flex justify-between font-bold mt-1 text-gray-900">
-              <span>Total Quoted Amount:</span>
-              <span className="font-mono">{money(quotedAmount)}</span>
-            </div>
-          </div>
-        </div>
-
         {/* Gallery */}
-        {(project.proposal_images || []).length > 0 && (
+        {proposalImages.length > 0 && (
           <>
             <div className="px-10 py-3 print:px-8" style={{ background: stripeColor }}>
               <p className="text-sm font-bold text-white uppercase tracking-widest">Gallery</p>
             </div>
             <div className="px-10 py-6 border-b border-gray-100 print:px-8">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 print:grid-cols-3">
-                {(project.proposal_images || []).map((url, i) => (
+                {proposalImages.map((url, i) => (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     key={i}

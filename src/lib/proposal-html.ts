@@ -31,8 +31,6 @@ interface BizInfo {
 interface ProposalOptions {
   proposalNum: string;
   validUntil?: string;
-  includeMaterials?: boolean;
-  includeLabor?: boolean;
   forEmail?: boolean;
 }
 
@@ -41,10 +39,8 @@ export function generateProposalHtml(
   biz: BizInfo = {},
   opts: ProposalOptions
 ): string {
-  const { proposalNum, validUntil, includeMaterials = true, includeLabor = true, forEmail = false } = opts;
+  const { proposalNum, validUntil, forEmail = false } = opts;
 
-  const materials = project.materials || [];
-  const laborLog = project.labor_log || [];
   const highlights: ProposalHighlight[] = (project.proposal_highlights || []).filter((h) => h.included !== false);
   const scope = project.proposal_scope?.included !== false ? (project.proposal_scope?.body || "") : "";
   const costSection = project.proposal_cost_section?.included !== false ? project.proposal_cost_section : null;
@@ -52,9 +48,6 @@ export function generateProposalHtml(
   const stripeColor = "#8b6914";
   const logoUrl = "https://relicbuilt.com/logo-full.png";
 
-  const materialTotal = materials.reduce((s, m) => s + (m.cost || 0), 0);
-  const laborTotal = laborLog.reduce((s, l) => s + (l.cost || 0), 0);
-  const totalHours = laborLog.reduce((s, l) => s + (l.hours || 0), 0);
   const quotedAmount = project.quoted_amount || 0;
 
   const addressLine2 = [biz.biz_city, biz.biz_state, biz.biz_zip].filter(Boolean).join(", ");
@@ -169,47 +162,6 @@ export function generateProposalHtml(
     </table>
   </div>` : ""}
 
-  <!-- Scope of Work (materials) -->
-  ${includeMaterials && materials.length > 0 ? `
-  <div style="background:${stripeColor};padding:10px 20px;margin-top:0;">
-    <p style="margin:0;font-size:11px;font-weight:bold;color:#fff;text-transform:uppercase;letter-spacing:0.14em;">Scope of Work</p>
-  </div>
-  ${materials.map((m) => `
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid #f5f5f5;">
-    <span style="font-size:13px;color:#333;">${esc(m.description)}${m.vendor ? `<span style="font-size:11px;color:#aaa;margin-left:8px;">${esc(m.vendor)}</span>` : ""}</span>
-    <span style="font-size:13px;font-weight:bold;font-family:monospace;white-space:nowrap;margin-left:20px;">${money(m.cost)}</span>
-  </div>`).join("")}
-  ${includeLabor && laborLog.length > 0 ? `
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid #f5f5f5;">
-    <span style="font-size:13px;color:#333;">Labor <span style="font-size:11px;color:#aaa;">${totalHours.toFixed(1)} hrs</span></span>
-    <span style="font-size:13px;font-weight:bold;font-family:monospace;white-space:nowrap;margin-left:20px;">${money(laborTotal)}</span>
-  </div>` : ""}
-  ` : includeLabor && laborLog.length > 0 ? `
-  <div style="background:${stripeColor};padding:10px 20px;margin-top:0;">
-    <p style="margin:0;font-size:11px;font-weight:bold;color:#fff;text-transform:uppercase;letter-spacing:0.14em;">Labor</p>
-  </div>
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 20px;border-bottom:1px solid #f5f5f5;">
-    <span style="font-size:13px;color:#333;">Labor <span style="font-size:11px;color:#aaa;">${totalHours.toFixed(1)} hrs</span></span>
-    <span style="font-size:13px;font-weight:bold;font-family:monospace;white-space:nowrap;margin-left:20px;">${money(laborTotal)}</span>
-  </div>
-  ` : ""}
-
-  <!-- Totals -->
-  <div style="border-top:1px solid #e5e5e5;margin:8px 0 20px;"></div>
-  <div style="display:flex;justify-content:flex-end;margin-bottom:28px;padding:0 20px;">
-    <table style="width:300px;font-size:13px;border-collapse:collapse;">
-      ${includeMaterials && materials.length > 0 ? `<tr><td style="padding:4px 0;color:#777;">Materials:</td><td style="padding:4px 0;text-align:right;font-family:monospace;">${money(materialTotal)}</td></tr>` : ""}
-      ${includeLabor && laborLog.length > 0 ? `<tr><td style="padding:4px 0;color:#777;">Labor:</td><td style="padding:4px 0;text-align:right;font-family:monospace;">${money(laborTotal)}</td></tr>` : ""}
-      <tr>
-        <td colspan="2" style="padding-top:8px;">
-          <div style="background:#f0f0f0;padding:10px 14px;display:flex;justify-content:space-between;">
-            <span style="font-size:13px;font-weight:bold;color:#111;">Total Quoted Amount:</span>
-            <span style="font-size:14px;font-weight:bold;font-family:monospace;color:#111;">${money(quotedAmount)}</span>
-          </div>
-        </td>
-      </tr>
-    </table>
-  </div>
 
   <!-- Gallery -->
   ${images.length > 0 ? `
