@@ -21,12 +21,12 @@ import {
   Check,
 } from "lucide-react";
 
-const STATUSES: { key: Lead["status"]; label: string }[] = [
-  { key: "new",       label: "New"       },
-  { key: "contacted", label: "Contacted" },
-  { key: "quoted",    label: "Quoted"    },
-  { key: "converted", label: "Converted" },
-  { key: "lost",      label: "Lost"      },
+const STATUSES: { key: Lead["status"]; label: string; color: string }[] = [
+  { key: "new",       label: "New",       color: "#6366f1" },
+  { key: "contacted", label: "Contacted", color: "#f59e0b" },
+  { key: "quoted",    label: "Quoted",    color: "#3b82f6" },
+  { key: "converted", label: "Converted", color: "#22c55e" },
+  { key: "lost",      label: "Lost",      color: "#9ca3af" },
 ];
 
 const BUDGET_RANGES = [
@@ -38,9 +38,14 @@ const inp = "w-full bg-card border border-border px-4 py-3 text-foreground text-
 const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
 
 function statusBadge(status: Lead["status"]) {
+  const s = STATUSES.find((x) => x.key === status);
+  const c = s?.color ?? "#9ca3af";
   return (
-    <span className="text-xs font-semibold px-2 py-0.5 bg-muted/20 text-muted">
-      {STATUSES.find((s) => s.key === status)?.label ?? status}
+    <span
+      className="text-xs font-semibold px-2 py-0.5"
+      style={{ background: c + "18", color: c }}
+    >
+      {s?.label ?? status}
     </span>
   );
 }
@@ -365,11 +370,11 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
               <button
                 key={s.key}
                 onClick={() => updateStatus(s.key)}
-                className={`text-xs px-3 py-1.5 font-medium transition-colors ${
-                  lead.status === s.key
-                    ? "bg-accent text-background"
-                    : "bg-muted/20 text-muted hover:bg-muted/40 hover:text-foreground"
-                }`}
+                className="text-xs px-3 py-1.5 font-medium transition-colors"
+                style={lead.status === s.key
+                  ? { background: s.color, color: "#fff" }
+                  : { background: "rgba(128,128,128,0.12)", color: "#9ca3af" }
+                }
               >
                 {s.label}
               </button>
@@ -592,11 +597,11 @@ export default function LeadsPage() {
           <div className="flex flex-wrap gap-1 mt-2.5">
             <button
               onClick={() => setStatusFilter("all")}
-              className={`text-xs px-2 py-0.5 transition-colors ${
-                statusFilter === "all"
-                  ? "bg-accent text-background"
-                  : "bg-muted/20 text-muted hover:bg-muted/40 hover:text-foreground"
-              }`}
+              className="text-xs px-2 py-0.5 transition-colors"
+              style={statusFilter === "all"
+                ? { background: "#c4a24d", color: "#fff" }
+                : { background: "rgba(128,128,128,0.12)", color: "#9ca3af" }
+              }
             >
               All
             </button>
@@ -604,11 +609,11 @@ export default function LeadsPage() {
               <button
                 key={s.key}
                 onClick={() => setStatusFilter(s.key)}
-                className={`text-xs px-2 py-0.5 transition-colors ${
-                  statusFilter === s.key
-                    ? "bg-accent text-background"
-                    : "bg-muted/20 text-muted hover:bg-muted/40 hover:text-foreground"
-                }`}
+                className="text-xs px-2 py-0.5 transition-colors"
+                style={statusFilter === s.key
+                  ? { background: s.color, color: "#fff" }
+                  : { background: "rgba(128,128,128,0.12)", color: "#9ca3af" }
+                }
               >
                 {s.label}
               </button>
@@ -635,14 +640,20 @@ export default function LeadsPage() {
                     active ? "bg-accent/10 border-l-2 border-l-accent" : "hover:bg-background"
                   }`}
                 >
-                  <div className="w-7 h-7 rounded-full bg-muted/20 flex items-center justify-center shrink-0 mt-0.5">
-                    <User size={13} className="text-muted" />
+                  <div
+                    className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5"
+                    style={{ background: (STATUSES.find((s) => s.key === lead.status)?.color ?? "#9ca3af") + "22" }}
+                  >
+                    <User size={13} style={{ color: STATUSES.find((s) => s.key === lead.status)?.color ?? "#9ca3af" }} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className={`text-sm font-medium truncate ${active ? "text-accent" : "text-foreground"}`}>{lead.name}</p>
                     <p className="text-xs text-muted truncate mt-0.5">{lead.email || lead.phone || "No contact info"}</p>
                     <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] text-muted font-medium">
+                      <span
+                        className="text-[10px] font-semibold"
+                        style={{ color: STATUSES.find((s) => s.key === lead.status)?.color ?? "#9ca3af" }}
+                      >
                         {STATUSES.find((s) => s.key === lead.status)?.label}
                       </span>
                       {lead.budget_range && <span className="text-[10px] text-muted truncate">{lead.budget_range}</span>}
