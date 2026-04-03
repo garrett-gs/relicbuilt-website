@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
     const sends: Promise<Response>[] = [];
 
     // Email deposit invoice to client
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://relicbuilt.com";
+    const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://relicbuilt.com").trim().replace(/\/$/, "");
     if (project.client_email && depositInvoice) {
       const payUrl = `${siteUrl}/pay/${depositInvoice.id}`;
       const html = depositEmailHtml({
