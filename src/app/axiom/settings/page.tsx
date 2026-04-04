@@ -9,7 +9,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { cn, formatPhone } from "@/lib/utils";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 
-const TABS = ["General", "Team", "Categories", "Terms"] as const;
+const TABS = ["General", "Team", "Categories", "Locations", "Terms"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function SettingsPage() {
@@ -222,6 +222,28 @@ export default function SettingsPage() {
             ))}
           </div>
           <button onClick={() => updateField("categories", [...(settings.categories || []), ""])} className="text-accent text-sm flex items-center gap-1"><Plus size={14} /> Add Category</button>
+        </div>
+      )}
+
+      {tab === "Locations" && (
+        <div className="max-w-md">
+          <p className="text-sm text-muted mb-4">Define storage locations for inventory tracking. Each item can be tracked across these locations.</p>
+          <div className="space-y-2 mb-4">
+            {(settings.inventory_locations || []).map((loc: string, i: number) => (
+              <div key={i} className="flex items-center gap-2">
+                <input value={loc} onChange={(e) => {
+                  const locs = [...(settings.inventory_locations || [])];
+                  locs[i] = e.target.value;
+                  updateField("inventory_locations", locs);
+                }} className="flex-1 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" placeholder="e.g. Shop, Warehouse, Trailer…" />
+                <button onClick={() => {
+                  const locs = (settings.inventory_locations || []).filter((_: string, idx: number) => idx !== i);
+                  updateField("inventory_locations", locs);
+                }} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
+              </div>
+            ))}
+          </div>
+          <button onClick={() => updateField("inventory_locations", [...(settings.inventory_locations || []), ""])} className="text-accent text-sm flex items-center gap-1"><Plus size={14} /> Add Location</button>
         </div>
       )}
 

@@ -45,21 +45,24 @@ export default function InventoryPage() {
   const [transactions, setTransactions] = useState<InventoryTransaction[]>([]);
   const [projects, setProjects] = useState<SimpleProject[]>([]);
   const [vendors, setVendors] = useState<SimpleVendor[]>([]);
+  const [locations, setLocations] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [catsRes, itemsRes, txnRes, projRes, vendRes] = await Promise.all([
+    const [catsRes, itemsRes, txnRes, projRes, vendRes, settRes] = await Promise.all([
       axiom.from("inventory_categories").select("*").order("sort_order"),
       axiom.from("inventory_items").select("*").eq("active", true).order("description"),
       axiom.from("inventory_transactions").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }).limit(200),
       axiom.from("custom_work").select("id,project_name").in("status", ["new", "in_review", "quoted", "in_progress"]).order("project_name"),
       axiom.from("vendors").select("id,name").eq("status", "active").order("name"),
+      axiom.from("settings").select("inventory_locations").limit(1).single(),
     ]);
     setCategories((catsRes.data ?? []) as InventoryCategory[]);
     setItems((itemsRes.data ?? []) as InventoryItem[]);
     setTransactions((txnRes.data ?? []) as InventoryTransaction[]);
     setProjects((projRes.data ?? []) as SimpleProject[]);
     setVendors((vendRes.data ?? []) as SimpleVendor[]);
+    setLocations((settRes.data?.inventory_locations ?? []) as string[]);
     setLoading(false);
   }, []);
 
@@ -105,6 +108,7 @@ export default function InventoryPage() {
               categories={categories}
               projects={projects}
               vendors={vendors}
+              locations={locations}
               userEmail={userEmail || ""}
               onReload={load}
             />
@@ -133,12 +137,13 @@ export default function InventoryPage() {
 // ── Inventory Tab ────────────────────────────────────────────────────────────
 
 function InventoryTab({
-  items, categories, projects, vendors, userEmail, onReload,
+  items, categories, projects, vendors, locations, userEmail, onReload,
 }: {
   items: InventoryItem[];
   categories: InventoryCategory[];
   projects: SimpleProject[];
   vendors: SimpleVendor[];
+  locations: string[];
   userEmail: string;
   onReload: () => void;
 }) {
@@ -413,6 +418,7 @@ function InventoryTab({
         <AddItemModal
           categories={categories}
           vendors={vendors}
+          locations={locations}
           onClose={() => setShowAdd(false)}
           onSaved={onReload}
         />
@@ -422,6 +428,7 @@ function InventoryTab({
           item={txnModal.item}
           type={txnModal.type}
           projects={projects}
+          locations={locations}
           userEmail={userEmail}
           onClose={() => setTxnModal(null)}
           onSaved={onReload}
@@ -431,6 +438,7 @@ function InventoryTab({
         <EditItemModal
           item={editItem}
           categories={categories}
+          locations={locations}
           onClose={() => setEditItem(null)}
           onSaved={onReload}
         />
@@ -600,10 +608,11 @@ function ProductRow({
 // ── Add Item Modal ───────────────────────────────────────────────────────────
 
 function AddItemModal({
-  categories, vendors, onClose, onSaved,
+  categories, vendors, locations, onClose, onSaved,
 }: {
   categories: InventoryCategory[];
   vendors: SimpleVendor[];
+  locations: string[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -683,7 +692,10 @@ function AddItemModal({
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className={lbl}>Location</label>
-            <input value={location} onChange={(e) => setLocation(e.target.value)} className={inp} placeholder="Shelf, bin, etc." />
+            <select value={location} onChange={(e) => setLocation(e.target.value)} className={inp}>
+              <option value="">None</option>
+              {locations.filter(Boolean).map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+            </select>
           </div>
           <div>
             <label className={lbl}>Min Stock Level</label>
@@ -704,10 +716,11 @@ function AddItemModal({
 // ── Edit Item Modal ──────────────────────────────────────────────────────────
 
 function EditItemModal({
-  item, categories, onClose, onSaved,
+  item, categories, locations, onClose, onSaved,
 }: {
   item: InventoryItem;
   categories: InventoryCategory[];
+  locations: string[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -771,7 +784,12 @@ function EditItemModal({
           </div>
           <div>
             <label className={lbl}>Location</label>
-            <input value={location} onChange={(e) => setLocation(e.target.value)} className={inp} />
+            <select value={location} onChange={(e) => setLocation(e.target.value)} className={inp}>
+              <option value="">None</option>
+              {locations.filter(Boolean).map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+              {/* Show current value if not in the list (legacy free-text) */}
+              {location && !locations.includes(location) && <option value={location}>{location}</option>}
+            </select>
           </div>
         </div>
         <div>
@@ -809,17 +827,19 @@ function EditItemModal({
 // ── Transaction Modal ────────────────────────────────────────────────────────
 
 function TransactionModal({
-  item, type, projects, userEmail, onClose, onSaved,
+  item, type, projects, locations, userEmail, onClose, onSaved,
 }: {
   item: InventoryItem;
   type: "in" | "out";
   projects: SimpleProject[];
+  locations: string[];
   userEmail: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [qty, setQty] = useState("");
   const [projectId, setProjectId] = useState("");
+  const [locationName, setLocationName] = useState(item.location || "");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -828,9 +848,47 @@ function TransactionModal({
     if (!q || q <= 0) return;
     setSaving(true);
 
+    // Determine which inventory item to update — same location stays on this item,
+    // different location finds/creates the item at that location
+    let targetId = item.id;
+    let targetQty = item.quantity_on_hand;
+
+    if (type === "in" && locationName !== (item.location || "")) {
+      // Look for an existing item with same product at the chosen location
+      const { data: existing } = await axiom.from("inventory_items")
+        .select("id,quantity_on_hand")
+        .eq("description", item.description)
+        .eq("location", locationName || "")
+        .eq("active", true)
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        targetId = existing.id;
+        targetQty = existing.quantity_on_hand;
+      } else {
+        // Create new item at this location
+        const { data: newItem } = await axiom.from("inventory_items").insert({
+          description: item.description,
+          item_number: item.item_number || null,
+          unit: item.unit,
+          unit_cost: item.unit_cost,
+          quantity_on_hand: 0,
+          category_id: item.category_id || null,
+          vendor_id: item.vendor_id || null,
+          location: locationName || null,
+          min_stock_level: 0,
+        }).select("id,quantity_on_hand").single();
+        if (newItem) {
+          targetId = newItem.id;
+          targetQty = 0;
+        }
+      }
+    }
+
     // Insert transaction
     await axiom.from("inventory_transactions").insert({
-      inventory_item_id: item.id,
+      inventory_item_id: targetId,
       type,
       quantity: q,
       unit_cost: item.unit_cost,
@@ -842,18 +900,19 @@ function TransactionModal({
 
     // Update quantity on hand
     const delta = type === "out" ? -q : q;
-    const newQty = item.quantity_on_hand + delta;
+    const newQty = targetQty + delta;
     await axiom.from("inventory_items").update({
       quantity_on_hand: newQty,
       updated_at: new Date().toISOString(),
-    }).eq("id", item.id);
+    }).eq("id", targetId);
 
     const proj = projects.find((p) => p.id === projectId);
+    const locLabel = locationName ? ` @ ${locationName}` : "";
     await logActivity({
       action: "updated",
       entity: "inventory",
-      entity_id: item.id,
-      label: `${type === "in" ? "Received" : "Used"} ${q} ${item.unit} of ${item.description}${proj ? ` → ${proj.project_name}` : ""}`,
+      entity_id: targetId,
+      label: `${type === "in" ? "Received" : "Used"} ${q} ${item.unit} of ${item.description}${locLabel}${proj ? ` → ${proj.project_name}` : ""}`,
       user_name: userEmail,
     });
 
@@ -876,6 +935,16 @@ function TransactionModal({
           <label className={lbl}>Quantity *</label>
           <input type="number" min="0" step="1" value={qty} onChange={(e) => setQty(e.target.value)} className={inp} placeholder={`How many ${item.unit}?`} autoFocus />
         </div>
+        {type === "in" && locations.length > 0 && (
+          <div>
+            <label className={lbl}>Location</label>
+            <select value={locationName} onChange={(e) => setLocationName(e.target.value)} className={inp}>
+              <option value="">No location</option>
+              {locations.filter(Boolean).map((loc) => <option key={loc} value={loc}>{loc}</option>)}
+              {locationName && !locations.includes(locationName) && <option value={locationName}>{locationName}</option>}
+            </select>
+          </div>
+        )}
         {type === "out" && (
           <div>
             <label className={lbl}>Project *</label>
