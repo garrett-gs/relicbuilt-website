@@ -352,49 +352,55 @@ function InventoryTab({
       )}
 
       {/* Grouped items */}
-      {grouped.map(({ category, items: catItems }) => (
-        <div key={category.id} className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-3 h-3 rounded-sm" style={{ background: category.color }} />
-            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">{category.name}</h3>
-            <span className="text-xs text-muted">({catItems.length})</span>
+      {grouped.map(({ category, items: catItems }) => {
+        const productGroups = groupByProduct(catItems);
+        return (
+          <div key={category.id} className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-3 h-3 rounded-sm" style={{ background: category.color }} />
+              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">{category.name}</h3>
+              <span className="text-xs text-muted">({catItems.length})</span>
+            </div>
+            <div className="bg-card border border-border divide-y divide-border">
+              {productGroups.map((pg) => (
+                <ProductRow
+                  key={pg.key}
+                  group={pg}
+                  vendors={vendors}
+                  onUse={(item) => setTxnModal({ item, type: "out" })}
+                  onReceive={(item) => setTxnModal({ item, type: "in" })}
+                  onEdit={(item) => setEditItem(item)}
+                />
+              ))}
+            </div>
           </div>
-          <div className="bg-card border border-border divide-y divide-border">
-            {catItems.map((item) => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                vendors={vendors}
-                onUse={() => setTxnModal({ item, type: "out" })}
-                onReceive={() => setTxnModal({ item, type: "in" })}
-                onEdit={() => setEditItem(item)}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
+        );
+      })}
 
-      {uncategorized.length > 0 && (
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-3 h-3 rounded-sm bg-muted/40" />
-            <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Uncategorized</h3>
-            <span className="text-xs text-muted">({uncategorized.length})</span>
+      {uncategorized.length > 0 && (() => {
+        const productGroups = groupByProduct(uncategorized);
+        return (
+          <div className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-3 h-3 rounded-sm bg-muted/40" />
+              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Uncategorized</h3>
+              <span className="text-xs text-muted">({uncategorized.length})</span>
+            </div>
+            <div className="bg-card border border-border divide-y divide-border">
+              {productGroups.map((pg) => (
+                <ProductRow
+                  key={pg.key}
+                  group={pg}
+                  vendors={vendors}
+                  onUse={(item) => setTxnModal({ item, type: "out" })}
+                  onReceive={(item) => setTxnModal({ item, type: "in" })}
+                  onEdit={(item) => setEditItem(item)}
+                />
+              ))}
+            </div>
           </div>
-          <div className="bg-card border border-border divide-y divide-border">
-            {uncategorized.map((item) => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                vendors={vendors}
-                onUse={() => setTxnModal({ item, type: "out" })}
-                onReceive={() => setTxnModal({ item, type: "in" })}
-                onEdit={() => setEditItem(item)}
-              />
-            ))}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {filtered.length === 0 && (
         <div className="text-center text-muted text-sm py-12">
@@ -435,52 +441,158 @@ function InventoryTab({
 
 // ── Item Row ─────────────────────────────────────────────────────────────────
 
-function ItemRow({
-  item, vendors, onUse, onReceive, onEdit,
+// Group items by product (same item_number or description) to show per-location breakdown
+interface ProductGroup {
+  key: string;
+  description: string;
+  item_number?: string;
+  unit: string;
+  unit_cost: number;
+  vendor_id?: string;
+  items: InventoryItem[];
+  totalQty: number;
+}
+
+function groupByProduct(items: InventoryItem[]): ProductGroup[] {
+  const map = new Map<string, ProductGroup>();
+  for (const item of items) {
+    // Key by item_number if available, otherwise by description (lowercased)
+    const key = item.item_number
+      ? `num:${item.item_number}`
+      : `desc:${item.description.toLowerCase().trim()}`;
+    const existing = map.get(key);
+    if (existing) {
+      existing.items.push(item);
+      existing.totalQty += item.quantity_on_hand;
+    } else {
+      map.set(key, {
+        key,
+        description: item.description,
+        item_number: item.item_number || undefined,
+        unit: item.unit,
+        unit_cost: item.unit_cost,
+        vendor_id: item.vendor_id || undefined,
+        items: [item],
+        totalQty: item.quantity_on_hand,
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
+function ProductRow({
+  group, vendors, onUse, onReceive, onEdit,
 }: {
-  item: InventoryItem;
+  group: ProductGroup;
   vendors: SimpleVendor[];
-  onUse: () => void;
-  onReceive: () => void;
-  onEdit: () => void;
+  onUse: (item: InventoryItem) => void;
+  onReceive: (item: InventoryItem) => void;
+  onEdit: (item: InventoryItem) => void;
 }) {
-  const vendor = vendors.find((v) => v.id === item.vendor_id);
-  const isLow = item.min_stock_level > 0 && item.quantity_on_hand <= item.min_stock_level;
+  const vendor = vendors.find((v) => v.id === group.vendor_id);
+  const hasMultiple = group.items.length > 1;
+  const anyLow = group.items.some((it) => it.min_stock_level > 0 && it.quantity_on_hand <= it.min_stock_level);
 
   return (
-    <div className="flex items-center gap-4 px-4 py-3 hover:bg-background/50 transition-colors">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium text-foreground truncate">{item.description}</p>
-          {item.item_number && <span className="text-xs text-muted font-mono shrink-0">#{item.item_number}</span>}
+    <div className="hover:bg-background/50 transition-colors">
+      <div className="flex items-center gap-4 px-4 py-3">
+        {/* Product info */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-foreground truncate">{group.description}</p>
+            {group.item_number && <span className="text-xs text-muted font-mono shrink-0">#{group.item_number}</span>}
+          </div>
+          <div className="flex items-center gap-3 mt-0.5 text-xs text-muted">
+            {vendor && <span>{vendor.name}</span>}
+            <span>{money(group.unit_cost)} / {group.unit}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-3 mt-0.5 text-xs text-muted">
-          {vendor && <span>{vendor.name}</span>}
-          <span>{money(item.unit_cost)} / {item.unit}</span>
-          {item.location && <span>{item.location}</span>}
+
+        {/* Per-location quantities */}
+        <div className="flex items-center gap-4 shrink-0">
+          {group.items.map((item) => {
+            const isLow = item.min_stock_level > 0 && item.quantity_on_hand <= item.min_stock_level;
+            return (
+              <div key={item.id} className="text-center min-w-[60px]">
+                <p className={`text-sm font-bold font-mono ${isLow ? "text-red-400" : "text-foreground"}`}>
+                  {item.quantity_on_hand}
+                </p>
+                <p className="text-[10px] text-muted truncate max-w-[80px]" title={item.location || "No location"}>
+                  {item.location || "—"}
+                </p>
+              </div>
+            );
+          })}
+
+          {/* Divider + Total */}
+          {hasMultiple && (
+            <>
+              <div className="w-px h-8 bg-border" />
+              <div className="text-center min-w-[60px]">
+                <p className={`text-lg font-bold font-mono ${anyLow ? "text-red-400" : "text-accent"}`}>
+                  {group.totalQty}
+                </p>
+                <p className="text-[10px] text-muted uppercase">Total</p>
+              </div>
+            </>
+          )}
+
+          {/* Single item — just show the unit label */}
+          {!hasMultiple && (
+            <div className="w-0" />
+          )}
+        </div>
+
+        {/* Actions — for single-item products, act on that item; for multi, act on first */}
+        <div className="flex items-center gap-1 shrink-0">
+          {group.items.length === 1 ? (
+            <>
+              <button onClick={() => onReceive(group.items[0])} title="Receive (in)" className="p-1.5 text-green-500 hover:bg-green-500/10 rounded transition-colors">
+                <ArrowDownCircle size={16} />
+              </button>
+              <button onClick={() => onUse(group.items[0])} title="Use (out)" className="p-1.5 text-red-400 hover:bg-red-400/10 rounded transition-colors">
+                <ArrowUpCircle size={16} />
+              </button>
+              <button onClick={() => onEdit(group.items[0])} title="Edit" className="p-1.5 text-muted hover:text-foreground hover:bg-card rounded transition-colors">
+                <Pencil size={14} />
+              </button>
+            </>
+          ) : (
+            <span className="text-[10px] text-muted">{group.items.length} locations</span>
+          )}
         </div>
       </div>
 
-      {/* Quantity */}
-      <div className={`text-right shrink-0 ${isLow ? "text-red-400" : ""}`}>
-        <p className={`text-lg font-bold font-mono ${isLow ? "text-red-400" : "text-foreground"}`}>
-          {item.quantity_on_hand}
-        </p>
-        <p className="text-[10px] text-muted uppercase">{item.unit}</p>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-1 shrink-0">
-        <button onClick={onReceive} title="Receive (in)" className="p-1.5 text-green-500 hover:bg-green-500/10 rounded transition-colors">
-          <ArrowDownCircle size={16} />
-        </button>
-        <button onClick={onUse} title="Use (out)" className="p-1.5 text-red-400 hover:bg-red-400/10 rounded transition-colors">
-          <ArrowUpCircle size={16} />
-        </button>
-        <button onClick={onEdit} title="Edit" className="p-1.5 text-muted hover:text-foreground hover:bg-card rounded transition-colors">
-          <Pencil size={14} />
-        </button>
-      </div>
+      {/* Multi-location sub-rows with individual actions */}
+      {hasMultiple && (
+        <div className="border-t border-border/40 bg-background/30">
+          {group.items.map((item) => {
+            const isLow = item.min_stock_level > 0 && item.quantity_on_hand <= item.min_stock_level;
+            return (
+              <div key={item.id} className="flex items-center gap-4 px-4 py-1.5 pl-8 hover:bg-background/50">
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs text-muted">{item.location || "No location"}</span>
+                </div>
+                <div className="min-w-[60px] text-center">
+                  <span className={`text-sm font-mono font-medium ${isLow ? "text-red-400" : "text-foreground"}`}>{item.quantity_on_hand}</span>
+                  <span className="text-[10px] text-muted ml-1">{item.unit}</span>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={() => onReceive(item)} title="Receive (in)" className="p-1 text-green-500 hover:bg-green-500/10 rounded transition-colors">
+                    <ArrowDownCircle size={14} />
+                  </button>
+                  <button onClick={() => onUse(item)} title="Use (out)" className="p-1 text-red-400 hover:bg-red-400/10 rounded transition-colors">
+                    <ArrowUpCircle size={14} />
+                  </button>
+                  <button onClick={() => onEdit(item)} title="Edit" className="p-1 text-muted hover:text-foreground hover:bg-card rounded transition-colors">
+                    <Pencil size={12} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
