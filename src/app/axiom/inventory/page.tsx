@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { logActivity } from "@/lib/activity";
@@ -17,7 +17,6 @@ import {
   ArrowUpCircle,
   RefreshCw,
   AlertTriangle,
-  ChevronRight,
   Printer,
 } from "lucide-react";
 
@@ -305,6 +304,12 @@ function InventoryTab({
     }
   }
 
+  // Determine which location columns to show — only locations that have items
+  const activeLocations = locations.filter(Boolean).length > 0
+    ? locations.filter(Boolean)
+    : [...new Set(items.map((it) => it.location).filter(Boolean))] as string[];
+  const noLocItems = items.filter((it) => !it.location || !activeLocations.includes(it.location)).length;
+
   return (
     <>
       {/* Summary cards */}
@@ -356,58 +361,160 @@ function InventoryTab({
         </div>
       )}
 
-      {/* Grouped items */}
-      {grouped.map(({ category, items: catItems }) => {
-        const productGroups = groupByProduct(catItems);
-        return (
-          <div key={category.id} className="mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-3 h-3 rounded-sm" style={{ background: category.color }} />
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">{category.name}</h3>
-              <span className="text-xs text-muted">({catItems.length})</span>
-            </div>
-            <div className="bg-card border border-border divide-y divide-border">
-              {productGroups.map((pg) => (
-                <ProductRow
-                  key={pg.key}
-                  group={pg}
-                  vendors={vendors}
-                  onUse={(item) => setTxnModal({ item, type: "out" })}
-                  onReceive={(item) => setTxnModal({ item, type: "in" })}
-                  onEdit={(item) => setEditItem(item)}
-                />
-              ))}
-            </div>
-          </div>
-        );
-      })}
+      {/* Inventory table */}
+      {filtered.length > 0 ? (
+        <div className="bg-card border border-border overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-background/50">
+                <th className="text-left px-4 py-2.5 text-[11px] uppercase tracking-wider text-muted font-semibold">Description</th>
+                <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider text-muted font-semibold">Item #</th>
+                <th className="text-left px-3 py-2.5 text-[11px] uppercase tracking-wider text-muted font-semibold">Unit</th>
+                <th className="text-right px-3 py-2.5 text-[11px] uppercase tracking-wider text-muted font-semibold">Price</th>
+                {activeLocations.map((loc) => (
+                  <th key={loc} className="text-center px-3 py-2.5 text-[11px] uppercase tracking-wider text-accent font-semibold min-w-[80px]">{loc}</th>
+                ))}
+                {noLocItems > 0 && (
+                  <th className="text-center px-3 py-2.5 text-[11px] uppercase tracking-wider text-muted font-semibold min-w-[80px]">Unassigned</th>
+                )}
+                <th className="text-center px-3 py-2.5 text-[11px] uppercase tracking-wider text-accent font-bold min-w-[70px] border-l border-border">Total</th>
+                <th className="text-center px-3 py-2.5 text-[11px] uppercase tracking-wider text-muted font-semibold w-[100px]">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grouped.map(({ category, items: catItems }) => {
+                const productGroups = groupByProduct(catItems);
+                return (
+                  <React.Fragment key={category.id}>
+                    <tr className="bg-background/30">
+                      <td colSpan={5 + activeLocations.length + (noLocItems > 0 ? 1 : 0) + 1} className="px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-sm" style={{ background: category.color }} />
+                          <span className="text-xs font-semibold text-foreground uppercase tracking-wider">{category.name}</span>
+                          <span className="text-[10px] text-muted">({catItems.length})</span>
+                        </div>
+                      </td>
+                    </tr>
+                    {productGroups.map((pg) => {
+                      const locQtys = buildLocationQtys(pg.items, activeLocations);
+                      const unassignedQty = pg.items.filter((it) => !it.location || !activeLocations.includes(it.location)).reduce((s, it) => s + it.quantity_on_hand, 0);
+                      const anyLow = pg.items.some((it) => it.min_stock_level > 0 && it.quantity_on_hand <= it.min_stock_level);
+                      const vendor = vendors.find((v) => v.id === pg.vendor_id);
+                      return (
+                        <tr key={pg.key} className="border-t border-border/40 hover:bg-background/40 transition-colors">
+                          <td className="px-4 py-2.5">
+                            <span className="font-medium text-foreground">{pg.description}</span>
+                            {vendor && <span className="text-[10px] text-muted ml-2">{vendor.name}</span>}
+                          </td>
+                          <td className="px-3 py-2.5 font-mono text-muted text-xs">{pg.item_number || "—"}</td>
+                          <td className="px-3 py-2.5 text-muted">{pg.unit}</td>
+                          <td className="px-3 py-2.5 text-right font-mono">{money(pg.unit_cost)}</td>
+                          {activeLocations.map((loc) => {
+                            const q = locQtys[loc] || 0;
+                            const locItem = pg.items.find((it) => it.location === loc);
+                            const isLow = locItem && locItem.min_stock_level > 0 && locItem.quantity_on_hand <= locItem.min_stock_level;
+                            return (
+                              <td key={loc} className="px-3 py-2.5 text-center">
+                                <span className={`font-mono font-bold ${q === 0 ? "text-muted/40" : isLow ? "text-red-400" : "text-foreground"}`}>
+                                  {q}
+                                </span>
+                              </td>
+                            );
+                          })}
+                          {noLocItems > 0 && (
+                            <td className="px-3 py-2.5 text-center">
+                              <span className={`font-mono font-bold ${unassignedQty === 0 ? "text-muted/40" : "text-muted"}`}>{unassignedQty}</span>
+                            </td>
+                          )}
+                          <td className="px-3 py-2.5 text-center border-l border-border">
+                            <span className={`font-mono font-bold text-base ${anyLow ? "text-red-400" : "text-accent"}`}>{pg.totalQty}</span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => setTxnModal({ item: pg.items[0], type: "in" })} title="Receive (in)" className="p-1.5 text-green-500 hover:bg-green-500/10 rounded transition-colors">
+                                <ArrowDownCircle size={15} />
+                              </button>
+                              <button onClick={() => setTxnModal({ item: pg.items[0], type: "out" })} title="Use (out)" className="p-1.5 text-red-400 hover:bg-red-400/10 rounded transition-colors">
+                                <ArrowUpCircle size={15} />
+                              </button>
+                              <button onClick={() => setEditItem(pg.items[0])} title="Edit" className="p-1.5 text-muted hover:text-foreground hover:bg-card rounded transition-colors">
+                                <Pencil size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
 
-      {uncategorized.length > 0 && (() => {
-        const productGroups = groupByProduct(uncategorized);
-        return (
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-3 h-3 rounded-sm bg-muted/40" />
-              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wider">Uncategorized</h3>
-              <span className="text-xs text-muted">({uncategorized.length})</span>
-            </div>
-            <div className="bg-card border border-border divide-y divide-border">
-              {productGroups.map((pg) => (
-                <ProductRow
-                  key={pg.key}
-                  group={pg}
-                  vendors={vendors}
-                  onUse={(item) => setTxnModal({ item, type: "out" })}
-                  onReceive={(item) => setTxnModal({ item, type: "in" })}
-                  onEdit={(item) => setEditItem(item)}
-                />
-              ))}
-            </div>
-          </div>
-        );
-      })()}
-
-      {filtered.length === 0 && (
+              {uncategorized.length > 0 && (() => {
+                const productGroups = groupByProduct(uncategorized);
+                return (
+                  <React.Fragment>
+                    <tr className="bg-background/30">
+                      <td colSpan={5 + activeLocations.length + (noLocItems > 0 ? 1 : 0) + 1} className="px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2.5 h-2.5 rounded-sm bg-muted/40" />
+                          <span className="text-xs font-semibold text-foreground uppercase tracking-wider">Uncategorized</span>
+                          <span className="text-[10px] text-muted">({uncategorized.length})</span>
+                        </div>
+                      </td>
+                    </tr>
+                    {productGroups.map((pg) => {
+                      const locQtys = buildLocationQtys(pg.items, activeLocations);
+                      const unassignedQty = pg.items.filter((it) => !it.location || !activeLocations.includes(it.location)).reduce((s, it) => s + it.quantity_on_hand, 0);
+                      const anyLow = pg.items.some((it) => it.min_stock_level > 0 && it.quantity_on_hand <= it.min_stock_level);
+                      const vendor = vendors.find((v) => v.id === pg.vendor_id);
+                      return (
+                        <tr key={pg.key} className="border-t border-border/40 hover:bg-background/40 transition-colors">
+                          <td className="px-4 py-2.5">
+                            <span className="font-medium text-foreground">{pg.description}</span>
+                            {vendor && <span className="text-[10px] text-muted ml-2">{vendor.name}</span>}
+                          </td>
+                          <td className="px-3 py-2.5 font-mono text-muted text-xs">{pg.item_number || "—"}</td>
+                          <td className="px-3 py-2.5 text-muted">{pg.unit}</td>
+                          <td className="px-3 py-2.5 text-right font-mono">{money(pg.unit_cost)}</td>
+                          {activeLocations.map((loc) => {
+                            const q = locQtys[loc] || 0;
+                            return (
+                              <td key={loc} className="px-3 py-2.5 text-center">
+                                <span className={`font-mono font-bold ${q === 0 ? "text-muted/40" : "text-foreground"}`}>{q}</span>
+                              </td>
+                            );
+                          })}
+                          {noLocItems > 0 && (
+                            <td className="px-3 py-2.5 text-center">
+                              <span className={`font-mono font-bold ${unassignedQty === 0 ? "text-muted/40" : "text-muted"}`}>{unassignedQty}</span>
+                            </td>
+                          )}
+                          <td className="px-3 py-2.5 text-center border-l border-border">
+                            <span className={`font-mono font-bold text-base ${anyLow ? "text-red-400" : "text-accent"}`}>{pg.totalQty}</span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => setTxnModal({ item: pg.items[0], type: "in" })} title="Receive (in)" className="p-1.5 text-green-500 hover:bg-green-500/10 rounded transition-colors">
+                                <ArrowDownCircle size={15} />
+                              </button>
+                              <button onClick={() => setTxnModal({ item: pg.items[0], type: "out" })} title="Use (out)" className="p-1.5 text-red-400 hover:bg-red-400/10 rounded transition-colors">
+                                <ArrowUpCircle size={15} />
+                              </button>
+                              <button onClick={() => setEditItem(pg.items[0])} title="Edit" className="p-1.5 text-muted hover:text-foreground hover:bg-card rounded transition-colors">
+                                <Pencil size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })()}
+            </tbody>
+          </table>
+        </div>
+      ) : (
         <div className="text-center text-muted text-sm py-12">
           {items.length === 0 ? "No inventory items yet. Add items from the vendor catalog or manually." : "No matches."}
         </div>
@@ -447,7 +554,18 @@ function InventoryTab({
   );
 }
 
-// ── Item Row ─────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function buildLocationQtys(items: InventoryItem[], locs: string[]): Record<string, number> {
+  const map: Record<string, number> = {};
+  for (const loc of locs) map[loc] = 0;
+  for (const it of items) {
+    if (it.location && locs.includes(it.location)) {
+      map[it.location] = (map[it.location] || 0) + it.quantity_on_hand;
+    }
+  }
+  return map;
+}
 
 // Group items by product (same item_number or description) to show per-location breakdown
 interface ProductGroup {
@@ -486,123 +604,6 @@ function groupByProduct(items: InventoryItem[]): ProductGroup[] {
     }
   }
   return Array.from(map.values());
-}
-
-function ProductRow({
-  group, vendors, onUse, onReceive, onEdit,
-}: {
-  group: ProductGroup;
-  vendors: SimpleVendor[];
-  onUse: (item: InventoryItem) => void;
-  onReceive: (item: InventoryItem) => void;
-  onEdit: (item: InventoryItem) => void;
-}) {
-  const vendor = vendors.find((v) => v.id === group.vendor_id);
-  const hasMultiple = group.items.length > 1;
-  const anyLow = group.items.some((it) => it.min_stock_level > 0 && it.quantity_on_hand <= it.min_stock_level);
-
-  return (
-    <div className="hover:bg-background/50 transition-colors">
-      <div className="flex items-center gap-4 px-4 py-3">
-        {/* Product info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-medium text-foreground truncate">{group.description}</p>
-            {group.item_number && <span className="text-xs text-muted font-mono shrink-0">#{group.item_number}</span>}
-          </div>
-          <div className="flex items-center gap-3 mt-0.5 text-xs text-muted">
-            {vendor && <span>{vendor.name}</span>}
-            <span>{money(group.unit_cost)} / {group.unit}</span>
-          </div>
-        </div>
-
-        {/* Per-location quantities */}
-        <div className="flex items-center gap-4 shrink-0">
-          {group.items.map((item) => {
-            const isLow = item.min_stock_level > 0 && item.quantity_on_hand <= item.min_stock_level;
-            return (
-              <div key={item.id} className="text-center min-w-[60px]">
-                <p className={`text-sm font-bold font-mono ${isLow ? "text-red-400" : "text-foreground"}`}>
-                  {item.quantity_on_hand}
-                </p>
-                <p className="text-[10px] text-muted truncate max-w-[80px]" title={item.location || "No location"}>
-                  {item.location || "—"}
-                </p>
-              </div>
-            );
-          })}
-
-          {/* Divider + Total */}
-          {hasMultiple && (
-            <>
-              <div className="w-px h-8 bg-border" />
-              <div className="text-center min-w-[60px]">
-                <p className={`text-lg font-bold font-mono ${anyLow ? "text-red-400" : "text-accent"}`}>
-                  {group.totalQty}
-                </p>
-                <p className="text-[10px] text-muted uppercase">Total</p>
-              </div>
-            </>
-          )}
-
-          {/* Single item — just show the unit label */}
-          {!hasMultiple && (
-            <div className="w-0" />
-          )}
-        </div>
-
-        {/* Actions — for single-item products, act on that item; for multi, act on first */}
-        <div className="flex items-center gap-1 shrink-0">
-          {group.items.length === 1 ? (
-            <>
-              <button onClick={() => onReceive(group.items[0])} title="Receive (in)" className="p-1.5 text-green-500 hover:bg-green-500/10 rounded transition-colors">
-                <ArrowDownCircle size={16} />
-              </button>
-              <button onClick={() => onUse(group.items[0])} title="Use (out)" className="p-1.5 text-red-400 hover:bg-red-400/10 rounded transition-colors">
-                <ArrowUpCircle size={16} />
-              </button>
-              <button onClick={() => onEdit(group.items[0])} title="Edit" className="p-1.5 text-muted hover:text-foreground hover:bg-card rounded transition-colors">
-                <Pencil size={14} />
-              </button>
-            </>
-          ) : (
-            <span className="text-[10px] text-muted">{group.items.length} locations</span>
-          )}
-        </div>
-      </div>
-
-      {/* Multi-location sub-rows with individual actions */}
-      {hasMultiple && (
-        <div className="border-t border-border/40 bg-background/30">
-          {group.items.map((item) => {
-            const isLow = item.min_stock_level > 0 && item.quantity_on_hand <= item.min_stock_level;
-            return (
-              <div key={item.id} className="flex items-center gap-4 px-4 py-1.5 pl-8 hover:bg-background/50">
-                <div className="flex-1 min-w-0">
-                  <span className="text-xs text-muted">{item.location || "No location"}</span>
-                </div>
-                <div className="min-w-[60px] text-center">
-                  <span className={`text-sm font-mono font-medium ${isLow ? "text-red-400" : "text-foreground"}`}>{item.quantity_on_hand}</span>
-                  <span className="text-[10px] text-muted ml-1">{item.unit}</span>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={() => onReceive(item)} title="Receive (in)" className="p-1 text-green-500 hover:bg-green-500/10 rounded transition-colors">
-                    <ArrowDownCircle size={14} />
-                  </button>
-                  <button onClick={() => onUse(item)} title="Use (out)" className="p-1 text-red-400 hover:bg-red-400/10 rounded transition-colors">
-                    <ArrowUpCircle size={14} />
-                  </button>
-                  <button onClick={() => onEdit(item)} title="Edit" className="p-1 text-muted hover:text-foreground hover:bg-card rounded transition-colors">
-                    <Pencil size={12} />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
 }
 
 // ── Add Item Modal ───────────────────────────────────────────────────────────
