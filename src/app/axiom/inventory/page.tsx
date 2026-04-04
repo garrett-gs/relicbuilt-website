@@ -888,13 +888,15 @@ function TransactionModal({
     }
 
     // Insert transaction
+    const isAdjustment = projectId === "__adjustment__";
+    const txnType = isAdjustment ? "adjustment" as const : type;
     await axiom.from("inventory_transactions").insert({
       inventory_item_id: targetId,
-      type,
+      type: txnType,
       quantity: q,
       unit_cost: item.unit_cost,
-      custom_work_id: projectId || null,
-      notes: notes.trim() || null,
+      custom_work_id: isAdjustment ? null : (projectId || null),
+      notes: (isAdjustment && !notes.trim() ? "Inventory adjustment" : notes.trim()) || null,
       date: new Date().toISOString().split("T")[0],
       created_by: userEmail,
     });
@@ -907,13 +909,16 @@ function TransactionModal({
       updated_at: new Date().toISOString(),
     }).eq("id", targetId);
 
-    const proj = projects.find((p) => p.id === projectId);
+    const proj = !isAdjustment ? projects.find((p) => p.id === projectId) : null;
     const locLabel = locationName ? ` @ ${locationName}` : "";
+    const actionLabel = isAdjustment
+      ? `Adjustment: -${q} ${item.unit} of ${item.description}${locLabel}`
+      : `${type === "in" ? "Received" : "Used"} ${q} ${item.unit} of ${item.description}${locLabel}${proj ? ` → ${proj.project_name}` : ""}`;
     await logActivity({
       action: "updated",
       entity: "inventory",
       entity_id: targetId,
-      label: `${type === "in" ? "Received" : "Used"} ${q} ${item.unit} of ${item.description}${locLabel}${proj ? ` → ${proj.project_name}` : ""}`,
+      label: actionLabel,
       user_name: userEmail,
     });
 
@@ -948,9 +953,10 @@ function TransactionModal({
         )}
         {type === "out" && (
           <div>
-            <label className={lbl}>Project *</label>
+            <label className={lbl}>Allocate To *</label>
             <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={inp}>
-              <option value="">Select project…</option>
+              <option value="">Select…</option>
+              <option value="__adjustment__">Inventory Adjustment</option>
               {projects.map((p) => <option key={p.id} value={p.id}>{p.project_name}</option>)}
             </select>
           </div>
