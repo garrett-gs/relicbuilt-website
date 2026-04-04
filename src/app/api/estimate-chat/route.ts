@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
       { data: recentReceipts },
     ] = await Promise.all([
       supabase.from("settings").select("biz_name, team_members, deposit_percent").limit(1).single(),
-      supabase.from("catalog_items").select("*, vendors(name)").eq("active", true).order("description").limit(200),
+      supabase.from("inventory_items").select("*, vendors(name)").eq("active", true).order("description").limit(200),
       supabase.from("custom_work").select("project_name, quoted_amount, materials, labor_log, status").in("status", ["completed", "delivered"]).order("created_at", { ascending: false }).limit(15),
       supabase.from("receipts").select("vendor, total, line_items, receipt_date").order("receipt_date", { ascending: false }).limit(30),
     ]);
@@ -36,9 +36,13 @@ export async function POST(req: NextRequest) {
       .join("\n") || "  - No rates configured yet";
 
     const catalogLines = (catalog || []).map((item) => {
-      const vendor = (item.vendors as { name: string } | null)?.name || "Unknown vendor";
-      return `  - [${item.item_number || "—"}] ${item.description} | ${item.unit_price ? `$${item.unit_price}/${item.unit}` : "no price"} | ${vendor}`;
-    }).join("\n") || "  - No catalog items yet";
+      const vendor = (item.vendors as { name: string } | null)?.name || "";
+      const price = item.unit_cost ? `$${item.unit_cost}/${item.unit}` : "no price";
+      const sku = item.item_number ? ` | SKU: ${item.item_number}` : "";
+      const vendorStr = vendor ? ` | ${vendor}` : "";
+      const stock = item.quantity_on_hand > 0 ? ` (${item.quantity_on_hand} in stock)` : "";
+      return `  - ${item.description} | ${price}${sku}${vendorStr}${stock}`;
+    }).join("\n") || "  - No inventory items yet";
 
     const projectHistoryLines = (recentProjects || []).map((p) => {
       const matTotal = (p.materials || []).reduce((s: number, m: { cost?: number }) => s + (m.cost || 0), 0);
