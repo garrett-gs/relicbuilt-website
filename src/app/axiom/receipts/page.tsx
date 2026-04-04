@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { CustomWork, PurchaseOrder } from "@/types/axiom";
-import { Camera, ExternalLink, Trash2, ShoppingCart, Search, X, RefreshCw, Package } from "lucide-react";
+import { Camera, ExternalLink, Trash2, ShoppingCart, Search, X, RefreshCw, Package, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
@@ -142,6 +143,9 @@ export default function ReceiptsPage() {
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
+          <Link href="/axiom/dashboard" className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-accent transition-colors mb-2">
+            <ArrowLeft size={12} /> Back to Axiom
+          </Link>
           <h1 className="text-2xl font-heading font-bold">Receipts</h1>
           <p className="text-muted text-sm mt-0.5">{filtered.length} receipt{filtered.length !== 1 ? "s" : ""} · {money(total)} total</p>
         </div>

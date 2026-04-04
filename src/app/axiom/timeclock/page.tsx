@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { TeamMember, CustomWork, TimeEntry } from "@/types/axiom";
-import { Clock, X, CheckCircle2, LogIn, LogOut } from "lucide-react";
+import { Clock, X, CheckCircle2, LogIn, LogOut, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 type Step = "select_member" | "enter_pin" | "select_project" | "clocked_in" | "clocked_out";
@@ -157,7 +158,10 @@ export default function TimeClockPage() {
   const PAD = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center">
+    <div className="min-h-[calc(100vh-8rem)] flex flex-col items-center justify-center relative">
+      <Link href="/axiom/dashboard" className="absolute top-4 left-4 inline-flex items-center gap-1.5 text-xs text-muted hover:text-accent transition-colors">
+        <ArrowLeft size={12} /> Back to Axiom
+      </Link>
       {/* Clock */}
       <div className="text-center mb-8">
         <p className="text-4xl font-mono font-bold text-foreground">
