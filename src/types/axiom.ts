@@ -457,6 +457,56 @@ export interface TimeEntry {
   created_at: string;
 }
 
+// ── Inventory ──────────────────────────────────────────────────
+
+export interface InventoryCategory {
+  id: string;
+  name: string;
+  description?: string;
+  subcategories: string[];
+  color: string;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface InventoryItem {
+  id: string;
+  catalog_item_id?: string;
+  vendor_id?: string;
+  category_id?: string;
+  item_number?: string;
+  description: string;
+  unit: string;
+  unit_cost: number;
+  quantity_on_hand: number;
+  min_stock_level: number;
+  location?: string;
+  notes?: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  // joined
+  vendor_name?: string;
+  category_name?: string;
+  category_color?: string;
+}
+
+export interface InventoryTransaction {
+  id: string;
+  inventory_item_id: string;
+  type: "in" | "out" | "adjustment";
+  quantity: number;
+  unit_cost: number;
+  custom_work_id?: string;
+  notes?: string;
+  date: string;
+  created_by?: string;
+  created_at: string;
+  // joined
+  item_description?: string;
+  project_name?: string;
+}
+
 // ── Leads ────────────────────────────────────────────────────
 
 export interface Lead {

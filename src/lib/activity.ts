@@ -20,6 +20,7 @@ type EntityType =
   | "customer"
   | "company"
   | "estimate"
+  | "inventory"
   | "settings";
 
 export async function logActivity({

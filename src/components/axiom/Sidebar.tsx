@@ -12,6 +12,7 @@ import {
   Hammer,
   Clock,
   CalendarDays,
+  Warehouse,
   Users,
   UserPlus,
   FileText,
@@ -49,6 +50,7 @@ const navSections = [
       { href: "/axiom/projects", icon: Hammer, label: "Projects" },
       { href: "/axiom/timeclock", icon: Clock, label: "Time Clock" },
       { href: "/axiom/calendar", icon: CalendarDays, label: "Build Calendar" },
+      { href: "/axiom/inventory", icon: Warehouse, label: "Inventory" },
     ],
   },
   {
