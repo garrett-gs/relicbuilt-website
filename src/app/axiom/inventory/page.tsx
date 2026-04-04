@@ -954,9 +954,9 @@ function TransactionModal({
         {type === "out" && (
           <div>
             <label className={lbl}>Allocate To *</label>
-            <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={inp}>
+            <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className={inp} style={projectId === "__adjustment__" ? { color: "#f59e0b" } : undefined}>
               <option value="">Select…</option>
-              <option value="__adjustment__">Inventory Adjustment</option>
+              <option value="__adjustment__" style={{ color: "#f59e0b" }}>⬤ Inventory Adjustment</option>
               {projects.map((p) => <option key={p.id} value={p.id}>{p.project_name}</option>)}
             </select>
           </div>
