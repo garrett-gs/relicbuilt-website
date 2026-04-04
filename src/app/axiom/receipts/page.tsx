@@ -2,9 +2,11 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
-import { CustomWork } from "@/types/axiom";
-import { Camera, ExternalLink, Trash2, ShoppingCart, Search, X } from "lucide-react";
+import { CustomWork, PurchaseOrder } from "@/types/axiom";
+import { Camera, ExternalLink, Trash2, ShoppingCart, Search, X, RefreshCw, Package } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
+import { logActivity } from "@/lib/activity";
+import { useAuth } from "@/components/axiom/AuthProvider";
 
 interface LineItem {
   description: string;
@@ -22,6 +24,7 @@ interface ReceiptRecord {
   line_items: LineItem[];
   project_id?: string;
   project_name?: string;
+  purchase_order_id?: string;
   notes?: string;
   submitted_by?: string;
   created_at: string;
@@ -30,20 +33,25 @@ interface ReceiptRecord {
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
 
 export default function ReceiptsPage() {
+  const { userEmail } = useAuth();
   const [receipts, setReceipts] = useState<ReceiptRecord[]>([]);
   const [projects, setProjects] = useState<CustomWork[]>([]);
+  const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [search, setSearch] = useState("");
   const [filterProject, setFilterProject] = useState("");
   const [addingTo, setAddingTo] = useState<Record<string, "materials" | "labor" | "done">>({});
+  const [priceUpdating, setPriceUpdating] = useState<Record<string, string>>({});
   const [poItem, setPoItem] = useState<AddToPOItem | null>(null);
 
   const load = useCallback(async () => {
-    const [{ data: rec }, { data: pw }] = await Promise.all([
+    const [{ data: rec }, { data: pw }, { data: poData }] = await Promise.all([
       axiom.from("receipts").select("*").order("created_at", { ascending: false }),
       axiom.from("custom_work").select("id,project_name").order("project_name"),
+      axiom.from("purchase_orders").select("id,po_number,vendor_name,status").order("created_at", { ascending: false }),
     ]);
     if (rec) setReceipts(rec as ReceiptRecord[]);
     if (pw) setProjects(pw as CustomWork[]);
+    if (poData) setPos(poData as PurchaseOrder[]);
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -70,8 +78,56 @@ export default function ReceiptsPage() {
     setReceipts((prev) => prev.map((x) => x.id === r.id ? { ...x, project_id: projectId, project_name: proj?.project_name } : x));
   }
 
+  async function linkPO(r: ReceiptRecord, poId: string) {
+    await axiom.from("receipts").update({ purchase_order_id: poId || null }).eq("id", r.id);
+    setReceipts((prev) => prev.map((x) => x.id === r.id ? { ...x, purchase_order_id: poId } : x));
+  }
+
+  async function updateInventoryPrices(r: ReceiptRecord) {
+    if (!r.line_items || r.line_items.length === 0) return;
+    setPriceUpdating((prev) => ({ ...prev, [r.id]: "updating" }));
+
+    try {
+      // Get all active inventory items for matching
+      const { data: invItems } = await axiom.from("inventory_items").select("*").eq("active", true);
+      const allInv = invItems || [];
+      let updated = 0;
+
+      for (const li of r.line_items) {
+        if (!li.unit_price || li.unit_price <= 0) continue;
+
+        // Match by description (case-insensitive)
+        const match = allInv.find((inv: { description: string; item_number?: string }) =>
+          inv.description.toLowerCase() === li.description.toLowerCase() ||
+          (inv.item_number && li.description.toLowerCase().includes(inv.item_number.toLowerCase()))
+        );
+
+        if (match && match.unit_cost !== li.unit_price) {
+          await axiom.from("inventory_items").update({
+            unit_cost: li.unit_price,
+            updated_at: new Date().toISOString(),
+          }).eq("id", match.id);
+          updated++;
+        }
+      }
+
+      await logActivity({
+        action: "updated",
+        entity: "inventory",
+        entity_id: r.id,
+        label: `Updated ${updated} inventory price${updated !== 1 ? "s" : ""} from receipt — ${r.vendor || "Unknown vendor"}`,
+        user_name: userEmail,
+      });
+
+      setPriceUpdating((prev) => ({ ...prev, [r.id]: `${updated} updated` }));
+    } catch {
+      setPriceUpdating((prev) => ({ ...prev, [r.id]: "error" }));
+    }
+  }
+
   const filtered = receipts.filter((r) => {
-    if (filterProject && r.project_id !== filterProject) return false;
+    if (filterProject === "__none__" && r.project_id) return false;
+    if (filterProject && filterProject !== "__none__" && r.project_id !== filterProject) return false;
     if (search) {
       const q = search.toLowerCase();
       return (r.vendor || "").toLowerCase().includes(q) || (r.project_name || "").toLowerCase().includes(q) || (r.submitted_by || "").toLowerCase().includes(q);
@@ -141,104 +197,148 @@ export default function ReceiptsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {filtered.map((r) => (
-            <div key={r.id} className="bg-card border border-border flex flex-col">
+          {filtered.map((r) => {
+            const linkedPO = pos.find((p) => p.id === r.purchase_order_id);
+            const priceStatus = priceUpdating[r.id];
 
-              {/* Receipt image */}
-              {r.image_url ? (
-                <a href={r.image_url} target="_blank" rel="noopener noreferrer" className="block shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={r.image_url} alt="" className="w-full h-40 object-cover border-b border-border hover:opacity-90 transition-opacity" />
-                </a>
-              ) : (
-                <div className="w-full h-40 bg-border/10 border-b border-border flex items-center justify-center shrink-0">
-                  <Camera size={28} className="text-muted/40" />
-                </div>
-              )}
+            return (
+              <div key={r.id} className="bg-card border border-border flex flex-col">
 
-              {/* Card body */}
-              <div className="p-3 flex flex-col gap-2.5 flex-1">
-
-                {/* Vendor + total */}
-                <div className="flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold leading-snug">{r.vendor || "Unknown vendor"}</p>
-                  <p className="text-sm font-mono font-bold text-accent shrink-0">{money(r.total || 0)}</p>
-                </div>
-
-                {/* Date + submitted by */}
-                <p className="text-xs text-muted">
-                  {r.receipt_date ? new Date(r.receipt_date + "T12:00:00").toLocaleDateString() : new Date(r.created_at).toLocaleDateString()}
-                  {r.submitted_by && <span className="text-muted/60"> · {r.submitted_by}</span>}
-                </p>
-
-                {/* Line items */}
-                {r.line_items?.length > 0 && (
-                  <div className="space-y-0.5 border-t border-border pt-2">
-                    {r.line_items.map((li, i) => (
-                      <div key={i} className="flex items-center gap-1.5 text-xs">
-                        <span className="flex-1 text-muted truncate">{li.description}</span>
-                        <span className="font-mono text-muted shrink-0">{money(li.total)}</span>
-                        <button
-                          onClick={() => setPoItem({ description: li.description, qty: li.qty, unit_price: li.unit_price, vendor_name: r.vendor })}
-                          className="text-muted hover:text-accent transition-colors shrink-0" title="Add to P.O."
-                        >
-                          <ShoppingCart size={10} />
-                        </button>
-                      </div>
-                    ))}
+                {/* Receipt image */}
+                {r.image_url ? (
+                  <a href={r.image_url} target="_blank" rel="noopener noreferrer" className="block shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={r.image_url} alt="" className="w-full h-40 object-cover border-b border-border hover:opacity-90 transition-opacity" />
+                  </a>
+                ) : (
+                  <div className="w-full h-40 bg-border/10 border-b border-border flex items-center justify-center shrink-0">
+                    <Camera size={28} className="text-muted/40" />
                   </div>
                 )}
 
-                {r.notes && <p className="text-xs text-muted/60 italic">{r.notes}</p>}
+                {/* Card body */}
+                <div className="p-3 flex flex-col gap-2.5 flex-1">
 
-                {/* Project dropdown */}
-                <div className="mt-auto pt-2 border-t border-border space-y-2">
-                  <select
-                    value={r.project_id || ""}
-                    onChange={(e) => linkProject(r, e.target.value)}
-                    className="w-full bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent"
-                  >
-                    <option value="">— No project —</option>
-                    {projects.map((p) => <option key={p.id} value={p.id}>{p.project_name}</option>)}
-                  </select>
+                  {/* Vendor + total */}
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-semibold leading-snug">{r.vendor || "Unknown vendor"}</p>
+                    <p className="text-sm font-mono font-bold text-accent shrink-0">{money(r.total || 0)}</p>
+                  </div>
 
-                  {/* Add to project buttons */}
-                  {r.project_id && (
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => addToProject(r, "materials")}
-                        disabled={addingTo[r.id + "materials"] !== undefined}
-                        className="flex-1 text-[11px] py-1 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50"
-                      >
-                        {addingTo[r.id + "materials"] === "done" ? "✓ Materials" : "+ Materials"}
-                      </button>
-                      <button
-                        onClick={() => addToProject(r, "labor")}
-                        disabled={addingTo[r.id + "labor"] !== undefined}
-                        className="flex-1 text-[11px] py-1 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50"
-                      >
-                        {addingTo[r.id + "labor"] === "done" ? "✓ Labor" : "+ Labor"}
-                      </button>
+                  {/* Date + submitted by */}
+                  <p className="text-xs text-muted">
+                    {r.receipt_date ? new Date(r.receipt_date + "T12:00:00").toLocaleDateString() : new Date(r.created_at).toLocaleDateString()}
+                    {r.submitted_by && <span className="text-muted/60"> · {r.submitted_by}</span>}
+                  </p>
+
+                  {/* Linked PO badge */}
+                  {linkedPO && (
+                    <div className="flex items-center gap-1.5 text-[10px] text-blue-400 bg-blue-400/10 px-2 py-1">
+                      <Package size={10} />
+                      <span className="font-mono">{linkedPO.po_number}</span>
                     </div>
                   )}
 
-                  {/* Delete */}
-                  <div className="flex justify-end">
-                    <button
-                      onClick={async () => {
-                        if (!confirm("Delete this receipt?")) return;
-                        await axiom.from("receipts").delete().eq("id", r.id);
-                        setReceipts((prev) => prev.filter((x) => x.id !== r.id));
-                      }}
-                      className="flex items-center gap-1 text-[11px] text-muted hover:text-red-500 transition-colors"
+                  {/* Line items */}
+                  {r.line_items?.length > 0 && (
+                    <div className="space-y-0.5 border-t border-border pt-2">
+                      {r.line_items.map((li, i) => (
+                        <div key={i} className="flex items-center gap-1.5 text-xs">
+                          <span className="flex-1 text-muted truncate">{li.description}</span>
+                          <span className="font-mono text-muted shrink-0">{money(li.total)}</span>
+                          <button
+                            onClick={() => setPoItem({ description: li.description, qty: li.qty, unit_price: li.unit_price, vendor_name: r.vendor })}
+                            className="text-muted hover:text-accent transition-colors shrink-0" title="Add to P.O."
+                          >
+                            <ShoppingCart size={10} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {r.notes && <p className="text-xs text-muted/60 italic">{r.notes}</p>}
+
+                  {/* Project + PO dropdowns */}
+                  <div className="mt-auto pt-2 border-t border-border space-y-2">
+                    <select
+                      value={r.project_id || ""}
+                      onChange={(e) => linkProject(r, e.target.value)}
+                      className="w-full bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent"
                     >
-                      <Trash2 size={11} /> Delete
-                    </button>
+                      <option value="">— No project —</option>
+                      {projects.map((p) => <option key={p.id} value={p.id}>{p.project_name}</option>)}
+                    </select>
+
+                    <select
+                      value={r.purchase_order_id || ""}
+                      onChange={(e) => linkPO(r, e.target.value)}
+                      className="w-full bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent"
+                    >
+                      <option value="">— No P.O. —</option>
+                      {pos.map((p) => <option key={p.id} value={p.id}>{p.po_number} — {p.vendor_name}</option>)}
+                    </select>
+
+                    {/* Add to project buttons */}
+                    {r.project_id && (
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => addToProject(r, "materials")}
+                          disabled={addingTo[r.id + "materials"] !== undefined}
+                          className="flex-1 text-[11px] py-1 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50"
+                        >
+                          {addingTo[r.id + "materials"] === "done" ? "✓ Materials" : "+ Materials"}
+                        </button>
+                        <button
+                          onClick={() => addToProject(r, "labor")}
+                          disabled={addingTo[r.id + "labor"] !== undefined}
+                          className="flex-1 text-[11px] py-1 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50"
+                        >
+                          {addingTo[r.id + "labor"] === "done" ? "✓ Labor" : "+ Labor"}
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Update inventory prices */}
+                    {r.line_items?.length > 0 && (
+                      <button
+                        onClick={() => updateInventoryPrices(r)}
+                        disabled={priceStatus === "updating"}
+                        className={`w-full flex items-center justify-center gap-1.5 text-[11px] py-1 border transition-colors ${
+                          priceStatus && priceStatus !== "updating"
+                            ? "border-green-500/30 text-green-400"
+                            : "border-border hover:border-blue-400 hover:text-blue-400 text-muted"
+                        } disabled:opacity-50`}
+                      >
+                        <RefreshCw size={10} className={priceStatus === "updating" ? "animate-spin" : ""} />
+                        {priceStatus === "updating"
+                          ? "Updating…"
+                          : priceStatus === "error"
+                            ? "Error — retry"
+                            : priceStatus
+                              ? `✓ ${priceStatus}`
+                              : "Update Inventory Prices"}
+                      </button>
+                    )}
+
+                    {/* Delete */}
+                    <div className="flex justify-end">
+                      <button
+                        onClick={async () => {
+                          if (!confirm("Delete this receipt?")) return;
+                          await axiom.from("receipts").delete().eq("id", r.id);
+                          setReceipts((prev) => prev.filter((x) => x.id !== r.id));
+                        }}
+                        className="flex items-center gap-1 text-[11px] text-muted hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={11} /> Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

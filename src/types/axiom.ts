@@ -137,6 +137,7 @@ export interface Receipt {
   line_items: ReceiptLineItem[];
   project_id?: string;
   project_name?: string;
+  purchase_order_id?: string;
   notes?: string;
   created_at: string;
 }
