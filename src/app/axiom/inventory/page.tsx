@@ -18,6 +18,7 @@ import {
   RefreshCw,
   AlertTriangle,
   ChevronRight,
+  Printer,
 } from "lucide-react";
 
 const inp = "w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent";
@@ -168,6 +169,137 @@ function InventoryTab({
   const lowStock = items.filter((it) => it.min_stock_level > 0 && it.quantity_on_hand <= it.min_stock_level);
   const totalValue = items.reduce((s, it) => s + it.quantity_on_hand * it.unit_cost, 0);
 
+  function printTakeSheet() {
+    const today = new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+    // Build grouped items for the sheet
+    const groups = categories
+      .map((cat) => ({
+        category: cat,
+        items: items.filter((it) => it.category_id === cat.id).sort((a, b) => a.description.localeCompare(b.description)),
+      }))
+      .filter((g) => g.items.length > 0);
+    const uncat = items.filter((it) => !it.category_id).sort((a, b) => a.description.localeCompare(b.description));
+
+    function renderRows(list: InventoryItem[]) {
+      return list
+        .map(
+          (it) => `
+          <tr>
+            <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:13px;font-family:monospace;color:#666;">${it.item_number || "—"}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:13px;">${it.description}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:13px;text-align:center;">${it.unit}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #ddd;font-size:13px;text-align:center;font-family:monospace;">${it.quantity_on_hand}</td>
+            <td style="padding:6px 10px;border-bottom:1px solid #ddd;width:120px;">
+              <div style="border-bottom:1.5px solid #999;height:20px;"></div>
+            </td>
+            <td style="padding:6px 10px;border-bottom:1px solid #ddd;width:140px;">
+              <div style="border-bottom:1.5px solid #999;height:20px;"></div>
+            </td>
+          </tr>`
+        )
+        .join("");
+    }
+
+    const tableHead = `
+      <tr style="background:#f5f5f5;">
+        <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;border-bottom:2px solid #333;">Item #</th>
+        <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;border-bottom:2px solid #333;">Description</th>
+        <th style="padding:8px 10px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;border-bottom:2px solid #333;">Unit</th>
+        <th style="padding:8px 10px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;border-bottom:2px solid #333;">On Hand</th>
+        <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;border-bottom:2px solid #333;width:120px;">Count</th>
+        <th style="padding:8px 10px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;border-bottom:2px solid #333;width:140px;">Notes</th>
+      </tr>`;
+
+    let sectionsHtml = "";
+    for (const g of groups) {
+      sectionsHtml += `
+        <div style="margin-bottom:28px;page-break-inside:avoid;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="width:12px;height:12px;border-radius:2px;background:${g.category.color};"></div>
+            <h2 style="margin:0;font-size:15px;text-transform:uppercase;letter-spacing:2px;font-weight:700;">${g.category.name}</h2>
+            <span style="font-size:12px;color:#999;">(${g.items.length} items)</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;">
+            ${tableHead}
+            ${renderRows(g.items)}
+          </table>
+        </div>`;
+    }
+    if (uncat.length > 0) {
+      sectionsHtml += `
+        <div style="margin-bottom:28px;page-break-inside:avoid;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <div style="width:12px;height:12px;border-radius:2px;background:#ccc;"></div>
+            <h2 style="margin:0;font-size:15px;text-transform:uppercase;letter-spacing:2px;font-weight:700;">Uncategorized</h2>
+            <span style="font-size:12px;color:#999;">(${uncat.length} items)</span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;">
+            ${tableHead}
+            ${renderRows(uncat)}
+          </table>
+        </div>`;
+    }
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>Inventory Take Sheet — ${today}</title>
+  <style>
+    @page { margin: 0.5in; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111; margin: 0; padding: 0; }
+    @media print { .no-print { display: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="padding:12px 20px;background:#111;display:flex;justify-content:space-between;align-items:center;">
+    <span style="color:#fff;font-size:14px;">Inventory Take Sheet</span>
+    <button onclick="window.print()" style="background:#c8a55a;color:#111;border:none;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer;letter-spacing:1px;">PRINT</button>
+  </div>
+
+  <div style="padding:24px 20px;">
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;border-bottom:3px solid #111;padding-bottom:16px;">
+      <div>
+        <h1 style="margin:0;font-size:22px;text-transform:uppercase;letter-spacing:3px;font-weight:800;">Inventory Take Sheet</h1>
+        <p style="margin:6px 0 0;font-size:13px;color:#666;">Physical Count Worksheet</p>
+      </div>
+      <div style="text-align:right;">
+        <p style="margin:0;font-size:15px;font-weight:700;">${today}</p>
+        <p style="margin:6px 0 0;font-size:13px;color:#666;">${items.length} total items</p>
+      </div>
+    </div>
+
+    <!-- Counted By -->
+    <div style="display:flex;gap:40px;margin-bottom:24px;">
+      <div style="flex:1;">
+        <span style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;">Counted By:</span>
+        <div style="border-bottom:1.5px solid #999;height:24px;margin-top:4px;"></div>
+      </div>
+      <div style="flex:1;">
+        <span style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#666;">Verified By:</span>
+        <div style="border-bottom:1.5px solid #999;height:24px;margin-top:4px;"></div>
+      </div>
+    </div>
+
+    ${sectionsHtml}
+
+    <!-- Footer -->
+    <div style="margin-top:32px;padding-top:16px;border-top:2px solid #111;display:flex;justify-content:space-between;">
+      <p style="margin:0;font-size:11px;color:#666;">Relic Built — Inventory Take Sheet</p>
+      <p style="margin:0;font-size:11px;color:#666;">Printed: ${today}</p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
+  }
+
   return (
     <>
       {/* Summary cards */}
@@ -200,6 +332,9 @@ function InventoryTab({
           <option value="all">All Categories</option>
           {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        <button onClick={printTakeSheet} className="flex items-center gap-1.5 border border-border text-muted hover:text-foreground px-4 py-2.5 text-sm font-medium transition-colors">
+          <Printer size={14} /> Take Sheet
+        </button>
         <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 bg-accent text-background px-4 py-2.5 text-sm font-medium hover:bg-accent/90 transition-colors">
           <Plus size={14} /> Add Item
         </button>

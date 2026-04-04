@@ -10,7 +10,7 @@ import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import ImageUpload from "@/components/ui/ImageUpload";
 import { cn, formatPhone } from "@/lib/utils";
-import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart } from "lucide-react";
+import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { useRouter } from "next/navigation";
 import { generateProposalHtml } from "@/lib/proposal-html";
@@ -530,6 +530,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [dueDate, setDueDate] = useState(project.due_date || "");
   const [portalStage, setPortalStage] = useState(project.portal_stage || "consultation");
   const [folderUrl, setFolderUrl] = useState(project.folder_url || "");
+  const [editingFolder, setEditingFolder] = useState(false);
   const [proposalHighlights, setProposalHighlights] = useState<ProposalHighlight[]>(project.proposal_highlights || []);
   const [proposalScope, setProposalScope] = useState<ProposalScope>(project.proposal_scope || { body: "", included: true });
   const [proposalCostSection, setProposalCostSection] = useState<ProposalCostSection>(project.proposal_cost_section || { items: [], show_total: true, included: true });
@@ -892,24 +893,50 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       {/* File Folder */}
       <div>
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">File Folder</label>
-        <div className="flex gap-2">
-          <input
-            value={folderUrl}
-            onChange={(e) => { setFolderUrl(e.target.value); markDirty(); }}
-            placeholder="Paste Dropbox (or any) folder link…"
-            className="flex-1 bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
-          />
-          {folderUrl && (
+        {folderUrl && !editingFolder ? (
+          <div className="flex items-center gap-2 bg-card border border-border px-4 py-3">
+            <FolderOpen size={16} className="text-blue-400 shrink-0" />
             <a
               href={folderUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-4 py-3 bg-accent text-background text-sm font-medium hover:bg-accent/90 transition-colors shrink-0"
+              className="text-sm text-blue-400 hover:text-blue-300 transition-colors truncate flex-1"
             >
-              <ExternalLink size={14} /> Open
+              {(() => {
+                try {
+                  const u = new URL(folderUrl);
+                  const parts = decodeURIComponent(u.pathname).split("/").filter(Boolean);
+                  return parts.length > 0 ? parts[parts.length - 1] : u.hostname;
+                } catch { return folderUrl; }
+              })()}
             </a>
-          )}
-        </div>
+            <ExternalLink size={12} className="text-blue-400/60 shrink-0" />
+            <button onClick={() => setEditingFolder(true)} className="text-muted hover:text-foreground ml-2 shrink-0" title="Edit link">
+              <Pencil size={13} />
+            </button>
+            <button onClick={() => { setFolderUrl(""); markDirty(); }} className="text-muted hover:text-red-400 shrink-0" title="Remove link">
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <input
+              value={folderUrl}
+              onChange={(e) => { setFolderUrl(e.target.value); markDirty(); }}
+              placeholder="Paste Dropbox (or any) folder link…"
+              className="flex-1 bg-card border border-border px-4 py-3 text-sm text-foreground focus:outline-none focus:border-accent"
+              autoFocus={editingFolder}
+            />
+            {editingFolder && (
+              <button
+                onClick={() => setEditingFolder(false)}
+                className="px-4 py-3 bg-accent text-background text-sm font-medium hover:bg-accent/90 transition-colors shrink-0"
+              >
+                Done
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Profit box */}
