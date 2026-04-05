@@ -152,8 +152,9 @@ export default function EstimatorPage() {
   useEffect(() => { load(); }, [load]);
 
   async function createEstimate(form: { project_name: string; client_name: string; customer_id: string }) {
-    const n = Math.floor(1000 + Math.random() * 9000);
-    const estimate_number = `EST-${new Date().getFullYear()}-${n}`;
+    const { count } = await axiom.from("estimates").select("*", { count: "exact", head: true });
+    const seq = String((count || 0) + 1).padStart(4, "0");
+    const estimate_number = `EST-${new Date().getFullYear()}-${seq}`;
     const { data } = await axiom.from("estimates").insert({
       estimate_number,
       project_name: form.project_name,
