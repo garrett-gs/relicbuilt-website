@@ -285,7 +285,7 @@ function CreateModal({ onSubmit, onClose }: {
         <div className="space-y-4">
           <Field label="Project / Description" value={form.project_name} onChange={(v) => setForm((f) => ({ ...f, project_name: v }))} required />
           <CustomerSearch onSelect={handleCustomerSelect} />
-          <Field label="Client Name" value={form.client_name} onChange={(v) => setForm((f) => ({ ...f, client_name: v }))} />
+          <Field label="Contact" value={form.client_name} onChange={(v) => setForm((f) => ({ ...f, client_name: v }))} />
           <div className="flex gap-3">
             <Button onClick={() => onSubmit(form)} disabled={!form.project_name}>Create</Button>
             <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -539,7 +539,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
           <Field label="Project / Description" value={projectName} onChange={(v) => { setProjectName(v); markDirty(); }} />
           <div className="grid grid-cols-2 gap-3">
             <CustomerSearch onSelect={handleCustomerSelect} initialName={customerName} />
-            <Field label="Client Name" value={clientName} onChange={(v) => { setClientName(v); markDirty(); }} />
+            <Field label="Contact" value={clientName} onChange={(v) => { setClientName(v); markDirty(); }} />
           </div>
           <div className="flex items-center gap-4">
             <p className="text-xs text-muted font-mono">{estimate.estimate_number}</p>
