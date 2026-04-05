@@ -45,7 +45,7 @@ interface SearchResult {
   type: "customer" | "company";
 }
 
-function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => void; initialName?: string }) {
+function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer, type: "customer" | "company") => void; initialName?: string }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -83,8 +83,7 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => 
     setSelectedName(r.name);
     setQuery("");
     setOpen(false);
-    // Pass as Customer shape so the parent gets id + name
-    onSelect({ id: r.id, name: r.name, email: r.email, phone: r.phone } as Customer);
+    onSelect({ id: r.id, name: r.name, email: r.email, phone: r.phone } as Customer, r.type);
   }
 
   return (
@@ -95,7 +94,7 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => 
           <span className="flex items-center gap-1 bg-accent/10 text-accent text-sm px-3 py-2 border border-accent/30 flex-1 truncate">
             {selectedName}
             <button
-              onClick={() => { setSelectedName(""); onSelect({} as Customer); }}
+              onClick={() => { setSelectedName(""); onSelect({} as Customer, "customer"); }}
               className="ml-1 hover:text-foreground"
             >
               <X size={12} />
@@ -265,12 +264,26 @@ function CreateModal({ onSubmit, onClose }: {
   onClose: () => void;
 }) {
   const [form, setForm] = useState({ project_name: "", client_name: "", customer_id: "" });
+  const [companyContacts, setCompanyContacts] = useState<Customer[]>([]);
+  const [clientType, setClientType] = useState<"customer" | "company" | null>(null);
 
-  function handleCustomerSelect(c: Customer) {
+  function handleCustomerSelect(c: Customer, type: "customer" | "company") {
     if (!c.id) {
       setForm((f) => ({ ...f, customer_id: "", client_name: "" }));
+      setCompanyContacts([]);
+      setClientType(null);
+      return;
+    }
+    if (type === "company") {
+      setForm((f) => ({ ...f, customer_id: c.id, client_name: "" }));
+      setClientType("company");
+      axiom.from("customers").select("*").eq("company_id", c.id).order("name").then(({ data }) => {
+        setCompanyContacts(data || []);
+      });
     } else {
       setForm((f) => ({ ...f, customer_id: c.id, client_name: c.name }));
+      setCompanyContacts([]);
+      setClientType("customer");
     }
   }
 
@@ -285,7 +298,27 @@ function CreateModal({ onSubmit, onClose }: {
         <div className="space-y-4">
           <Field label="Project / Description" value={form.project_name} onChange={(v) => setForm((f) => ({ ...f, project_name: v }))} required />
           <CustomerSearch onSelect={handleCustomerSelect} />
-          <Field label="Contact" value={form.client_name} onChange={(v) => setForm((f) => ({ ...f, client_name: v }))} />
+          {clientType === "company" ? (
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Contact</label>
+              {companyContacts.length > 0 ? (
+                <select
+                  value={form.client_name}
+                  onChange={(e) => setForm((f) => ({ ...f, client_name: e.target.value }))}
+                  className="w-full bg-card border border-border px-3 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+                >
+                  <option value="">Select a contact...</option>
+                  {companyContacts.map((ct) => (
+                    <option key={ct.id} value={ct.name}>{ct.name}{ct.title ? ` — ${ct.title}` : ""}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs text-muted bg-card border border-border px-3 py-3">No contacts linked to this company. <a href="/axiom/customers" className="text-accent underline">Add one</a>.</p>
+              )}
+            </div>
+          ) : (
+            <Field label="Contact" value={form.client_name} onChange={(v) => setForm((f) => ({ ...f, client_name: v }))} />
+          )}
           <div className="flex gap-3">
             <Button onClick={() => onSubmit(form)} disabled={!form.project_name}>Create</Button>
             <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -414,18 +447,35 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   }
   function removeLabor(i: number) { setLaborItems(laborItems.filter((_, idx) => idx !== i)); markDirty(); }
 
-  function handleCustomerSelect(c: Customer) {
+  const [companyContacts, setCompanyContacts] = useState<Customer[]>([]);
+  const [clientType, setClientType] = useState<"customer" | "company" | null>(null);
+
+  function handleCustomerSelect(c: Customer, type: "customer" | "company") {
     if (!c.id) {
       setCustomerId("");
       setCustomerName("");
       setClientEmail("");
       setClientPhone("");
+      setCompanyContacts([]);
+      setClientType(null);
+    } else if (type === "company") {
+      setCustomerId(c.id);
+      setCustomerName(c.name);
+      setClientName("");
+      setClientEmail("");
+      setClientPhone("");
+      setClientType("company");
+      axiom.from("customers").select("*").eq("company_id", c.id).order("name").then(({ data }) => {
+        setCompanyContacts(data || []);
+      });
     } else {
       setCustomerId(c.id);
       setCustomerName(c.name);
       setClientName(c.name);
       setClientEmail(c.email || "");
       setClientPhone(c.phone || "");
+      setCompanyContacts([]);
+      setClientType("customer");
     }
     markDirty();
   }
@@ -539,7 +589,35 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
           <Field label="Project / Description" value={projectName} onChange={(v) => { setProjectName(v); markDirty(); }} />
           <div className="grid grid-cols-2 gap-3">
             <CustomerSearch onSelect={handleCustomerSelect} initialName={customerName} />
-            <Field label="Contact" value={clientName} onChange={(v) => { setClientName(v); markDirty(); }} />
+            {clientType === "company" ? (
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Contact</label>
+                {companyContacts.length > 0 ? (
+                  <select
+                    value={clientName}
+                    onChange={(e) => {
+                      setClientName(e.target.value);
+                      const contact = companyContacts.find((ct) => ct.name === e.target.value);
+                      if (contact) {
+                        setClientEmail(contact.email || "");
+                        setClientPhone(contact.phone || "");
+                      }
+                      markDirty();
+                    }}
+                    className="w-full bg-card border border-border px-3 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+                  >
+                    <option value="">Select a contact...</option>
+                    {companyContacts.map((ct) => (
+                      <option key={ct.id} value={ct.name}>{ct.name}{ct.title ? ` — ${ct.title}` : ""}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-xs text-muted bg-card border border-border px-3 py-3">No contacts linked to this company. <a href="/axiom/customers" className="text-accent underline">Add one</a>.</p>
+                )}
+              </div>
+            ) : (
+              <Field label="Contact" value={clientName} onChange={(v) => { setClientName(v); markDirty(); }} />
+            )}
           </div>
           <div className="flex items-center gap-4">
             <p className="text-xs text-muted font-mono">{estimate.estimate_number}</p>
