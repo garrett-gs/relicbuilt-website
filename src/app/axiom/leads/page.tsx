@@ -84,8 +84,16 @@ function CustomerSearch({
   async function search(q: string) {
     setQuery(q);
     if (!q.trim()) { setResults([]); setOpen(false); return; }
-    const { data } = await axiom.from("customers").select("*").ilike("name", `%${q}%`).limit(8);
-    if (data) { setResults(data); setOpen(true); }
+    const [{ data: customers }, { data: companies }] = await Promise.all([
+      axiom.from("customers").select("*").ilike("name", `%${q}%`).limit(6),
+      axiom.from("companies").select("id,name,phone").ilike("name", `%${q}%`).limit(6),
+    ]);
+    const combined: Customer[] = [
+      ...(companies || []).map((c: { id: string; name: string; phone?: string }) => ({ id: c.id, name: c.name, phone: c.phone, _isCompany: true } as Customer & { _isCompany?: boolean })),
+      ...(customers || []),
+    ];
+    setResults(combined);
+    setOpen(true);
   }
 
   function pick(c: Customer) {
@@ -117,7 +125,7 @@ function CustomerSearch({
             <input
               value={query}
               onChange={(e) => search(e.target.value)}
-              placeholder="Search customers or type name…"
+              placeholder="Search customers, companies, or type name…"
               className="w-full bg-card border border-border pl-9 pr-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
             />
           </div>

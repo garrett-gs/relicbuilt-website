@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
-import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem } from "@/types/axiom";
+import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Company, Vendor, CatalogItem } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
@@ -37,9 +37,17 @@ function calcTotals(est: Pick<Estimate, "line_items" | "labor_items" | "markup_p
 
 // ── Customer search dropdown ──────────────────────────────────
 
+interface SearchResult {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  type: "customer" | "company";
+}
+
 function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => void; initialName?: string }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Customer[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [selectedName, setSelectedName] = useState(initialName || "");
   const ref = useRef<HTMLDivElement>(null);
@@ -59,20 +67,29 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => 
   async function search(q: string) {
     setQuery(q);
     if (!q.trim()) { setResults([]); setOpen(false); return; }
-    const { data } = await axiom.from("customers").select("*").ilike("name", `%${q}%`).limit(8);
-    if (data) { setResults(data); setOpen(true); }
+    const [{ data: customers }, { data: companies }] = await Promise.all([
+      axiom.from("customers").select("id,name,email,phone").ilike("name", `%${q}%`).limit(6),
+      axiom.from("companies").select("id,name,phone").ilike("name", `%${q}%`).limit(6),
+    ]);
+    const merged: SearchResult[] = [
+      ...(companies || []).map((c: { id: string; name: string; phone?: string }) => ({ id: c.id, name: c.name, phone: c.phone, type: "company" as const })),
+      ...(customers || []).map((c: { id: string; name: string; email?: string; phone?: string }) => ({ id: c.id, name: c.name, email: c.email, phone: c.phone, type: "customer" as const })),
+    ];
+    setResults(merged);
+    setOpen(true);
   }
 
-  function pick(c: Customer) {
-    setSelectedName(c.name);
+  function pick(r: SearchResult) {
+    setSelectedName(r.name);
     setQuery("");
     setOpen(false);
-    onSelect(c);
+    // Pass as Customer shape so the parent gets id + name
+    onSelect({ id: r.id, name: r.name, email: r.email, phone: r.phone } as Customer);
   }
 
   return (
     <div ref={ref} className="relative">
-      <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Customer</label>
+      <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Client</label>
       <div className="flex items-center gap-2">
         {selectedName ? (
           <span className="flex items-center gap-1 bg-accent/10 text-accent text-sm px-3 py-2 border border-accent/30 flex-1 truncate">
@@ -90,7 +107,7 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => 
             <input
               value={query}
               onChange={(e) => search(e.target.value)}
-              placeholder="Search customers..."
+              placeholder="Search customers & companies..."
               className="w-full bg-card border border-border pl-9 pr-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
             />
           </div>
@@ -98,17 +115,22 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => 
       </div>
       {open && results.length > 0 && (
         <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border shadow-lg mt-0.5 max-h-48 overflow-y-auto">
-          {results.map((c) => (
-            <button key={c.id} onMouseDown={() => pick(c)} className="w-full text-left px-4 py-2.5 text-sm hover:bg-background flex items-center justify-between">
-              <span>{c.name}</span>
-              <span className="text-xs text-muted">{c.email || c.phone || ""}</span>
+          {results.map((r) => (
+            <button key={r.type + r.id} onMouseDown={() => pick(r)} className="w-full text-left px-4 py-2.5 text-sm hover:bg-background flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                {r.name}
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-sm uppercase tracking-wider ${r.type === "company" ? "bg-blue-500/15 text-blue-400" : "bg-accent/15 text-accent"}`}>
+                  {r.type === "company" ? "Co" : "Person"}
+                </span>
+              </span>
+              <span className="text-xs text-muted">{r.email || r.phone || ""}</span>
             </button>
           ))}
         </div>
       )}
       {open && results.length === 0 && query && (
         <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border mt-0.5 px-4 py-3 text-sm text-muted">
-          No customers found — <a href="/axiom/customers" className="text-accent underline">add one first</a>
+          No results — <a href="/axiom/customers" className="text-accent underline">add a customer</a> or <a href="/axiom/companies" className="text-accent underline">company</a>
         </div>
       )}
     </div>
