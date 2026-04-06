@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { Settings, TeamMember } from "@/types/axiom";
+import { useAuth } from "@/components/axiom/AuthProvider";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { Plus, Trash2 } from "lucide-react";
@@ -13,7 +14,11 @@ const TABS = ["General", "Team", "Categories", "Locations", "Terms"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function SettingsPage() {
+  const { userEmail } = useAuth();
   const [settings, setSettings] = useState<Settings | null>(null);
+  const isAdmin = !!(settings?.team_members || []).find(
+    (m: TeamMember) => m.email?.toLowerCase() === userEmail.toLowerCase() && m.role === "admin"
+  );
   const [tab, setTab] = useState<Tab>("General");
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -179,8 +184,9 @@ export default function SettingsPage() {
                   <div>
                     <label className="text-[10px] uppercase tracking-wider text-muted block mb-1">4-Digit Time Clock PIN</label>
                     <input
-                      type="password"
+                      type={isAdmin ? "text" : "password"}
                       inputMode="numeric"
+                      disabled={!isAdmin}
                       maxLength={4}
                       value={m.pin || ""}
                       onChange={(e) => {
