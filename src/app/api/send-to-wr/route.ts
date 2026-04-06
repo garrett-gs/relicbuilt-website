@@ -26,22 +26,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Estimate not found" }, { status: 404 });
     }
 
-    // If there's a linked project, grab build files and images
+    // If there's a linked project, grab images and build files
+    let mainImage = "";
+    let allImages: string[] = [];
     let buildFiles: { name: string; url: string; type: string }[] = [];
-    let projectImages: string[] = [];
     let projectDescription = "";
 
     if (estimate.custom_work_id) {
       const { data: project } = await axiom
         .from("custom_work")
-        .select("*")
+        .select("image_url, inspiration_images, project_description")
         .eq("id", estimate.custom_work_id)
         .single();
 
       if (project) {
+        mainImage = project.image_url || "";
+        allImages = project.inspiration_images || [];
+        if (mainImage) allImages.unshift(mainImage);
         projectDescription = project.project_description || "";
-        projectImages = project.inspiration_images || [];
-        if (project.image_url) projectImages.unshift(project.image_url);
       }
 
       const { data: files } = await axiom
@@ -58,7 +60,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Calculate totals
+    // Calculate total price for the build
     const lineItems = estimate.line_items || [];
     const laborItems = estimate.labor_items || [];
     const markupPct = estimate.markup_percent || 0;
@@ -76,11 +78,13 @@ export async function POST(req: NextRequest) {
     const markupAmount = subtotal * (markupPct / 100);
     const total = subtotal + markupAmount;
 
-    // Build the payload for WR Nexus
+    // Push to WR's relic_builds table
+    const wr = getWRClient();
+
     const payload = {
       relic_estimate_id: estimate.id,
       estimate_number: estimate.estimate_number,
-      project_name: estimate.project_name,
+      project_name: estimate.project_name || estimate.estimate_number,
       description: projectDescription || estimate.notes || "",
       line_items: lineItems,
       labor_items: laborItems,
@@ -88,20 +92,18 @@ export async function POST(req: NextRequest) {
       material_total: materialTotal,
       labor_total: laborTotal,
       total,
-      images: projectImages,
+      image_url: mainImage || null,
+      images: allImages,
       files: buildFiles,
       status: estimate.status,
       sent_at: new Date().toISOString(),
     };
 
-    // Push to WR Nexus
-    const wr = getWRClient();
-
-    // Upsert — if we've already sent this estimate, update it
+    // Upsert — if already sent, update it
     const { data: wrData, error: wrErr } = await wr
       .from("relic_builds")
       .upsert(payload, { onConflict: "relic_estimate_id" })
-      .select()
+      .select("id")
       .single();
 
     if (wrErr) {
