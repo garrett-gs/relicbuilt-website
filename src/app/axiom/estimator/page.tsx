@@ -437,6 +437,10 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [wrSending, setWrSending] = useState(false);
   const [wrSent, setWrSent] = useState(!!(estimate as { sent_to_wr_at?: string }).sent_to_wr_at);
 
+  useEffect(() => {
+    setWrSent(!!(estimate as { sent_to_wr_at?: string }).sent_to_wr_at);
+  }, [estimate]);
+
   async function sendToWR() {
     if (dirty) save();
     setWrSending(true);
@@ -450,6 +454,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
       setWrSent(true);
+      onUpdate({ sent_to_wr_at: new Date().toISOString() } as Partial<Estimate>);
       await logActivity({
         action: "sent",
         entity: "estimate",
