@@ -78,6 +78,10 @@ export async function POST(req: NextRequest) {
     const markupAmount = subtotal * (markupPct / 100);
     const total = subtotal + markupAmount;
 
+    // Determine type: labor-only (maintenance) vs custom build
+    const isLaborOnly = lineItems.length === 0 && laborItems.length > 0;
+    const buildType = isLaborOnly ? "maintenance" : "build";
+
     // Push to WR's relic_builds table
     const wr = getWRClient();
 
@@ -86,6 +90,7 @@ export async function POST(req: NextRequest) {
       estimate_number: estimate.estimate_number,
       project_name: estimate.project_name || estimate.estimate_number,
       description: projectDescription || estimate.notes || "",
+      build_type: buildType,
       line_items: lineItems,
       labor_items: laborItems,
       markup_percent: markupPct,
