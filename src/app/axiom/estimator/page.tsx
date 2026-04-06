@@ -8,7 +8,7 @@ import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Ve
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const STATUS_COLORS: Record<Estimate["status"], string> = {
@@ -289,6 +289,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   onUpdate: (u: Partial<Estimate>) => void;
   onDelete: () => void;
 }) {
+  const { userEmail: detailUserEmail } = useAuth();
   const [customerId, setCustomerId] = useState(estimate.customer_id || "");
   const [customerName, setCustomerName] = useState("");
   const [clientEmail, setClientEmail] = useState("");
@@ -431,6 +432,36 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     });
     setDirty(false);
     setSaved(true);
+  }
+
+  const [wrSending, setWrSending] = useState(false);
+  const [wrSent, setWrSent] = useState(false);
+
+  async function sendToWR() {
+    if (dirty) save();
+    setWrSending(true);
+    setWrSent(false);
+    try {
+      const res = await fetch("/api/send-to-wr", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estimate_id: estimate.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setWrSent(true);
+      await logActivity({
+        action: "sent",
+        entity: "estimate",
+        entity_id: estimate.id,
+        label: `Sent estimate ${estimate.estimate_number} to WR Nexus`,
+        user_name: detailUserEmail,
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to send to WR");
+    } finally {
+      setWrSending(false);
+    }
   }
 
   async function createProject() {
@@ -754,6 +785,23 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
             <p className="text-[10px] text-muted text-center">Mark as Accepted to enable</p>
           )}
         </div>
+        <button
+          onClick={sendToWR}
+          disabled={wrSending}
+          className={`flex items-center gap-2 px-3 py-2 border text-sm transition-colors ${
+            wrSent
+              ? "border-green-500/50 text-green-400 bg-green-500/10"
+              : "border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+          }`}
+        >
+          {wrSending ? (
+            <><Loader2 size={14} className="animate-spin" /> Sending...</>
+          ) : wrSent ? (
+            <><CheckCircle2 size={14} /> Sent to WR</>
+          ) : (
+            <><ExternalLink size={14} /> Send to WR Nexus</>
+          )}
+        </button>
         <button
           onClick={() => setChatOpen(true)}
           className="flex items-center gap-2 px-3 py-2 border border-accent/50 text-accent text-sm hover:bg-accent/10 transition-colors"
