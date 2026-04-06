@@ -119,6 +119,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    await axiom
+      .from("estimates")
+      .update({ sent_to_wr_at: new Date().toISOString() })
+      .eq("id", estimate.id);
+
     return NextResponse.json({ success: true, wr_id: wrData.id });
   } catch (err) {
     console.error("send-to-wr error:", err);

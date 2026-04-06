@@ -435,7 +435,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   }
 
   const [wrSending, setWrSending] = useState(false);
-  const [wrSent, setWrSent] = useState(false);
+  const [wrSent, setWrSent] = useState(!!(estimate as { sent_to_wr_at?: string }).sent_to_wr_at);
 
   async function sendToWR() {
     if (dirty) save();
