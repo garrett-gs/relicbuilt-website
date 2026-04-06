@@ -37,6 +37,13 @@ export default function TimeClockPage() {
   const [completedEntry, setCompletedEntry] = useState<TimeEntry | null>(null);
   const [elapsed, setElapsed] = useState("");
   const [now, setNow] = useState(new Date());
+  const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
+
+  const TASK_OPTIONS = ["Fabrication", "Assembly", "Finishing", "Delivery", "Installation"];
+
+  function toggleTask(task: string) {
+    setSelectedTasks((prev) => prev.includes(task) ? prev.filter(t => t !== task) : [...prev, task]);
+  }
 
   useEffect(() => {
     axiom.from("settings").select("team_members").limit(1).single().then(({ data }) => {
@@ -116,7 +123,7 @@ export default function TimeClockPage() {
     const hours = hoursFromEntry({ ...activeEntry, clock_out: clockOut });
 
     // Update time entry
-    await axiom.from("time_entries").update({ clock_out: clockOut, hours }).eq("id", activeEntry.id);
+    await axiom.from("time_entries").update({ clock_out: clockOut, hours, tasks: selectedTasks }).eq("id", activeEntry.id);
 
     // Append to project labor log
     if (activeEntry.custom_work_id) {
@@ -129,7 +136,8 @@ export default function TimeClockPage() {
           hours,
           rate,
           cost,
-          description: selectedMember!.name,
+          description: selectedTasks.length ? `${selectedMember!.name} — ${selectedTasks.join(", ")}` : selectedMember!.name,
+          tasks: selectedTasks,
         };
         const updatedLog = [...(project.labor_log || []), newEntry];
         const newActualCost = (project.actual_cost || 0) + cost;
@@ -153,6 +161,7 @@ export default function TimeClockPage() {
     setPinError(false);
     setActiveEntry(null);
     setCompletedEntry(null);
+    setSelectedTasks([]);
   }
 
   const PAD = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
@@ -302,6 +311,33 @@ export default function TimeClockPage() {
             <p className="text-xs text-muted mt-2">
               Started {new Date(activeEntry.clock_in).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </p>
+            <div className="mt-6 pt-4 border-t border-border text-left">
+              <p className="text-xs uppercase tracking-widest text-muted mb-3 text-center">Tasks Completed</p>
+              <div className="grid grid-cols-2 gap-2">
+                {TASK_OPTIONS.map((task) => {
+                  const checked = selectedTasks.includes(task);
+                  return (
+                    <button
+                      key={task}
+                      type="button"
+                      onClick={() => toggleTask(task)}
+                      className={cn(
+                        "flex items-center gap-2 border px-3 py-2 text-xs transition-colors",
+                        checked ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:border-accent/50"
+                      )}
+                    >
+                      <span className={cn(
+                        "w-3.5 h-3.5 border flex items-center justify-center",
+                        checked ? "border-accent bg-accent" : "border-border"
+                      )}>
+                        {checked && <span className="text-[10px] text-background font-bold">✓</span>}
+                      </span>
+                      {task}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
           <button
             onClick={handleClockOut}
