@@ -8,7 +8,8 @@ import { Invoice, InvoiceLineItem, Payment, Settings } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn, formatPhone } from "@/lib/utils";
-import { Plus, X, Trash2, Printer, DollarSign, Send, CheckCircle, Eye, Search } from "lucide-react";
+import { Plus, X, Trash2, Printer, DollarSign, Send, CheckCircle, Eye, Search, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { useRef } from "react";
 
 interface Customer { id: string; name: string; email?: string; phone?: string; }
@@ -110,6 +111,9 @@ export default function InvoicesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
+          <Link href="/axiom/dashboard" className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-accent transition-colors mb-2">
+            <ArrowLeft size={12} /> Back to Axiom
+          </Link>
           <h1 className="text-2xl font-heading font-bold">Invoices</h1>
           <p className="text-muted text-sm mt-1">{invoices.length} total</p>
         </div>

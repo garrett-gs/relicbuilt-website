@@ -18,7 +18,9 @@ import {
   RefreshCw,
   AlertTriangle,
   Printer,
+  ArrowLeft,
 } from "lucide-react";
+import Link from "next/link";
 
 const inp = "w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent";
 const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
@@ -78,6 +80,9 @@ export default function InventoryPage() {
       {/* Header */}
       <div className="border-b border-border bg-card px-6 pt-6 pb-0 flex items-end justify-between">
         <div>
+          <Link href="/axiom/dashboard" className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-accent transition-colors mb-2">
+            <ArrowLeft size={12} /> Back to Axiom
+          </Link>
           <h1 className="text-xl font-heading font-bold text-foreground tracking-wide mb-4">Inventory</h1>
           <div className="flex gap-0">
             {tabs.map((t) => (
