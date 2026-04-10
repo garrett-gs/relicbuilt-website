@@ -209,15 +209,20 @@ function OrdersTab() {
             type: "in",
             quantity: li.quantity,
             unit_cost: li.unit_price,
-            custom_work_id: po.custom_work_id || null,
             notes: `Received from ${po.po_number}`,
             date: new Date().toISOString().split("T")[0],
             created_by: userEmail,
           });
 
-          // Update quantity on hand
+          // Weighted average cost
+          const oldQty = match.quantity_on_hand || 0;
+          const oldCost = match.unit_cost || 0;
+          const newQty = oldQty + li.quantity;
+          const avgCost = newQty > 0 ? ((oldQty * oldCost) + (li.quantity * li.unit_price)) / newQty : li.unit_price;
+
           await axiom.from("inventory_items").update({
-            quantity_on_hand: (match.quantity_on_hand || 0) + li.quantity,
+            quantity_on_hand: newQty,
+            unit_cost: Math.round(avgCost * 100) / 100,
             updated_at: new Date().toISOString(),
           }).eq("id", match.id);
 
@@ -239,7 +244,6 @@ function OrdersTab() {
               type: "in",
               quantity: li.quantity,
               unit_cost: li.unit_price,
-              custom_work_id: po.custom_work_id || null,
               notes: `Received from ${po.po_number}`,
               date: new Date().toISOString().split("T")[0],
               created_by: userEmail,

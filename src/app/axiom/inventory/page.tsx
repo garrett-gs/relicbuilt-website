@@ -909,7 +909,29 @@ function TransactionModal({
       updated_at: new Date().toISOString(),
     }).eq("id", targetId);
 
+    // If allocating OUT to a project, add material to project's materials array
     const proj = !isAdjustment ? projects.find((p) => p.id === projectId) : null;
+    if (type === "out" && proj && !isAdjustment) {
+      const allocationCost = Math.round(q * item.unit_cost * 100) / 100;
+      const { data: projData } = await axiom.from("custom_work").select("materials, actual_cost").eq("id", projectId).single();
+      if (projData) {
+        const existingMaterials = projData.materials || [];
+        const newMaterial = {
+          description: `${item.description} (×${q} ${item.unit})`,
+          vendor: "Inventory",
+          cost: allocationCost,
+          inventory_item_id: targetId,
+          quantity: q,
+          unit_cost: item.unit_cost,
+        };
+        await axiom.from("custom_work").update({
+          materials: [...existingMaterials, newMaterial],
+          actual_cost: (projData.actual_cost || 0) + allocationCost,
+          updated_at: new Date().toISOString(),
+        }).eq("id", projectId);
+      }
+    }
+
     const locLabel = locationName ? ` @ ${locationName}` : "";
     const actionLabel = isAdjustment
       ? `Adjustment: -${q} ${item.unit} of ${item.description}${locLabel}`
