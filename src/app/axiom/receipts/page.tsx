@@ -89,6 +89,11 @@ export default function ReceiptsPage() {
     setPriceUpdating((prev) => ({ ...prev, [r.id]: "updating" }));
 
     try {
+      // Calculate landed cost — distribute tax proportionally across line items
+      const subtotal = r.line_items.reduce((s, li) => s + (Number(li.total) || 0), 0);
+      const tax = (r.total || 0) - subtotal; // difference between receipt total and line subtotal = tax/fees
+      const extras = tax > 0 ? tax : 0;
+
       // Get all active inventory items for matching
       const { data: invItems } = await axiom.from("inventory_items").select("*").eq("active", true);
       const allInv = invItems || [];
@@ -97,15 +102,26 @@ export default function ReceiptsPage() {
       for (const li of r.line_items) {
         if (!li.unit_price || li.unit_price <= 0) continue;
 
+        // Landed unit price: original + proportional share of tax/fees
+        const lineTotal = Number(li.total) || (li.qty * li.unit_price);
+        const lineShare = subtotal > 0 ? (lineTotal / subtotal) * extras : 0;
+        const landedUnitPrice = li.qty > 0 ? Math.round(((lineTotal + lineShare) / li.qty) * 100) / 100 : li.unit_price;
+
         // Match by description (case-insensitive)
         const match = allInv.find((inv: { description: string; item_number?: string }) =>
           inv.description.toLowerCase() === li.description.toLowerCase() ||
           (inv.item_number && li.description.toLowerCase().includes(inv.item_number.toLowerCase()))
         );
 
-        if (match && match.unit_cost !== li.unit_price) {
+        if (match) {
+          // Weighted average cost
+          const oldQty = match.quantity_on_hand || 0;
+          const oldCost = match.unit_cost || 0;
+          const newQty = oldQty + li.qty;
+          const avgCost = newQty > 0 ? ((oldQty * oldCost) + (li.qty * landedUnitPrice)) / newQty : landedUnitPrice;
+
           await axiom.from("inventory_items").update({
-            unit_cost: li.unit_price,
+            unit_cost: Math.round(avgCost * 100) / 100,
             updated_at: new Date().toISOString(),
           }).eq("id", match.id);
           updated++;
@@ -116,7 +132,7 @@ export default function ReceiptsPage() {
         action: "updated",
         entity: "inventory",
         entity_id: r.id,
-        label: `Updated ${updated} inventory price${updated !== 1 ? "s" : ""} from receipt — ${r.vendor || "Unknown vendor"}`,
+        label: `Updated ${updated} inventory price${updated !== 1 ? "s" : ""} from receipt — ${r.vendor || "Unknown vendor"}${extras > 0 ? ` (incl. $${extras.toFixed(2)} tax/fees)` : ""}`,
         user_name: userEmail,
       });
 

@@ -79,6 +79,9 @@ function OrdersTab() {
   const [deleteText, setDeleteText] = useState("");
   const [receivingId, setReceivingId] = useState<string | null>(null);
   const [receiveMsg, setReceiveMsg] = useState("");
+  const [receiveModal, setReceiveModal] = useState<PurchaseOrder | null>(null);
+  const [receiveTax, setReceiveTax] = useState("");
+  const [receiveDelivery, setReceiveDelivery] = useState("");
 
   const load = useCallback(async () => {
     const [p, v, proj] = await Promise.all([
@@ -180,18 +183,27 @@ function OrdersTab() {
     load();
   }
 
-  async function receiveIntoInventory(po: PurchaseOrder) {
+  async function receiveIntoInventory(po: PurchaseOrder, taxAmount: number, deliveryAmount: number) {
     if (!po.line_items || po.line_items.length === 0) return;
     setReceivingId(po.id);
     setReceiveMsg("");
 
     try {
+      // Calculate landed cost — distribute tax + delivery proportionally
+      const subtotal = po.line_items.reduce((s, li) => s + (li.quantity * li.unit_price), 0);
+      const extras = taxAmount + deliveryAmount;
+
       // Get all inventory items for matching
       const { data: invItems } = await axiom.from("inventory_items").select("*").eq("active", true);
       const allInv = invItems || [];
 
       let received = 0;
       for (const li of po.line_items) {
+        // Landed unit price: original + proportional share of tax/delivery
+        const lineTotal = li.quantity * li.unit_price;
+        const lineShare = subtotal > 0 ? (lineTotal / subtotal) * extras : 0;
+        const landedUnitPrice = Math.round(((lineTotal + lineShare) / li.quantity) * 100) / 100;
+
         // Match by item_number + description, or just description
         let match = allInv.find((inv: { item_number?: string; description: string }) =>
           inv.item_number && li.item_number && inv.item_number === li.item_number
@@ -208,17 +220,17 @@ function OrdersTab() {
             inventory_item_id: match.id,
             type: "in",
             quantity: li.quantity,
-            unit_cost: li.unit_price,
-            notes: `Received from ${po.po_number}`,
+            unit_cost: landedUnitPrice,
+            notes: `Received from ${po.po_number}${extras > 0 ? ` (landed cost incl. $${extras.toFixed(2)} tax/delivery)` : ""}`,
             date: new Date().toISOString().split("T")[0],
             created_by: userEmail,
           });
 
-          // Weighted average cost
+          // Weighted average cost using landed price
           const oldQty = match.quantity_on_hand || 0;
           const oldCost = match.unit_cost || 0;
           const newQty = oldQty + li.quantity;
-          const avgCost = newQty > 0 ? ((oldQty * oldCost) + (li.quantity * li.unit_price)) / newQty : li.unit_price;
+          const avgCost = newQty > 0 ? ((oldQty * oldCost) + (li.quantity * landedUnitPrice)) / newQty : landedUnitPrice;
 
           await axiom.from("inventory_items").update({
             quantity_on_hand: newQty,
@@ -228,13 +240,13 @@ function OrdersTab() {
 
           received++;
         } else {
-          // Create new inventory item + transaction
+          // Create new inventory item + transaction with landed cost
           const { data: newItem } = await axiom.from("inventory_items").insert({
             vendor_id: po.vendor_id || null,
             item_number: li.item_number || null,
             description: li.description,
             unit: li.unit,
-            unit_cost: li.unit_price,
+            unit_cost: landedUnitPrice,
             quantity_on_hand: li.quantity,
           }).select().single();
 
@@ -243,8 +255,8 @@ function OrdersTab() {
               inventory_item_id: newItem.id,
               type: "in",
               quantity: li.quantity,
-              unit_cost: li.unit_price,
-              notes: `Received from ${po.po_number}`,
+              unit_cost: landedUnitPrice,
+              notes: `Received from ${po.po_number}${extras > 0 ? ` (landed cost incl. $${extras.toFixed(2)} tax/delivery)` : ""}`,
               date: new Date().toISOString().split("T")[0],
               created_by: userEmail,
             });
@@ -257,11 +269,11 @@ function OrdersTab() {
         action: "updated",
         entity: "inventory",
         entity_id: po.id,
-        label: `Received PO ${po.po_number} into inventory (${received} items)`,
+        label: `Received PO ${po.po_number} into inventory (${received} items${extras > 0 ? `, +$${extras.toFixed(2)} landed` : ""})`,
         user_name: userEmail,
       });
 
-      setReceiveMsg(`Received ${received} of ${po.line_items.length} items into inventory.`);
+      setReceiveMsg(`Received ${received} of ${po.line_items.length} items into inventory.${extras > 0 ? ` Tax/delivery $${extras.toFixed(2)} distributed.` : ""}`);
     } catch (err) {
       console.error("receive error:", err);
       setReceiveMsg("Error receiving inventory.");
@@ -337,7 +349,7 @@ function OrdersTab() {
                   )}
                   {po.status === "approved" && po.line_items && po.line_items.length > 0 && (
                     <button
-                      onClick={() => receiveIntoInventory(po)}
+                      onClick={() => { setReceiveModal(po); setReceiveTax(""); setReceiveDelivery(""); }}
                       disabled={receivingId === po.id}
                       className="text-green-500 hover:text-green-400 disabled:opacity-50"
                       title="Receive into Inventory"
@@ -512,6 +524,68 @@ function OrdersTab() {
           }
           onClose={() => setEditPO(null)}
         />
+      )}
+
+      {/* Receive into Inventory modal — enter tax + delivery for landed cost */}
+      {receiveModal && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-50" onClick={() => setReceiveModal(null)} />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="bg-card border border-border w-full max-w-md p-6 shadow-lg" onClick={(e) => e.stopPropagation()}>
+              <h2 className="text-lg font-heading font-bold mb-1">Receive into Inventory</h2>
+              <p className="text-sm text-muted mb-4">{receiveModal.po_number} — {receiveModal.vendor_name}</p>
+
+              <div className="space-y-3 mb-4">
+                <div className="bg-background border border-border p-3 text-sm">
+                  <p className="text-muted text-xs uppercase tracking-wider mb-1">Line Items Subtotal</p>
+                  <p className="font-mono font-bold">{money(receiveModal.line_items.reduce((s, li) => s + li.quantity * li.unit_price, 0))}</p>
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-muted block mb-1">Tax Amount</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={receiveTax}
+                    onChange={(e) => setReceiveTax(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider text-muted block mb-1">Delivery / Shipping Fee</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={receiveDelivery}
+                    onChange={(e) => setReceiveDelivery(e.target.value)}
+                    placeholder="0.00"
+                    className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent font-mono"
+                  />
+                </div>
+                {(Number(receiveTax) > 0 || Number(receiveDelivery) > 0) && (
+                  <p className="text-xs text-muted">Tax + delivery will be distributed proportionally across all line items (landed cost).</p>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={async () => {
+                    const po = receiveModal;
+                    setReceiveModal(null);
+                    await receiveIntoInventory(po, Number(receiveTax) || 0, Number(receiveDelivery) || 0);
+                  }}
+                  disabled={receivingId === receiveModal.id}
+                  className="flex-1 bg-green-600 text-white px-4 py-2.5 text-sm font-semibold hover:bg-green-700 disabled:opacity-50"
+                >
+                  {receivingId === receiveModal.id ? "Receiving…" : "Receive"}
+                </button>
+                <button onClick={() => setReceiveModal(null)} className="flex-1 border border-border px-4 py-2.5 text-sm text-muted hover:text-foreground">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
