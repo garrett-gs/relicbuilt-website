@@ -7,7 +7,7 @@ import { Clock, X, CheckCircle2, LogIn, LogOut, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-type Step = "select_member" | "enter_pin" | "select_project" | "clocked_in" | "clocked_out";
+type Step = "select_member" | "enter_pin" | "select_project" | "confirm_clock_in" | "clocked_in" | "clocked_out";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -35,6 +35,7 @@ export default function TimeClockPage() {
   const [pinError, setPinError] = useState(false);
   const [activeEntry, setActiveEntry] = useState<TimeEntry | null>(null);
   const [completedEntry, setCompletedEntry] = useState<TimeEntry | null>(null);
+  const [selectedProject, setSelectedProject] = useState<CustomWork | null>(null);
   const [elapsed, setElapsed] = useState("");
   const [now, setNow] = useState(new Date());
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
@@ -174,6 +175,7 @@ export default function TimeClockPage() {
     setPinError(false);
     setActiveEntry(null);
     setCompletedEntry(null);
+    setSelectedProject(null);
     setSelectedTasks([]);
   }
 
@@ -283,7 +285,7 @@ export default function TimeClockPage() {
                 return (
                   <button
                     key={p.id}
-                    onClick={() => isClockedIn ? setStep("clocked_in") : handleClockIn(p)}
+                    onClick={() => { if (isClockedIn) { setStep("clocked_in"); } else { setSelectedProject(p); setStep("confirm_clock_in"); } }}
                     className={cn(
                       "w-full border p-4 text-left transition-colors flex items-center justify-between",
                       isClockedIn
@@ -308,6 +310,39 @@ export default function TimeClockPage() {
           )}
           <button onClick={reset} className="mt-4 text-xs text-muted hover:text-foreground flex items-center gap-1 mx-auto">
             <X size={12} /> Cancel
+          </button>
+        </div>
+      )}
+
+      {/* ── Step: Confirm clock in ── */}
+      {step === "confirm_clock_in" && selectedProject && (
+        <div className="w-full max-w-sm text-center">
+          <div className="bg-card border border-border p-8 mb-6">
+            <LogIn size={32} className="text-accent mx-auto mb-3" />
+            <h3 className="text-xs uppercase tracking-widest text-muted mb-2">
+              Ready to Clock In?
+            </h3>
+            <p className="text-lg font-medium text-foreground">
+              {selectedProject.project_name}
+            </p>
+            {selectedProject.client_name && (
+              <p className="text-sm text-muted mt-1">{selectedProject.client_name}</p>
+            )}
+            <p className="text-sm text-muted mt-3">
+              {selectedMember?.name}
+            </p>
+          </div>
+          <button
+            onClick={() => handleClockIn(selectedProject)}
+            className="w-full py-4 bg-green-600 hover:bg-green-500 text-white font-bold text-lg tracking-wide transition-colors flex items-center justify-center gap-2 mb-3"
+          >
+            <LogIn size={20} /> Clock In
+          </button>
+          <button
+            onClick={() => setStep("select_project")}
+            className="text-xs text-muted hover:text-foreground flex items-center gap-1 mx-auto"
+          >
+            <X size={12} /> Back to Projects
           </button>
         </div>
       )}
