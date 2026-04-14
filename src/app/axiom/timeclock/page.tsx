@@ -104,6 +104,19 @@ export default function TimeClockPage() {
   }
 
   async function handleClockIn(project: CustomWork) {
+    // Close any stale open entries for this member before clocking in
+    const { data: stale } = await axiom.from("time_entries")
+      .select("id, clock_in, hourly_rate, custom_work_id")
+      .eq("member_name", selectedMember!.name)
+      .is("clock_out", null);
+    if (stale && stale.length > 0) {
+      for (const s of stale) {
+        const clockOut = new Date().toISOString();
+        const hours = hoursFromEntry({ ...s, clock_out: clockOut } as TimeEntry);
+        await axiom.from("time_entries").update({ clock_out: clockOut, hours }).eq("id", s.id);
+      }
+    }
+
     const { data } = await axiom.from("time_entries").insert({
       member_name: selectedMember!.name,
       custom_work_id: project.id,
