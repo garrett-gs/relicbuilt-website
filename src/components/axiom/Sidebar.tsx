@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
+import { axiom } from "@/lib/axiom-supabase";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -26,6 +27,7 @@ import {
   Menu,
   X,
   ExternalLink,
+  HardHat,
 } from "lucide-react";
 
 const navSections = [
@@ -34,6 +36,7 @@ const navSections = [
     items: [
       { href: "/axiom/dashboard", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/axiom/tasks", icon: CheckSquare, label: "Tasks" },
+      { href: "/axiom/crew", icon: HardHat, label: "Crew", adminOnly: true },
     ],
   },
   {
@@ -76,6 +79,26 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { signOut, userEmail } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isAdminOrManager, setIsAdminOrManager] = useState(false);
+
+  useEffect(() => {
+    if (!userEmail) return;
+    axiom
+      .from("settings")
+      .select("team_members")
+      .limit(1)
+      .single()
+      .then(({ data }) => {
+        if (!data) return;
+        const me = (data.team_members || []).find(
+          (m: { email?: string }) =>
+            m.email?.toLowerCase() === userEmail.toLowerCase()
+        );
+        if (me && (me.role === "admin" || me.role === "manager")) {
+          setIsAdminOrManager(true);
+        }
+      });
+  }, [userEmail]);
 
   const nav = (
     <>
@@ -102,7 +125,7 @@ export default function Sidebar() {
             <p className="px-3 mb-1.5 text-[10px] uppercase tracking-widest text-muted/60 font-medium">
               {section.label}
             </p>
-            {section.items.map((item) => {
+            {section.items.filter((item) => !("adminOnly" in item && item.adminOnly) || isAdminOrManager).map((item) => {
               const active = pathname === item.href;
               const isSub = "sub" in item && item.sub;
               const isExternal = "external" in item && item.external;
