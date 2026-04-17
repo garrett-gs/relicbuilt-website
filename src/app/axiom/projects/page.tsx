@@ -14,6 +14,7 @@ import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, C
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { useRouter } from "next/navigation";
 import { generateProposalHtml } from "@/lib/proposal-html";
+import { generateProjectRecapHtml } from "@/lib/project-recap-html";
 import { notifyPortal } from "@/lib/notify-portal";
 import { Settings } from "@/types/axiom";
 
@@ -173,6 +174,23 @@ export default function ProjectsPage() {
     }
   }
 
+  async function openRecap(project: CustomWork) {
+    // Load receipts, invoices, and biz settings in parallel
+    const [receiptsRes, invoicesRes, settingsRes] = await Promise.all([
+      axiom.from("receipts").select("*").eq("project_id", project.id).order("receipt_date", { ascending: false }),
+      axiom.from("invoices").select("*").eq("custom_work_id", project.id).order("created_at"),
+      axiom.from("settings").select("biz_name,biz_phone,biz_address,biz_city,biz_state,biz_zip").limit(1).single(),
+    ]);
+    const html = generateProjectRecapHtml({
+      project,
+      receipts: receiptsRes.data || [],
+      invoices: (invoicesRes.data || []) as Invoice[],
+      biz: settingsRes.data || {},
+    });
+    const w = window.open("", "_blank");
+    if (w) { w.document.write(html); w.document.close(); }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -249,6 +267,7 @@ export default function ProjectsPage() {
             onTogglePortal={() => togglePortal(selected)}
             onGenerateInvoice={() => generateInvoice(selected)}
             onGenerateProposal={() => setShowProposal(true)}
+            onGenerateRecap={() => openRecap(selected)}
           />
         </Modal>
       )}
@@ -501,13 +520,14 @@ function CreateProjectForm({ onSubmit, onCancel }: { onSubmit: (form: Record<str
 
 // ── Detail view ──────────────────────────────────────────────
 
-function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerateInvoice, onGenerateProposal }: {
+function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerateInvoice, onGenerateProposal, onGenerateRecap }: {
   project: CustomWork;
   onUpdate: (u: Partial<CustomWork>) => void;
   onDelete: () => void;
   onTogglePortal: () => void;
   onGenerateInvoice: () => void;
   onGenerateProposal: () => void;
+  onGenerateRecap: () => void;
 }) {
   const [customerId, setCustomerId] = useState(project.customer_id || "");
   // Seed with client_name so the badge shows immediately; async lookup will refine it
@@ -1555,6 +1575,9 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         </Button>
         <Button variant="outline" onClick={onGenerateInvoice}>
           <FileText size={14} className="mr-1" /> Generate Invoice
+        </Button>
+        <Button variant="outline" onClick={onGenerateRecap}>
+          <Printer size={14} className="mr-1" /> Project Recap
         </Button>
         {confirmDelete ? (
           <div className="flex items-center gap-2">
