@@ -215,10 +215,26 @@ export function generateProjectRecapHtml({ project, receipts, invoices, biz }: R
   <!-- Cost Breakdown -->
   <div class="section" style="padding:12px 28px;">
     <table style="width:100%;font-size:13px;">
-      <tr><td style="padding:5px 0;color:#666;">Materials Cost:</td><td style="padding:5px 0;text-align:right;font-family:monospace;font-weight:600;">${money(materialTotal)}</td></tr>
-      <tr><td style="padding:5px 0;color:#666;">Labor Cost (${laborHours.toFixed(1)} hrs):</td><td style="padding:5px 0;text-align:right;font-family:monospace;font-weight:600;">${money(laborTotal)}</td></tr>
-      ${receiptTotal > 0 ? `<tr><td style="padding:5px 0;color:#666;">Receipt Purchases:</td><td style="padding:5px 0;text-align:right;font-family:monospace;font-weight:600;">${money(receiptTotal)}</td></tr>` : ""}
-      <tr style="border-top:1px solid #e5e5e5;"><td style="padding:5px 0;font-weight:bold;">Total Cost:</td><td style="padding:5px 0;text-align:right;font-family:monospace;font-weight:bold;">${money(totalCost)}</td></tr>
+      <tr>
+        <td style="padding:5px 0;color:#666;">Materials Cost:</td>
+        <td style="padding:5px 0;text-align:right;font-family:monospace;font-weight:600;">${money(materialTotal)}</td>
+        ${units > 1 ? `<td style="padding:5px 0;text-align:right;font-family:monospace;color:#888;font-size:12px;padding-left:16px;">${money(materialTotal / units)} / unit</td>` : ""}
+      </tr>
+      <tr>
+        <td style="padding:5px 0;color:#666;">Labor Cost (${laborHours.toFixed(1)} hrs):</td>
+        <td style="padding:5px 0;text-align:right;font-family:monospace;font-weight:600;">${money(laborTotal)}</td>
+        ${units > 1 ? `<td style="padding:5px 0;text-align:right;font-family:monospace;color:#888;font-size:12px;padding-left:16px;">${money(laborTotal / units)} / unit</td>` : ""}
+      </tr>
+      ${receiptTotal > 0 ? `<tr>
+        <td style="padding:5px 0;color:#666;">Receipt Purchases:</td>
+        <td style="padding:5px 0;text-align:right;font-family:monospace;font-weight:600;">${money(receiptTotal)}</td>
+        ${units > 1 ? `<td style="padding:5px 0;text-align:right;font-family:monospace;color:#888;font-size:12px;padding-left:16px;">${money(receiptTotal / units)} / unit</td>` : ""}
+      </tr>` : ""}
+      <tr style="border-top:1px solid #e5e5e5;">
+        <td style="padding:5px 0;font-weight:bold;">Total Cost:</td>
+        <td style="padding:5px 0;text-align:right;font-family:monospace;font-weight:bold;">${money(totalCost)}</td>
+        ${units > 1 ? `<td style="padding:5px 0;text-align:right;font-family:monospace;font-weight:bold;font-size:12px;padding-left:16px;">${money(costPerUnit)} / unit</td>` : ""}
+      </tr>
     </table>
   </div>
 
