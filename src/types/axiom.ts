@@ -235,6 +235,7 @@ export interface Estimate {
   line_items: EstimateLineItem[];
   labor_items: EstimateLaborItem[];
   markup_percent: number;
+  unit_count?: number;
   notes?: string;
   created_at: string;
   updated_at: string;

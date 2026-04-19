@@ -300,6 +300,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [lineItems, setLineItems] = useState<EstimateLineItem[]>(estimate.line_items || []);
   const [laborItems, setLaborItems] = useState<EstimateLaborItem[]>(estimate.labor_items || []);
   const [markupPct, setMarkupPct] = useState(estimate.markup_percent || 0);
+  const [unitCount, setUnitCount] = useState(estimate.unit_count || 1);
   const [notes, setNotes] = useState(estimate.notes || "");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showLoadQuote, setShowLoadQuote] = useState(false);
@@ -428,6 +429,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       line_items: lineItems,
       labor_items: laborItems,
       markup_percent: markupPct,
+      unit_count: unitCount,
       notes,
     });
     setDirty(false);
@@ -763,12 +765,27 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
           </div>
         </div>
         <div className="flex items-center justify-between border-t border-border pt-3">
-          <div className="text-sm text-muted">
+          <div className="flex items-center gap-4 text-sm text-muted">
             {markupPct > 0 && <span>+ {money(markupAmount)} markup ({pct(markupPct)})</span>}
+            <div className="flex items-center gap-2">
+              <span className="text-xs uppercase tracking-wider text-muted"># Units</span>
+              <input
+                type="number"
+                min={1}
+                value={unitCount}
+                onChange={(e) => { setUnitCount(Math.max(1, parseInt(e.target.value) || 1)); markDirty(); }}
+                className="w-14 bg-background border border-border px-2 py-1 text-sm text-foreground focus:outline-none focus:border-accent text-center font-mono"
+              />
+            </div>
           </div>
           <div className="text-right">
             <span className="text-xs uppercase tracking-wider text-muted mr-3">Grand Total</span>
             <span className="text-2xl font-mono font-bold text-accent">{money(total)}</span>
+            {unitCount > 1 && (
+              <span className="block text-sm font-mono text-muted mt-1">
+                {money(total / unitCount)} / unit
+              </span>
+            )}
           </div>
         </div>
       </div>
