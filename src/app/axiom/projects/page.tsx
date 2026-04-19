@@ -545,6 +545,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [linkedReceipts, setLinkedReceipts] = useState<{ id: string; vendor?: string; receipt_date?: string; total?: number; line_items: { description: string; qty: number; unit_price: number; total: number }[] }[]>([]);
   const [receiptsExpanded, setReceiptsExpanded] = useState<Record<string, boolean>>({});
   const [quoted, setQuoted] = useState(project.quoted_amount || 0);
+  const [unitCount, setUnitCount] = useState(project.unit_count || 1);
   const [notes, setNotes] = useState(project.internal_notes || "");
   const [startDate, setStartDate] = useState(project.start_date || "");
   const [dueDate, setDueDate] = useState(project.due_date || "");
@@ -829,6 +830,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       budget_range: budgetRange,
       project_description: description,
       quoted_amount: quoted,
+      unit_count: unitCount,
       actual_cost: actualCost,
       materials,
       labor_log: labor,
@@ -892,7 +894,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       </div>
 
       {/* Dates + status */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Field label="Start Date" type="date" value={startDate} onChange={(v) => { setStartDate(v); markDirty(); }} />
         <Field label="Due Date" type="date" value={dueDate} onChange={(v) => { setDueDate(v); markDirty(); }} />
         <div>
@@ -907,6 +909,16 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">$</span>
             <CurrencyInput value={quoted} onChange={(v) => { setQuoted(v); markDirty(); }} className="w-full bg-card border border-border pl-7 pr-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent text-right" />
           </div>
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wider text-muted block mb-1.5"># of Units</label>
+          <input
+            type="number"
+            min={1}
+            value={unitCount}
+            onChange={(e) => { setUnitCount(Math.max(1, parseInt(e.target.value) || 1)); markDirty(); }}
+            className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent text-center"
+          />
         </div>
       </div>
 
@@ -981,6 +993,12 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
               {quoted > 0 ? `${margin.toFixed(1)}%` : "—"}
             </span>
           </div>
+          {unitCount > 1 && (
+            <div>
+              <span className="text-muted block text-xs">Cost / Unit ({unitCount} units)</span>
+              <span className="font-mono">{money(actualCost / unitCount)}</span>
+            </div>
+          )}
         </div>
       </div>
 

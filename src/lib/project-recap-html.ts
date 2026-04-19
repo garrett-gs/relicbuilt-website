@@ -51,6 +51,10 @@ export function generateProjectRecapHtml({ project, receipts, invoices, biz }: R
   const quoted = project.quoted_amount || 0;
   const profit = quoted - totalCost;
   const margin = quoted > 0 ? (profit / quoted) * 100 : 0;
+  const units = project.unit_count || 1;
+  const costPerUnit = units > 1 ? totalCost / units : 0;
+  const quotedPerUnit = units > 1 && quoted > 0 ? quoted / units : 0;
+  const profitPerUnit = units > 1 ? profit / units : 0;
 
   // Invoice totals
   const invoiceTotal = invoices.reduce((s, inv) => {
@@ -184,6 +188,29 @@ export function generateProjectRecapHtml({ project, receipts, invoices, biz }: R
       </div>
     </div>
   </div>
+
+  ${units > 1 ? `
+  <!-- Per-Unit Breakdown -->
+  <div style="background:#f7f5f0;border-bottom:1px solid #f0f0f0;">
+    <div class="pnl-box">
+      <div class="pnl-cell">
+        <p class="pnl-label"># of Units</p>
+        <p class="pnl-val">${units}</p>
+      </div>
+      <div class="pnl-cell">
+        <p class="pnl-label">Quoted / Unit</p>
+        <p class="pnl-val">${quotedPerUnit > 0 ? money(quotedPerUnit) : "—"}</p>
+      </div>
+      <div class="pnl-cell">
+        <p class="pnl-label">Cost / Unit</p>
+        <p class="pnl-val">${money(costPerUnit)}</p>
+      </div>
+      <div class="pnl-cell">
+        <p class="pnl-label">Profit / Unit</p>
+        <p class="pnl-val ${profitPerUnit >= 0 ? "green" : "red"}">${money(profitPerUnit)}</p>
+      </div>
+    </div>
+  </div>` : ""}
 
   <!-- Cost Breakdown -->
   <div class="section" style="padding:12px 28px;">

@@ -72,6 +72,7 @@ export interface CustomWork {
   status: "new" | "in_review" | "quoted" | "in_progress" | "complete";
   internal_notes?: string;
   quoted_amount: number;
+  unit_count?: number;
   actual_cost: number;
   materials: Material[];
   labor_log: LaborEntry[];
