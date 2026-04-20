@@ -269,9 +269,12 @@ function CreateModal({ onSubmit, onClose }: {
 
   function handleCustomerSelect(c: SearchResult) {
     if (!c.id) {
-      setForm((f) => ({ ...f, customer_id: "", client_name: "" }));
+      setForm((f) => ({ ...f, customer_id: "" }));
+    } else if (c.type === "company") {
+      // Company — don't set customer_id (FK mismatch), just track selection
+      setForm((f) => ({ ...f, customer_id: "" }));
     } else {
-      setForm((f) => ({ ...f, customer_id: c.id, client_name: c.name }));
+      setForm((f) => ({ ...f, customer_id: c.id }));
     }
   }
 
@@ -417,19 +420,77 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   }
   function removeLabor(i: number) { setLaborItems(laborItems.filter((_, idx) => idx !== i)); markDirty(); }
 
+  // Track whether the selected entity is a customer or company
+  const [selectedType, setSelectedType] = useState<"customer" | "company" | "">(estimate.customer_id ? "customer" : "");
+  const [companyContacts, setCompanyContacts] = useState<{ name: string; email?: string; phone?: string }[]>([]);
+  const [contactSuggestions, setContactSuggestions] = useState<{ name: string; email?: string; phone?: string }[]>([]);
+  const [showContactSuggestions, setShowContactSuggestions] = useState(false);
+  const contactRef = useRef<HTMLDivElement>(null);
+
+  // Close contact suggestions on outside click
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (contactRef.current && !contactRef.current.contains(e.target as Node)) setShowContactSuggestions(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
   function handleCustomerSelect(c: SearchResult) {
     if (!c.id) {
       setCustomerId("");
       setCustomerName("");
-      setClientEmail("");
-      setClientPhone("");
+      setSelectedType("");
+      setCompanyContacts([]);
+    } else if (c.type === "company") {
+      // Company: don't store as customer_id (FK mismatch), just track the name
+      setCustomerId("");
+      setCustomerName(c.name);
+      setSelectedType("company");
+      // Load contacts at this company for suggestions
+      axiom.from("customers").select("name,email,phone").eq("company_id", c.id).order("name").then(({ data }) => {
+        if (data) setCompanyContacts(data);
+      });
     } else {
+      // Individual customer
       setCustomerId(c.id);
       setCustomerName(c.name);
-      setClientName(c.name);
-      setClientEmail(c.email || "");
-      setClientPhone(c.phone || "");
+      setSelectedType("customer");
+      setCompanyContacts([]);
     }
+    // Don't auto-fill the Contact field — let the user type it
+    markDirty();
+  }
+
+  function handleContactInput(v: string) {
+    setClientName(v);
+    markDirty();
+    // Show suggestions from company contacts as user types
+    if (v.trim() && companyContacts.length > 0) {
+      const q = v.toLowerCase();
+      const matches = companyContacts.filter((c) => c.name.toLowerCase().includes(q));
+      setContactSuggestions(matches);
+      setShowContactSuggestions(matches.length > 0);
+    } else if (v.trim().length >= 2 && !companyContacts.length) {
+      // No company selected — search all customers
+      axiom.from("customers").select("name,email,phone").ilike("name", `%${v.trim()}%`).limit(5).then(({ data }) => {
+        if (data && data.length > 0) {
+          setContactSuggestions(data);
+          setShowContactSuggestions(true);
+        } else {
+          setShowContactSuggestions(false);
+        }
+      });
+    } else {
+      setShowContactSuggestions(false);
+    }
+  }
+
+  function pickContact(c: { name: string; email?: string; phone?: string }) {
+    setClientName(c.name);
+    setClientEmail(c.email || "");
+    setClientPhone(c.phone || "");
+    setShowContactSuggestions(false);
     markDirty();
   }
 
@@ -578,7 +639,26 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
           <Field label="Project / Description" value={projectName} onChange={(v) => { setProjectName(v); markDirty(); }} />
           <div className="grid grid-cols-2 gap-3">
             <CustomerSearch onSelect={handleCustomerSelect} initialName={customerName} />
-            <Field label="Contact" value={clientName} onChange={(v) => { setClientName(v); markDirty(); }} />
+            <div ref={contactRef} className="relative">
+              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Contact</label>
+              <input
+                value={clientName}
+                onChange={(e) => handleContactInput(e.target.value)}
+                onFocus={() => { if (companyContacts.length > 0 && !clientName) { setContactSuggestions(companyContacts); setShowContactSuggestions(true); } }}
+                placeholder={companyContacts.length > 0 ? "Type to search contacts…" : "Contact name"}
+                className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+              />
+              {showContactSuggestions && contactSuggestions.length > 0 && (
+                <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border shadow-lg mt-0.5 max-h-40 overflow-y-auto">
+                  {contactSuggestions.map((c, i) => (
+                    <button key={i} onMouseDown={() => pickContact(c)} className="w-full text-left px-4 py-2.5 text-sm hover:bg-background flex items-center justify-between">
+                      <span>{c.name}</span>
+                      <span className="text-xs text-muted">{c.email || c.phone || ""}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <p className="text-xs text-muted font-mono">{estimate.estimate_number}</p>
