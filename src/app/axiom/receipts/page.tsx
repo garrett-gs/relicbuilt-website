@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
-import { CustomWork, PurchaseOrder } from "@/types/axiom";
-import { Camera, ExternalLink, Trash2, ShoppingCart, Search, X, RefreshCw, Package, ArrowLeft } from "lucide-react";
+import { PurchaseOrder, InventoryItem } from "@/types/axiom";
+import { Camera, ExternalLink, Trash2, ShoppingCart, Search, X, RefreshCw, Package, ArrowLeft, Warehouse } from "lucide-react";
 import Link from "next/link";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { logActivity } from "@/lib/activity";
@@ -36,52 +36,129 @@ const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency",
 export default function ReceiptsPage() {
   const { userEmail } = useAuth();
   const [receipts, setReceipts] = useState<ReceiptRecord[]>([]);
-  const [projects, setProjects] = useState<CustomWork[]>([]);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [search, setSearch] = useState("");
-  const [filterProject, setFilterProject] = useState("");
-  const [addingTo, setAddingTo] = useState<Record<string, "materials" | "labor" | "done">>({});
+  const [filterPO, setFilterPO] = useState("");
   const [priceUpdating, setPriceUpdating] = useState<Record<string, string>>({});
+  const [receivingId, setReceivingId] = useState<string | null>(null);
+  const [receiveMsg, setReceiveMsg] = useState<Record<string, string>>({});
   const [poItem, setPoItem] = useState<AddToPOItem | null>(null);
 
   const load = useCallback(async () => {
-    const [{ data: rec }, { data: pw }, { data: poData }] = await Promise.all([
+    const [{ data: rec }, { data: poData }] = await Promise.all([
       axiom.from("receipts").select("*").order("created_at", { ascending: false }),
-      axiom.from("custom_work").select("id,project_name").order("project_name"),
-      axiom.from("purchase_orders").select("id,po_number,vendor_name,status").order("created_at", { ascending: false }),
+      axiom.from("purchase_orders").select("*").order("created_at", { ascending: false }),
     ]);
     if (rec) setReceipts(rec as ReceiptRecord[]);
-    if (pw) setProjects(pw as CustomWork[]);
     if (poData) setPos(poData as PurchaseOrder[]);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  async function addToProject(r: ReceiptRecord, type: "materials" | "labor") {
-    if (!r.project_id) return;
-    setAddingTo((prev) => ({ ...prev, [r.id + type]: type }));
-    const { data: project } = await axiom.from("custom_work").select("materials,labor_log").eq("id", r.project_id).single();
-    if (!project) { setAddingTo((prev) => ({ ...prev, [r.id + type]: "done" })); return; }
-    const date = r.receipt_date || new Date().toISOString().split("T")[0];
-    if (type === "materials") {
-      const updated = [...(project.materials || []), { description: r.vendor || "Receipt", vendor: r.vendor || "", cost: r.total || 0, receipt_id: r.id }];
-      await axiom.from("custom_work").update({ materials: updated }).eq("id", r.project_id);
-    } else {
-      const updated = [...(project.labor_log || []), { date, description: r.vendor || "Receipt", hours: 0, rate: 0, cost: r.total || 0 }];
-      await axiom.from("custom_work").update({ labor_log: updated }).eq("id", r.project_id);
-    }
-    setAddingTo((prev) => ({ ...prev, [r.id + type]: "done" }));
-  }
-
-  async function linkProject(r: ReceiptRecord, projectId: string) {
-    const proj = projects.find((p) => p.id === projectId);
-    await axiom.from("receipts").update({ project_id: projectId || null, project_name: proj?.project_name || null }).eq("id", r.id);
-    setReceipts((prev) => prev.map((x) => x.id === r.id ? { ...x, project_id: projectId, project_name: proj?.project_name } : x));
-  }
-
   async function linkPO(r: ReceiptRecord, poId: string) {
     await axiom.from("receipts").update({ purchase_order_id: poId || null }).eq("id", r.id);
     setReceipts((prev) => prev.map((x) => x.id === r.id ? { ...x, purchase_order_id: poId } : x));
+  }
+
+  async function receiveIntoInventory(r: ReceiptRecord) {
+    const po = pos.find((p) => p.id === r.purchase_order_id);
+    if (!po || !po.line_items || po.line_items.length === 0) return;
+    setReceivingId(r.id);
+
+    try {
+      // Calculate tax/delivery from receipt: total minus line items subtotal
+      const receiptSubtotal = (r.line_items || []).reduce((s, li) => s + (Number(li.total) || 0), 0);
+      const extras = Math.max(0, (r.total || 0) - receiptSubtotal);
+
+      // PO subtotal for proportional distribution
+      const poSubtotal = po.line_items.reduce((s, li) => s + (li.quantity * li.unit_price), 0);
+
+      // Get all inventory items for matching
+      const { data: invItems } = await axiom.from("inventory_items").select("*").eq("active", true);
+      const allInv = (invItems || []) as InventoryItem[];
+
+      let received = 0;
+      for (const li of po.line_items) {
+        // Landed unit price: original + proportional share of tax/delivery from receipt
+        const lineTotal = li.quantity * li.unit_price;
+        const lineShare = poSubtotal > 0 ? (lineTotal / poSubtotal) * extras : 0;
+        const landedUnitPrice = Math.round(((lineTotal + lineShare) / li.quantity) * 100) / 100;
+
+        // Match by item_number first, then description
+        let match = allInv.find((inv) =>
+          inv.item_number && li.item_number && inv.item_number === li.item_number
+        );
+        if (!match) {
+          match = allInv.find((inv) =>
+            inv.description.toLowerCase() === li.description.toLowerCase()
+          );
+        }
+
+        if (match) {
+          // Create "in" transaction
+          await axiom.from("inventory_transactions").insert({
+            inventory_item_id: match.id,
+            type: "in",
+            quantity: li.quantity,
+            unit_cost: landedUnitPrice,
+            notes: `Received from ${po.po_number}${extras > 0 ? ` (landed cost incl. $${extras.toFixed(2)} tax/delivery from receipt)` : ""}`,
+            date: new Date().toISOString().split("T")[0],
+            created_by: userEmail,
+          });
+
+          // Weighted average cost
+          const oldQty = match.quantity_on_hand || 0;
+          const oldCost = match.unit_cost || 0;
+          const newQty = oldQty + li.quantity;
+          const avgCost = newQty > 0 ? ((oldQty * oldCost) + (li.quantity * landedUnitPrice)) / newQty : landedUnitPrice;
+
+          await axiom.from("inventory_items").update({
+            quantity_on_hand: newQty,
+            unit_cost: Math.round(avgCost * 100) / 100,
+            updated_at: new Date().toISOString(),
+          }).eq("id", match.id);
+
+          received++;
+        } else {
+          // Create new inventory item with landed cost
+          const { data: newItem } = await axiom.from("inventory_items").insert({
+            vendor_id: po.vendor_id || null,
+            item_number: li.item_number || null,
+            description: li.description,
+            unit: li.unit,
+            unit_cost: landedUnitPrice,
+            quantity_on_hand: li.quantity,
+          }).select().single();
+
+          if (newItem) {
+            await axiom.from("inventory_transactions").insert({
+              inventory_item_id: newItem.id,
+              type: "in",
+              quantity: li.quantity,
+              unit_cost: landedUnitPrice,
+              notes: `Received from ${po.po_number}${extras > 0 ? ` (landed cost incl. $${extras.toFixed(2)} tax/delivery from receipt)` : ""}`,
+              date: new Date().toISOString().split("T")[0],
+              created_by: userEmail,
+            });
+            received++;
+          }
+        }
+      }
+
+      await logActivity({
+        action: "updated",
+        entity: "inventory",
+        entity_id: po.id,
+        label: `Received PO ${po.po_number} into inventory via receipt (${received} items${extras > 0 ? `, +$${extras.toFixed(2)} landed` : ""})`,
+        user_name: userEmail,
+      });
+
+      setReceiveMsg((prev) => ({ ...prev, [r.id]: `Received ${received} of ${po.line_items.length} items.${extras > 0 ? ` Tax/delivery $${extras.toFixed(2)} distributed.` : ""}` }));
+    } catch (err) {
+      console.error("receive error:", err);
+      setReceiveMsg((prev) => ({ ...prev, [r.id]: "Error receiving inventory." }));
+    }
+    setReceivingId(null);
   }
 
   async function updateInventoryPrices(r: ReceiptRecord) {
@@ -91,10 +168,9 @@ export default function ReceiptsPage() {
     try {
       // Calculate landed cost — distribute tax proportionally across line items
       const subtotal = r.line_items.reduce((s, li) => s + (Number(li.total) || 0), 0);
-      const tax = (r.total || 0) - subtotal; // difference between receipt total and line subtotal = tax/fees
+      const tax = (r.total || 0) - subtotal;
       const extras = tax > 0 ? tax : 0;
 
-      // Get all active inventory items for matching
       const { data: invItems } = await axiom.from("inventory_items").select("*").eq("active", true);
       const allInv = invItems || [];
       let updated = 0;
@@ -102,19 +178,16 @@ export default function ReceiptsPage() {
       for (const li of r.line_items) {
         if (!li.unit_price || li.unit_price <= 0) continue;
 
-        // Landed unit price: original + proportional share of tax/fees
         const lineTotal = Number(li.total) || (li.qty * li.unit_price);
         const lineShare = subtotal > 0 ? (lineTotal / subtotal) * extras : 0;
         const landedUnitPrice = li.qty > 0 ? Math.round(((lineTotal + lineShare) / li.qty) * 100) / 100 : li.unit_price;
 
-        // Match by description (case-insensitive)
         const match = allInv.find((inv: { description: string; item_number?: string }) =>
           inv.description.toLowerCase() === li.description.toLowerCase() ||
           (inv.item_number && li.description.toLowerCase().includes(inv.item_number.toLowerCase()))
         );
 
         if (match) {
-          // Weighted average cost
           const oldQty = match.quantity_on_hand || 0;
           const oldCost = match.unit_cost || 0;
           const newQty = oldQty + li.qty;
@@ -142,12 +215,15 @@ export default function ReceiptsPage() {
     }
   }
 
+  // Filter: by PO or search
+  const openPOs = pos.filter((p) => p.status === "pending" || p.status === "approved");
+
   const filtered = receipts.filter((r) => {
-    if (filterProject === "__none__" && r.project_id) return false;
-    if (filterProject && filterProject !== "__none__" && r.project_id !== filterProject) return false;
+    if (filterPO === "__none__" && r.purchase_order_id) return false;
+    if (filterPO && filterPO !== "__none__" && r.purchase_order_id !== filterPO) return false;
     if (search) {
       const q = search.toLowerCase();
-      return (r.vendor || "").toLowerCase().includes(q) || (r.project_name || "").toLowerCase().includes(q) || (r.submitted_by || "").toLowerCase().includes(q);
+      return (r.vendor || "").toLowerCase().includes(q) || (r.submitted_by || "").toLowerCase().includes(q);
     }
     return true;
   });
@@ -184,7 +260,7 @@ export default function ReceiptsPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search vendor, project, person…"
+            placeholder="Search vendor, person…"
             className="w-full bg-card border border-border pl-8 pr-8 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
           />
           {search && (
@@ -194,13 +270,13 @@ export default function ReceiptsPage() {
           )}
         </div>
         <select
-          value={filterProject}
-          onChange={(e) => setFilterProject(e.target.value)}
+          value={filterPO}
+          onChange={(e) => setFilterPO(e.target.value)}
           className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent min-w-40"
         >
-          <option value="">All Projects</option>
-          <option value="__none__">No Project</option>
-          {projects.map((p) => <option key={p.id} value={p.id}>{p.project_name}</option>)}
+          <option value="">All Receipts</option>
+          <option value="__none__">No P.O. Linked</option>
+          {pos.map((p) => <option key={p.id} value={p.id}>{p.po_number} — {p.vendor_name}</option>)}
         </select>
       </div>
 
@@ -220,6 +296,9 @@ export default function ReceiptsPage() {
           {filtered.map((r) => {
             const linkedPO = pos.find((p) => p.id === r.purchase_order_id);
             const priceStatus = priceUpdating[r.id];
+            const rMsg = receiveMsg[r.id];
+            const receiptSubtotal = (r.line_items || []).reduce((s, li) => s + (Number(li.total) || 0), 0);
+            const taxDelivery = Math.max(0, (r.total || 0) - receiptSubtotal);
 
             return (
               <div key={r.id} className="bg-card border border-border flex flex-col">
@@ -251,11 +330,17 @@ export default function ReceiptsPage() {
                     {r.submitted_by && <span className="text-muted/60"> · {r.submitted_by}</span>}
                   </p>
 
+                  {/* Tax/delivery badge */}
+                  {taxDelivery > 0 && (
+                    <p className="text-[10px] text-muted">Tax/delivery: {money(taxDelivery)}</p>
+                  )}
+
                   {/* Linked PO badge */}
                   {linkedPO && (
                     <div className="flex items-center gap-1.5 text-[10px] text-blue-400 bg-blue-400/10 px-2 py-1">
                       <Package size={10} />
                       <span className="font-mono">{linkedPO.po_number}</span>
+                      <span className="text-blue-400/60">· {linkedPO.status}</span>
                     </div>
                   )}
 
@@ -279,47 +364,42 @@ export default function ReceiptsPage() {
 
                   {r.notes && <p className="text-xs text-muted/60 italic">{r.notes}</p>}
 
-                  {/* Project + PO dropdowns */}
+                  {/* PO dropdown + actions */}
                   <div className="mt-auto pt-2 border-t border-border space-y-2">
-                    <select
-                      value={r.project_id || ""}
-                      onChange={(e) => linkProject(r, e.target.value)}
-                      className="w-full bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent"
-                    >
-                      <option value="">— No project —</option>
-                      {projects.map((p) => <option key={p.id} value={p.id}>{p.project_name}</option>)}
-                    </select>
-
                     <select
                       value={r.purchase_order_id || ""}
                       onChange={(e) => linkPO(r, e.target.value)}
                       className="w-full bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent"
                     >
                       <option value="">— No P.O. —</option>
-                      {pos.map((p) => <option key={p.id} value={p.id}>{p.po_number} — {p.vendor_name}</option>)}
+                      {openPOs.map((p) => <option key={p.id} value={p.id}>{p.po_number} — {p.vendor_name}</option>)}
+                      {/* Also show the currently linked PO if it's not in open list */}
+                      {linkedPO && !openPOs.find((p) => p.id === linkedPO.id) && (
+                        <option value={linkedPO.id}>{linkedPO.po_number} — {linkedPO.vendor_name}</option>
+                      )}
                     </select>
 
-                    {/* Add to project buttons */}
-                    {r.project_id && (
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => addToProject(r, "materials")}
-                          disabled={addingTo[r.id + "materials"] !== undefined}
-                          className="flex-1 text-[11px] py-1 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50"
-                        >
-                          {addingTo[r.id + "materials"] === "done" ? "✓ Materials" : "+ Materials"}
-                        </button>
-                        <button
-                          onClick={() => addToProject(r, "labor")}
-                          disabled={addingTo[r.id + "labor"] !== undefined}
-                          className="flex-1 text-[11px] py-1 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50"
-                        >
-                          {addingTo[r.id + "labor"] === "done" ? "✓ Labor" : "+ Labor"}
-                        </button>
-                      </div>
+                    {/* Receive into Inventory — when receipt is linked to an approved PO */}
+                    {linkedPO && linkedPO.status === "approved" && linkedPO.line_items?.length > 0 && (
+                      <button
+                        onClick={() => receiveIntoInventory(r)}
+                        disabled={receivingId === r.id}
+                        className={`w-full flex items-center justify-center gap-1.5 text-[11px] py-1.5 border transition-colors font-medium ${
+                          rMsg && !rMsg.startsWith("Error")
+                            ? "border-green-500/30 text-green-400"
+                            : "border-green-600/40 hover:border-green-500 hover:text-green-400 text-green-500/80 bg-green-500/5"
+                        } disabled:opacity-50`}
+                      >
+                        <Warehouse size={11} />
+                        {receivingId === r.id
+                          ? "Receiving…"
+                          : rMsg
+                            ? rMsg.startsWith("Error") ? "Error — retry" : `✓ ${rMsg}`
+                            : `Receive PO into Inventory${taxDelivery > 0 ? ` (+${money(taxDelivery)} landed)` : ""}`}
+                      </button>
                     )}
 
-                    {/* Update inventory prices */}
+                    {/* Update inventory prices (standalone, no PO needed) */}
                     {r.line_items?.length > 0 && (
                       <button
                         onClick={() => updateInventoryPrices(r)}
