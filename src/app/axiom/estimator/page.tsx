@@ -59,7 +59,7 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => 
   async function search(q: string) {
     setQuery(q);
     if (!q.trim()) { setResults([]); setOpen(false); return; }
-    const { data } = await axiom.from("customers").select("id,name,email,phone,company_name").ilike("name", `%${q}%`).limit(8);
+    const { data } = await axiom.from("customers").select("*").ilike("name", `%${q}%`).limit(8);
     setResults((data || []) as Customer[]);
     setOpen(true);
   }
