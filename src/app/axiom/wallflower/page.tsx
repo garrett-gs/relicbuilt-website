@@ -9,7 +9,7 @@ import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2, Calculator, ClipboardList,
-  ExternalLink, Copy, Check, ChevronDown,
+  Check,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -38,8 +38,6 @@ export default function WallflowerPage() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [portalUrl, setPortalUrl] = useState("");
-  const [copiedUrl, setCopiedUrl] = useState(false);
 
   const load = useCallback(async () => {
     const { data } = await axiom
@@ -55,17 +53,7 @@ export default function WallflowerPage() {
     axiom.from("settings").select("team_members").limit(1).single().then(({ data }) => {
       if (data?.team_members) setTeamMembers(data.team_members.filter((m: TeamMember) => m.name));
     });
-    // Build portal URL
-    if (typeof window !== "undefined") {
-      setPortalUrl(`${window.location.origin}/wallflower`);
-    }
   }, []);
-
-  function copyPortalUrl() {
-    navigator.clipboard.writeText(portalUrl);
-    setCopiedUrl(true);
-    setTimeout(() => setCopiedUrl(false), 2000);
-  }
 
   const filtered = orders.filter((o) => {
     if (filterStatus !== "all" && o.status !== filterStatus) return false;
@@ -184,15 +172,6 @@ export default function WallflowerPage() {
           <Button size="sm" onClick={() => setShowCreate(true)}>
             <Plus size={14} className="mr-1" /> New
           </Button>
-        </div>
-
-        {/* Portal link */}
-        <div className="bg-card border border-border p-3 mb-3 flex items-center gap-2">
-          <ExternalLink size={12} className="text-muted shrink-0" />
-          <span className="text-xs text-muted truncate flex-1">Portal link for Wallflower</span>
-          <button onClick={copyPortalUrl} className="text-accent text-xs flex items-center gap-1 shrink-0">
-            {copiedUrl ? <><Check size={12} /> Copied</> : <><Copy size={12} /> Copy</>}
-          </button>
         </div>
 
         {/* Search + filter */}
