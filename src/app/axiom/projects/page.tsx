@@ -4,13 +4,13 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
-import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, ProposalScope, ProposalCostSection, ProposalCostItem, BuildComment, ApprovalRequest, ProjectChecklist, Invoice } from "@/types/axiom";
+import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, ProposalScope, ProposalCostSection, ProposalCostItem, BuildComment, ApprovalRequest, ProjectChecklist, Invoice, InventoryItem, TeamMember } from "@/types/axiom";
 import ChecklistPanel from "@/components/axiom/ChecklistPanel";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import ImageUpload from "@/components/ui/ImageUpload";
 import { cn, formatPhone } from "@/lib/utils";
-import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil } from "lucide-react";
+import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { useRouter } from "next/navigation";
 import { generateProposalHtml } from "@/lib/proposal-html";
@@ -268,6 +268,7 @@ export default function ProjectsPage() {
             onGenerateInvoice={() => generateInvoice(selected)}
             onGenerateProposal={() => setShowProposal(true)}
             onGenerateRecap={() => openRecap(selected)}
+            userEmail={userEmail}
           />
         </Modal>
       )}
@@ -520,7 +521,7 @@ function CreateProjectForm({ onSubmit, onCancel }: { onSubmit: (form: Record<str
 
 // ── Detail view ──────────────────────────────────────────────
 
-function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerateInvoice, onGenerateProposal, onGenerateRecap }: {
+function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerateInvoice, onGenerateProposal, onGenerateRecap, userEmail }: {
   project: CustomWork;
   onUpdate: (u: Partial<CustomWork>) => void;
   onDelete: () => void;
@@ -528,6 +529,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   onGenerateInvoice: () => void;
   onGenerateProposal: () => void;
   onGenerateRecap: () => void;
+  userEmail: string;
 }) {
   const [customerId, setCustomerId] = useState(project.customer_id || "");
   // Seed with client_name so the badge shows immediately; async lookup will refine it
@@ -544,6 +546,19 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [poItem, setPoItem] = useState<AddToPOItem | null>(null);
   const [linkedReceipts, setLinkedReceipts] = useState<{ id: string; vendor?: string; receipt_date?: string; total?: number; line_items: { description: string; qty: number; unit_price: number; total: number }[] }[]>([]);
   const [receiptsExpanded, setReceiptsExpanded] = useState<Record<string, boolean>>({});
+
+  // Inventory allocation state
+  const [showAllocateModal, setShowAllocateModal] = useState(false);
+  const [invSearch, setInvSearch] = useState("");
+  const [invResults, setInvResults] = useState<InventoryItem[]>([]);
+  const [allocItem, setAllocItem] = useState<InventoryItem | null>(null);
+  const [allocQty, setAllocQty] = useState("");
+  const [allocSaving, setAllocSaving] = useState(false);
+  const [showNonInvForm, setShowNonInvForm] = useState(false);
+  const [niDesc, setNiDesc] = useState("");
+  const [niVendor, setNiVendor] = useState("");
+  const [niCost, setNiCost] = useState(0);
+  const [memberName, setMemberName] = useState("");
   const [quoted, setQuoted] = useState(project.quoted_amount || 0);
   const [unitCount, setUnitCount] = useState(project.unit_count || 1);
   const [notes, setNotes] = useState(project.internal_notes || "");
@@ -677,13 +692,176 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 
   function markDirty() { setDirty(true); setSaved(false); }
 
-  function addMaterial() { setMaterials([...materials, { description: "", vendor: "", cost: 0 }]); markDirty(); }
+  // Look up current user's team member name for task assignment
+  useEffect(() => {
+    axiom.from("settings").select("team_members").limit(1).single().then(({ data }) => {
+      if (data?.team_members) {
+        const members = data.team_members as TeamMember[];
+        const me = members.find(m => m.email === userEmail);
+        if (me) setMemberName(me.name);
+      }
+    });
+  }, [userEmail]);
+
+  // ── Inventory search ──
+  async function searchInventory(q: string) {
+    setInvSearch(q);
+    if (q.trim().length < 2) { setInvResults([]); return; }
+    const { data } = await axiom.from("inventory_items")
+      .select("*")
+      .eq("active", true)
+      .gt("quantity_on_hand", 0)
+      .ilike("description", `%${q.trim()}%`)
+      .order("description")
+      .limit(20);
+    if (data) setInvResults(data as InventoryItem[]);
+  }
+
+  // ── Allocate from inventory ──
+  async function allocateFromInventory() {
+    if (!allocItem || !allocQty) return;
+    const q = Number(allocQty);
+    if (q <= 0 || q > allocItem.quantity_on_hand) return;
+    setAllocSaving(true);
+
+    const allocationCost = Math.round(q * allocItem.unit_cost * 100) / 100;
+
+    // Create inventory transaction (out)
+    await axiom.from("inventory_transactions").insert({
+      inventory_item_id: allocItem.id,
+      type: "out",
+      quantity: q,
+      unit_cost: allocItem.unit_cost,
+      custom_work_id: project.id,
+      notes: `Allocated to ${project.project_name}`,
+      date: new Date().toISOString().split("T")[0],
+      created_by: userEmail,
+    });
+
+    // Update inventory quantity
+    await axiom.from("inventory_items").update({
+      quantity_on_hand: allocItem.quantity_on_hand - q,
+      updated_at: new Date().toISOString(),
+    }).eq("id", allocItem.id);
+
+    // Add material to project
+    const newMaterial: Material = {
+      description: `${allocItem.description} (×${q} ${allocItem.unit})`,
+      vendor: "Inventory",
+      cost: allocationCost,
+      inventory_item_id: allocItem.id,
+      quantity: q,
+      unit_cost: allocItem.unit_cost,
+      allocated_by: userEmail,
+    };
+    const updated = [...materials, newMaterial];
+    setMaterials(updated);
+    onUpdate({ materials: updated, actual_cost: actualCost + allocationCost });
+
+    await logActivity({
+      action: "updated",
+      entity: "inventory",
+      entity_id: allocItem.id,
+      label: `Allocated ${q} ${allocItem.unit} of ${allocItem.description} → ${project.project_name}`,
+      user_name: userEmail,
+    });
+
+    setAllocItem(null);
+    setAllocQty("");
+    setInvSearch("");
+    setInvResults([]);
+    setShowAllocateModal(false);
+    setAllocSaving(false);
+    markDirty();
+  }
+
+  // ── Add non-inventory material (creates auto-task for user) ──
+  async function addNonInventoryMaterial() {
+    if (!niDesc.trim()) return;
+    const newMaterial: Material = {
+      description: niDesc.trim(),
+      vendor: niVendor.trim(),
+      cost: niCost,
+      allocated_by: userEmail,
+    };
+    const updated = [...materials, newMaterial];
+    setMaterials(updated);
+    onUpdate({ materials: updated });
+
+    // Auto-create task assigned to the user who added the material
+    const assigneeName = memberName || userEmail;
+    await axiom.from("tasks").insert({
+      title: `Inventory Adjustment: ${niDesc.trim()}`,
+      description: `Material "${niDesc.trim()}" was added to project "${project.project_name}" without inventory allocation. Please create an inventory entry and adjustment for this item.\n\nVendor: ${niVendor.trim() || "N/A"}\nCost: $${niCost.toFixed(2)}`,
+      status: "todo",
+      priority: "medium",
+      assignee: assigneeName,
+      custom_work_id: project.id,
+      comments: [],
+    });
+
+    await logActivity({
+      action: "created",
+      entity: "task",
+      label: `Auto-task: Inventory adjustment needed for "${niDesc.trim()}" on ${project.project_name} — assigned to ${assigneeName}`,
+      user_name: userEmail,
+    });
+
+    setNiDesc("");
+    setNiVendor("");
+    setNiCost(0);
+    setShowNonInvForm(false);
+    markDirty();
+  }
+
+  // ── Remove material (reverses inventory if allocated) ──
+  async function removeMaterial(i: number) {
+    const m = materials[i];
+
+    // If this was an inventory allocation, reverse it
+    if (m.inventory_item_id && m.quantity) {
+      // Create reverse transaction (in)
+      await axiom.from("inventory_transactions").insert({
+        inventory_item_id: m.inventory_item_id,
+        type: "in",
+        quantity: m.quantity,
+        unit_cost: m.unit_cost || 0,
+        custom_work_id: project.id,
+        notes: `Reversed allocation from ${project.project_name}`,
+        date: new Date().toISOString().split("T")[0],
+        created_by: userEmail,
+      });
+
+      // Restore inventory quantity
+      const { data: invItem } = await axiom.from("inventory_items")
+        .select("quantity_on_hand")
+        .eq("id", m.inventory_item_id)
+        .single();
+      if (invItem) {
+        await axiom.from("inventory_items").update({
+          quantity_on_hand: invItem.quantity_on_hand + m.quantity,
+          updated_at: new Date().toISOString(),
+        }).eq("id", m.inventory_item_id);
+      }
+
+      await logActivity({
+        action: "updated",
+        entity: "inventory",
+        entity_id: m.inventory_item_id,
+        label: `Reversed ${m.quantity} units of ${m.description} from ${project.project_name}`,
+        user_name: userEmail,
+      });
+    }
+
+    setMaterials(materials.filter((_, idx) => idx !== i));
+    markDirty();
+  }
+
   function updateMaterial(i: number, field: keyof Material, value: string | number) {
     const updated = [...materials];
     (updated[i] as unknown as Record<string, string | number>)[field] = value;
     setMaterials(updated); markDirty();
   }
-  function removeMaterial(i: number) { setMaterials(materials.filter((_, idx) => idx !== i)); markDirty(); }
 
   function addLabor() { setLabor([...labor, { date: new Date().toISOString().split("T")[0], description: "", hours: 0, rate: 60, cost: 0 }]); markDirty(); }
   function updateLabor(i: number, field: keyof LaborEntry, value: string | number) {
@@ -804,12 +982,6 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       setClientEmail(r.email || "");
       setClientPhone(formatPhone(r.phone || ""));
     }
-    markDirty();
-  }
-
-  function addReceiptToMaterials(r: { id: string; vendor?: string; total?: number }) {
-    const entry = { description: r.vendor || "Receipt", vendor: r.vendor || "", cost: r.total || 0, receipt_id: r.id };
-    setMaterials((prev) => { const updated = [...prev, entry]; onUpdate({ materials: updated }); return updated; });
     markDirty();
   }
 
@@ -1025,11 +1197,6 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-mono text-foreground">{money(r.total || 0)}</span>
                     <button
-                      onClick={(e) => { e.stopPropagation(); addReceiptToMaterials(r); }}
-                      className="text-[10px] px-2 py-0.5 border border-border hover:border-accent hover:text-accent text-muted transition-colors"
-                      title="Add to Materials"
-                    >+ Mat</button>
-                    <button
                       onClick={(e) => { e.stopPropagation(); addReceiptToLabor(r); }}
                       className="text-[10px] px-2 py-0.5 border border-border hover:border-accent hover:text-accent text-muted transition-colors"
                       title="Add to Labor"
@@ -1055,25 +1222,146 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         )}
       </div>
 
-      {/* Materials */}
+      {/* Materials (locked to inventory allocation) */}
       <div>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Materials</h3>
-          <button onClick={addMaterial} className="text-accent text-xs flex items-center gap-1"><Plus size={12} /> Add</button>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setShowAllocateModal(true)} className="text-accent text-xs flex items-center gap-1"><Package size={12} /> From Inventory</button>
+            <button onClick={() => setShowNonInvForm(true)} className="text-muted text-xs flex items-center gap-1 hover:text-amber-400"><AlertTriangle size={10} /> Non-Inventory</button>
+          </div>
         </div>
+
         {materials.length === 0 ? (
-          <p className="text-muted text-sm">No materials added</p>
+          <p className="text-muted text-sm">No materials allocated</p>
         ) : (
           <div className="space-y-2">
             {materials.map((m, i) => (
-              <div key={i} className="grid grid-cols-[1fr_1fr_100px_32px] gap-2 items-center">
-                <input value={m.description} onChange={(e) => updateMaterial(i, "description", e.target.value)} placeholder="Description" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
-                <input value={m.vendor} onChange={(e) => updateMaterial(i, "vendor", e.target.value)} placeholder="Vendor" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
-                <CurrencyInput value={m.cost || 0} onChange={(v) => updateMaterial(i, "cost", v)} placeholder="Cost" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right w-28" />
-                <button onClick={() => removeMaterial(i)} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
+              <div key={i} className={cn("flex items-center gap-2 px-3 py-2 border text-sm", m.inventory_item_id ? "bg-card border-border" : "bg-amber-950/20 border-amber-800/40")}>
+                {m.inventory_item_id ? (
+                  <Package size={12} className="text-accent shrink-0" />
+                ) : (
+                  <AlertTriangle size={12} className="text-amber-400 shrink-0" />
+                )}
+                <span className="flex-1 text-foreground truncate">{m.description}</span>
+                {!m.inventory_item_id && (
+                  <>
+                    <input value={m.vendor} onChange={(e) => updateMaterial(i, "vendor", e.target.value)} placeholder="Vendor" className="w-28 bg-background border border-border px-2 py-1 text-xs text-foreground focus:outline-none focus:border-accent" />
+                    <CurrencyInput value={m.cost || 0} onChange={(v) => updateMaterial(i, "cost", v)} className="w-24 bg-background border border-border px-2 py-1 text-xs text-foreground focus:outline-none focus:border-accent text-right" />
+                  </>
+                )}
+                {m.inventory_item_id && (
+                  <span className="text-xs text-muted shrink-0">{m.quantity} × {money(m.unit_cost || 0)}</span>
+                )}
+                <span className="font-mono text-sm shrink-0 w-20 text-right">{money(m.cost || 0)}</span>
+                <button onClick={() => removeMaterial(i)} className="text-muted hover:text-red-500 shrink-0" title={m.inventory_item_id ? "Remove & return to inventory" : "Remove"}><Trash2 size={14} /></button>
               </div>
             ))}
             <p className="text-right text-sm font-mono text-muted">Total: {money(materialTotal)}</p>
+          </div>
+        )}
+
+        {/* Allocate from Inventory modal */}
+        {showAllocateModal && (
+          <>
+            <div className="fixed inset-0 bg-black/60 z-[60]" onClick={() => { setShowAllocateModal(false); setAllocItem(null); setInvSearch(""); setInvResults([]); }} />
+            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[61] bg-background border border-border w-full max-w-lg p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-semibold text-foreground flex items-center gap-2"><Package size={16} className="text-accent" /> Allocate from Inventory</h4>
+                <button onClick={() => { setShowAllocateModal(false); setAllocItem(null); setInvSearch(""); setInvResults([]); }} className="text-muted hover:text-foreground"><X size={18} /></button>
+              </div>
+
+              {!allocItem ? (
+                <>
+                  <input
+                    value={invSearch}
+                    onChange={(e) => searchInventory(e.target.value)}
+                    placeholder="Search inventory items…"
+                    className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent mb-3"
+                    autoFocus
+                  />
+                  {invResults.length > 0 && (
+                    <div className="max-h-64 overflow-y-auto space-y-1">
+                      {invResults.map((item) => (
+                        <button
+                          key={item.id}
+                          onClick={() => { setAllocItem(item); setAllocQty("1"); }}
+                          className="w-full text-left px-3 py-2 bg-card border border-border hover:border-accent transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-foreground font-medium">{item.description}</span>
+                            <span className="text-xs text-muted">{money(item.unit_cost)}/{item.unit}</span>
+                          </div>
+                          <div className="text-xs text-muted mt-0.5">
+                            In stock: <strong className="text-foreground">{item.quantity_on_hand} {item.unit}</strong>
+                            {item.location && <span className="ml-2">@ {item.location}</span>}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {invSearch.length >= 2 && invResults.length === 0 && (
+                    <p className="text-muted text-sm text-center py-4">No items found with stock available</p>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-card border border-border p-3 flex items-center gap-3">
+                    <Package size={18} className="text-accent shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium text-foreground">{allocItem.description}</p>
+                      <p className="text-xs text-muted">Available: <strong>{allocItem.quantity_on_hand} {allocItem.unit}</strong> · {money(allocItem.unit_cost)}/{allocItem.unit}</p>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Quantity to allocate</label>
+                    <input
+                      type="number"
+                      value={allocQty}
+                      onChange={(e) => setAllocQty(e.target.value)}
+                      min={1}
+                      max={allocItem.quantity_on_hand}
+                      className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+                      autoFocus
+                    />
+                    {Number(allocQty) > 0 && (
+                      <p className="text-xs text-muted mt-1">
+                        Cost: <strong className="text-foreground">{money(Number(allocQty) * allocItem.unit_cost)}</strong>
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => { setAllocItem(null); setAllocQty(""); }} className="flex-1 px-4 py-2 border border-border text-sm text-muted hover:text-foreground">Back</button>
+                    <button
+                      onClick={allocateFromInventory}
+                      disabled={allocSaving || Number(allocQty) <= 0 || Number(allocQty) > allocItem.quantity_on_hand}
+                      className="flex-1 px-4 py-2 bg-accent text-background text-sm font-medium disabled:opacity-50"
+                    >
+                      {allocSaving ? "Allocating…" : "Allocate"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Non-Inventory material form */}
+        {showNonInvForm && (
+          <div className="mt-3 p-3 border border-amber-800/40 bg-amber-950/20 space-y-2">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle size={14} className="text-amber-400" />
+              <span className="text-xs text-amber-400">A task will be created for you to adjust inventory</span>
+            </div>
+            <input value={niDesc} onChange={(e) => setNiDesc(e.target.value)} placeholder="Material description…" className="w-full bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" autoFocus />
+            <div className="grid grid-cols-2 gap-2">
+              <input value={niVendor} onChange={(e) => setNiVendor(e.target.value)} placeholder="Vendor" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
+              <CurrencyInput value={niCost} onChange={setNiCost} placeholder="Cost" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setShowNonInvForm(false); setNiDesc(""); setNiVendor(""); setNiCost(0); }} className="flex-1 px-3 py-2 border border-border text-xs text-muted hover:text-foreground">Cancel</button>
+              <button onClick={addNonInventoryMaterial} disabled={!niDesc.trim()} className="flex-1 px-3 py-2 bg-amber-600 text-white text-xs font-medium disabled:opacity-50">Add & Create Task</button>
+            </div>
           </div>
         )}
       </div>

@@ -110,6 +110,10 @@ export interface Material {
   vendor: string;
   cost: number;
   receipt_id?: string;
+  inventory_item_id?: string;
+  quantity?: number;
+  unit_cost?: number;
+  allocated_by?: string;
 }
 
 export interface LaborEntry {
