@@ -717,7 +717,10 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
                   </div>
                 ))}
               </div>
-              <div className="flex justify-end mt-2">
+              <div className="flex justify-between items-center mt-2">
+                {unitCount > 1 ? (
+                  <span className="text-xs font-mono text-muted">{money(materialTotal / unitCount)} / unit</span>
+                ) : <span />}
                 <span className="text-sm font-mono text-muted">Materials subtotal: <span className="text-foreground">{money(materialTotal)}</span></span>
               </div>
             </div>
@@ -821,7 +824,10 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
                   </div>
                 ))}
               </div>
-              <div className="flex justify-end mt-2">
+              <div className="flex justify-between items-center mt-2">
+                {unitCount > 1 ? (
+                  <span className="text-xs font-mono text-muted">{money(laborTotal / unitCount)} / unit</span>
+                ) : <span />}
                 <span className="text-sm font-mono text-muted">Labor subtotal: <span className="text-foreground">{money(laborTotal)}</span></span>
               </div>
             </div>
