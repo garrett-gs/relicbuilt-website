@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-const API_KEY = process.env.WALLFLOWER_API_KEY || "wf-relic-2026";
+const API_KEY = process.env.WALLFLOWER_API_KEY || "wfrelic2026";
 
 export async function POST(req: NextRequest) {
   try {
