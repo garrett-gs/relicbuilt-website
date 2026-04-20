@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
-import { CustomWork, TeamMember } from "@/types/axiom";
-import { Camera, Check, Plus, X, Loader2, Trash2, Delete, ShoppingCart, ChevronLeft } from "lucide-react";
+import { PurchaseOrder, TeamMember } from "@/types/axiom";
+import { Camera, Check, Plus, X, Loader2, Trash2, Delete, ShoppingCart, ChevronLeft, Package } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
@@ -145,8 +145,7 @@ interface ReceiptRecord {
   receipt_date?: string;
   total?: number;
   line_items: LineItem[];
-  project_id?: string;
-  project_name?: string;
+  purchase_order_id?: string;
   notes?: string;
   created_at: string;
 }
@@ -171,19 +170,18 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
   const [items, setItems] = useState<LineItem[]>([]);
   const [tax, setTax] = useState(0);
   const [notes, setNotes] = useState("");
-  const [selectedProjectId, setSelectedProjectId] = useState("");
-  const [projects, setProjects] = useState<CustomWork[]>([]);
+  const [selectedPOId, setSelectedPOId] = useState("");
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
   const [receipts, setReceipts] = useState<ReceiptRecord[]>([]);
   const [error, setError] = useState("");
   const [poItem, setPoItem] = useState<AddToPOItem | null>(null);
-  const [addingTo, setAddingTo] = useState<Record<string, "materials" | "labor" | "done">>({});
 
   const loadData = useCallback(async () => {
-    const [{ data: pw }, { data: rec }] = await Promise.all([
-      axiom.from("custom_work").select("*").order("project_name"),
+    const [{ data: poData }, { data: rec }] = await Promise.all([
+      axiom.from("purchase_orders").select("*").in("status", ["pending", "approved"]).order("created_at", { ascending: false }),
       axiom.from("receipts").select("*").order("created_at", { ascending: false }).limit(20),
     ]);
-    if (pw) setProjects(pw as CustomWork[]);
+    if (poData) setPurchaseOrders(poData as PurchaseOrder[]);
     if (rec) setReceipts(rec as ReceiptRecord[]);
   }, []);
 
@@ -252,36 +250,18 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
 
   async function save() {
     setStep("saving");
-    const linkedProject = projects.find((p) => p.id === selectedProjectId);
     await axiom.from("receipts").insert({
       image_url: imageUrl || null,
       vendor: vendor || null,
       receipt_date: receiptDate || null,
       total,
       line_items: items,
-      project_id: selectedProjectId || null,
-      project_name: linkedProject?.project_name || null,
+      purchase_order_id: selectedPOId || null,
       notes: notes || null,
       submitted_by: memberName,
     });
     setStep("saved");
     loadData();
-  }
-
-  async function addToProject(r: ReceiptRecord, type: "materials" | "labor") {
-    if (!r.project_id) return;
-    setAddingTo((prev) => ({ ...prev, [r.id + type]: type }));
-    const { data: project } = await axiom.from("custom_work").select("materials,labor_log").eq("id", r.project_id).single();
-    if (!project) { setAddingTo((prev) => ({ ...prev, [r.id + type]: "done" })); return; }
-    const date = r.receipt_date || new Date().toISOString().split("T")[0];
-    if (type === "materials") {
-      const updated = [...(project.materials || []), { description: r.vendor || "Receipt", vendor: r.vendor || "", cost: r.total || 0, receipt_id: r.id }];
-      await axiom.from("custom_work").update({ materials: updated }).eq("id", r.project_id);
-    } else {
-      const updated = [...(project.labor_log || []), { date, description: r.vendor || "Receipt", hours: 0, rate: 0, cost: r.total || 0 }];
-      await axiom.from("custom_work").update({ labor_log: updated }).eq("id", r.project_id);
-    }
-    setAddingTo((prev) => ({ ...prev, [r.id + type]: "done" }));
   }
 
   function reset() {
@@ -293,7 +273,7 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
     setItems([]);
     setTax(0);
     setNotes("");
-    setSelectedProjectId("");
+    setSelectedPOId("");
     setError("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
@@ -415,11 +395,11 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
             )}
           </div>
           <div>
-            <label className="text-xs text-muted block mb-1">Link to Project</label>
-            <select value={selectedProjectId} onChange={(e) => setSelectedProjectId(e.target.value)}
+            <label className="text-xs text-muted block mb-1">Link to Purchase Order</label>
+            <select value={selectedPOId} onChange={(e) => setSelectedPOId(e.target.value)}
               className="w-full bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent">
-              <option value="">— No project —</option>
-              {projects.map((p) => <option key={p.id} value={p.id}>{p.project_name}</option>)}
+              <option value="">— No P.O. —</option>
+              {purchaseOrders.map((p) => <option key={p.id} value={p.id}>{p.po_number} — {p.vendor_name}</option>)}
             </select>
           </div>
           <div>
@@ -440,8 +420,8 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
             <Check size={32} className="text-accent" />
           </div>
           <h2 className="text-xl font-heading font-bold">Receipt Saved</h2>
-          {selectedProjectId && (
-            <p className="text-muted text-sm">Linked to {projects.find((p) => p.id === selectedProjectId)?.project_name}.</p>
+          {selectedPOId && (
+            <p className="text-muted text-sm">Linked to {purchaseOrders.find((p) => p.id === selectedPOId)?.po_number}.</p>
           )}
           <Button onClick={reset} className="mt-2">Add Another</Button>
         </div>
@@ -451,73 +431,67 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
         <div className="mt-10">
           <h2 className="text-xs uppercase tracking-wider text-muted mb-3">Recent Receipts</h2>
           <div className="space-y-2">
-            {receipts.map((r) => (
-              <div key={r.id} className="bg-card border border-border p-3 flex gap-3 items-start">
-                {r.image_url ? (
-                  <img src={r.image_url} alt="" className="w-12 h-12 object-cover rounded border border-border shrink-0" />
-                ) : (
-                  <div className="w-12 h-12 bg-border/30 rounded border border-border shrink-0 flex items-center justify-center">
-                    <Camera size={16} className="text-muted" />
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate">{r.vendor || "Unknown vendor"}</p>
-                  <p className="text-xs text-muted">
-                    {r.receipt_date ? new Date(r.receipt_date + "T12:00:00").toLocaleDateString() : new Date(r.created_at).toLocaleDateString()}
-                    {r.project_name ? ` · ${r.project_name}` : ""}
-                  </p>
-                  {r.line_items?.length > 0 && (
-                    <div className="mt-1.5 space-y-1">
-                      {r.line_items.map((li, li_i) => (
-                        <div key={li_i} className="flex items-center gap-2 text-xs">
-                          <span className="flex-1 text-muted truncate">{li.description}</span>
-                          <span className="font-mono text-muted shrink-0">{money(li.total)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {r.project_id ? (
-                    <div className="flex gap-2 mt-2">
-                      <button onClick={() => addToProject(r, "materials")} disabled={addingTo[r.id + "materials"] !== undefined}
-                        className="text-[10px] px-2 py-1 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50">
-                        {addingTo[r.id + "materials"] === "done" ? "✓ Materials" : "+ Materials"}
-                      </button>
-                      <button onClick={() => addToProject(r, "labor")} disabled={addingTo[r.id + "labor"] !== undefined}
-                        className="text-[10px] px-2 py-1 border border-border hover:border-accent hover:text-accent text-muted transition-colors disabled:opacity-50">
-                        {addingTo[r.id + "labor"] === "done" ? "✓ Labor" : "+ Labor"}
-                      </button>
-                    </div>
+            {receipts.map((r) => {
+              const linkedPO = purchaseOrders.find((p) => p.id === r.purchase_order_id);
+              return (
+                <div key={r.id} className="bg-card border border-border p-3 flex gap-3 items-start">
+                  {r.image_url ? (
+                    <img src={r.image_url} alt="" className="w-12 h-12 object-cover rounded border border-border shrink-0" />
                   ) : (
-                    <div className="mt-2">
-                      <select className="text-[10px] bg-card border border-border px-2 py-1 text-muted focus:outline-none focus:border-accent w-full"
-                        defaultValue=""
-                        onChange={(e) => {
-                          if (!e.target.value) return;
-                          const proj = projects.find((p) => p.id === e.target.value);
-                          if (proj) {
-                            axiom.from("receipts").update({ project_id: proj.id, project_name: proj.project_name }).eq("id", r.id).then(() => {
-                              setReceipts((prev) => prev.map((x) => x.id === r.id ? { ...x, project_id: proj.id, project_name: proj.project_name } : x));
-                            });
-                          }
-                        }}>
-                        <option value="">Link to project…</option>
-                        {projects.map((p) => <option key={p.id} value={p.id}>{p.project_name}</option>)}
-                      </select>
+                    <div className="w-12 h-12 bg-border/30 rounded border border-border shrink-0 flex items-center justify-center">
+                      <Camera size={16} className="text-muted" />
                     </div>
                   )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{r.vendor || "Unknown vendor"}</p>
+                    <p className="text-xs text-muted">
+                      {r.receipt_date ? new Date(r.receipt_date + "T12:00:00").toLocaleDateString() : new Date(r.created_at).toLocaleDateString()}
+                    </p>
+                    {linkedPO && (
+                      <div className="flex items-center gap-1 mt-1 text-[10px] text-blue-400">
+                        <Package size={10} />
+                        <span className="font-mono">{linkedPO.po_number}</span>
+                      </div>
+                    )}
+                    {r.line_items?.length > 0 && (
+                      <div className="mt-1.5 space-y-1">
+                        {r.line_items.map((li, li_i) => (
+                          <div key={li_i} className="flex items-center gap-2 text-xs">
+                            <span className="flex-1 text-muted truncate">{li.description}</span>
+                            <span className="font-mono text-muted shrink-0">{money(li.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {!linkedPO && (
+                      <div className="mt-2">
+                        <select className="text-[10px] bg-card border border-border px-2 py-1 text-muted focus:outline-none focus:border-accent w-full"
+                          defaultValue=""
+                          onChange={(e) => {
+                            if (!e.target.value) return;
+                            axiom.from("receipts").update({ purchase_order_id: e.target.value }).eq("id", r.id).then(() => {
+                              setReceipts((prev) => prev.map((x) => x.id === r.id ? { ...x, purchase_order_id: e.target.value } : x));
+                            });
+                          }}>
+                          <option value="">Link to P.O.…</option>
+                          {purchaseOrders.map((p) => <option key={p.id} value={p.id}>{p.po_number} — {p.vendor_name}</option>)}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-end gap-2 shrink-0">
+                    <p className="text-sm font-mono">{money(r.total || 0)}</p>
+                    <button onClick={async () => {
+                      if (!confirm("Delete this receipt?")) return;
+                      await axiom.from("receipts").delete().eq("id", r.id);
+                      setReceipts((prev) => prev.filter((x) => x.id !== r.id));
+                    }} className="text-muted hover:text-red-500 transition-colors">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex flex-col items-end gap-2 shrink-0">
-                  <p className="text-sm font-mono">{money(r.total || 0)}</p>
-                  <button onClick={async () => {
-                    if (!confirm("Delete this receipt?")) return;
-                    await axiom.from("receipts").delete().eq("id", r.id);
-                    setReceipts((prev) => prev.filter((x) => x.id !== r.id));
-                  }} className="text-muted hover:text-red-500 transition-colors">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
