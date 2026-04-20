@@ -400,6 +400,26 @@ export interface ApprovalRequest {
   created_at: string;
 }
 
+// ── Wallflower Work Orders ──────────────────────────────────
+
+export interface WallflowerWorkOrder {
+  id: string;
+  item_name: string;
+  item_source: "inventory" | "custom";
+  work_type: string;
+  scope: string;
+  assigned_to?: string;
+  deadline?: string;
+  status: "pending" | "accepted" | "in_progress" | "estimated" | "complete" | "cancelled";
+  description?: string;
+  quantity: number;
+  estimate_id?: string;
+  notes?: string;
+  submitted_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Activity ────────────────────────────────────────────────
 
 export interface ActivityEntry {

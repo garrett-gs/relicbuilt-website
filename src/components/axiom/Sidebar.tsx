@@ -28,6 +28,7 @@ import {
   X,
   ExternalLink,
   HardHat,
+  ClipboardList,
 } from "lucide-react";
 
 const navSections = [
@@ -44,6 +45,7 @@ const navSections = [
     items: [
       { href: "/axiom/leads", icon: UserPlus, label: "Leads" },
       { href: "/axiom/customers", icon: Users, label: "Customers" },
+      { href: "/axiom/wallflower", icon: ClipboardList, label: "Wallflower RELIC" },
     ],
   },
   {
