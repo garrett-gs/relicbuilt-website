@@ -82,6 +82,7 @@ export default function Sidebar() {
   const { signOut, userEmail } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAdminOrManager, setIsAdminOrManager] = useState(false);
+  const [wfPendingCount, setWfPendingCount] = useState(0);
 
   useEffect(() => {
     if (!userEmail) return;
@@ -101,6 +102,22 @@ export default function Sidebar() {
         }
       });
   }, [userEmail]);
+
+  // Poll for pending Wallflower work orders
+  useEffect(() => {
+    function fetchCount() {
+      axiom
+        .from("wallflower_work_orders")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending")
+        .then(({ count }) => {
+          setWfPendingCount(count || 0);
+        });
+    }
+    fetchCount();
+    const interval = setInterval(fetchCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const nav = (
     <>
@@ -149,6 +166,7 @@ export default function Sidebar() {
                   </a>
                 );
               }
+              const badge = item.href === "/axiom/wallflower" && wfPendingCount > 0 ? wfPendingCount : 0;
               return (
                 <Link
                   key={item.href}
@@ -162,7 +180,12 @@ export default function Sidebar() {
                   )}
                 >
                   <item.icon size={16} />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {badge > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1">
+                      {badge}
+                    </span>
+                  )}
                 </Link>
               );
             })}
