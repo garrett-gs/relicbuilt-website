@@ -35,11 +35,19 @@ function calcTotals(est: Pick<Estimate, "line_items" | "labor_items" | "markup_p
   return { materialTotal, laborTotal, subtotal, markupAmount, total };
 }
 
-// ── Customer search dropdown ──────────────────────────────────
+// ── Customer / Company search dropdown ──────────────────────────────────
 
-function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => void; initialName?: string }) {
+type SearchResult = {
+  id: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  type: "customer" | "company";
+};
+
+function CustomerSearch({ onSelect, initialName }: { onSelect: (c: SearchResult) => void; initialName?: string }) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Customer[]>([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [selectedName, setSelectedName] = useState(initialName || "");
   const ref = useRef<HTMLDivElement>(null);
@@ -59,12 +67,19 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => 
   async function search(q: string) {
     setQuery(q);
     if (!q.trim()) { setResults([]); setOpen(false); return; }
-    const { data } = await axiom.from("customers").select("*").ilike("name", `%${q}%`).limit(8);
-    setResults((data || []) as Customer[]);
+    const [{ data: customers }, { data: companies }] = await Promise.all([
+      axiom.from("customers").select("*").ilike("name", `%${q}%`).limit(6),
+      axiom.from("companies").select("*").ilike("name", `%${q}%`).limit(4),
+    ]);
+    const merged: SearchResult[] = [
+      ...((companies || []).map((co) => ({ id: co.id, name: co.name, email: co.phone || "", phone: co.phone, type: "company" as const }))),
+      ...((customers || []).map((c) => ({ ...c, type: "customer" as const }))),
+    ];
+    setResults(merged);
     setOpen(true);
   }
 
-  function pick(c: Customer) {
+  function pick(c: SearchResult) {
     setSelectedName(c.name);
     setQuery("");
     setOpen(false);
@@ -73,13 +88,13 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => 
 
   return (
     <div ref={ref} className="relative">
-      <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Customer</label>
+      <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Customer / Company</label>
       <div className="flex items-center gap-2">
         {selectedName ? (
           <span className="flex items-center gap-1 bg-accent/10 text-accent text-sm px-3 py-2 border border-accent/30 flex-1 truncate">
             {selectedName}
             <button
-              onClick={() => { setSelectedName(""); onSelect({} as Customer); }}
+              onClick={() => { setSelectedName(""); onSelect({} as SearchResult); }}
               className="ml-1 hover:text-foreground"
             >
               <X size={12} />
@@ -91,7 +106,7 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => 
             <input
               value={query}
               onChange={(e) => search(e.target.value)}
-              placeholder="Search customers..."
+              placeholder="Search customers or companies..."
               className="w-full bg-card border border-border pl-9 pr-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
             />
           </div>
@@ -101,7 +116,7 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: Customer) => 
         <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border shadow-lg mt-0.5 max-h-48 overflow-y-auto">
           {results.map((c) => (
             <button key={c.id} onMouseDown={() => pick(c)} className="w-full text-left px-4 py-2.5 text-sm hover:bg-background flex items-center justify-between">
-              <span>{c.name}{c.company_name ? <span className="text-muted text-xs ml-2">({c.company_name})</span> : ""}</span>
+              <span>{c.name}{c.type === "company" ? <span className="text-blue-400 text-[10px] ml-2 uppercase tracking-wider">Company</span> : ""}</span>
               <span className="text-xs text-muted">{c.email || c.phone || ""}</span>
             </button>
           ))}
@@ -252,7 +267,7 @@ function CreateModal({ onSubmit, onClose }: {
 }) {
   const [form, setForm] = useState({ project_name: "", client_name: "", customer_id: "" });
 
-  function handleCustomerSelect(c: Customer) {
+  function handleCustomerSelect(c: SearchResult) {
     if (!c.id) {
       setForm((f) => ({ ...f, customer_id: "", client_name: "" }));
     } else {
@@ -402,7 +417,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   }
   function removeLabor(i: number) { setLaborItems(laborItems.filter((_, idx) => idx !== i)); markDirty(); }
 
-  function handleCustomerSelect(c: Customer) {
+  function handleCustomerSelect(c: SearchResult) {
     if (!c.id) {
       setCustomerId("");
       setCustomerName("");
