@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { TeamMember, CustomWork, TimeEntry } from "@/types/axiom";
-import { Clock, X, CheckCircle2, LogIn, LogOut, ArrowLeft } from "lucide-react";
+import { Clock, X, CheckCircle2, LogIn, LogOut, ArrowLeft, Plus } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
-type Step = "select_member" | "enter_pin" | "select_project" | "confirm_clock_in" | "clocked_in" | "clocked_out";
+type Step = "select_member" | "enter_pin" | "select_project" | "confirm_clock_in" | "clocked_in" | "clocked_out" | "manual_entry" | "manual_saved";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -40,10 +40,24 @@ export default function TimeClockPage() {
   const [now, setNow] = useState(new Date());
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
 
+  // Manual entry state
+  const [manualMember, setManualMember] = useState("");
+  const [manualProject, setManualProject] = useState("");
+  const [manualDate, setManualDate] = useState(new Date().toISOString().split("T")[0]);
+  const [manualHours, setManualHours] = useState("");
+  const [manualNotes, setManualNotes] = useState("");
+  const [manualTasks, setManualTasks] = useState<string[]>([]);
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualSavedEntry, setManualSavedEntry] = useState<{ member: string; project: string; hours: number; cost: number } | null>(null);
+
   const TASK_OPTIONS = ["Fabrication", "Assembly", "Finishing", "Delivery", "Installation"];
 
   function toggleTask(task: string) {
     setSelectedTasks((prev) => prev.includes(task) ? prev.filter(t => t !== task) : [...prev, task]);
+  }
+
+  function toggleManualTask(task: string) {
+    setManualTasks((prev) => prev.includes(task) ? prev.filter(t => t !== task) : [...prev, task]);
   }
 
   useEffect(() => {
@@ -168,6 +182,65 @@ export default function TimeClockPage() {
     setStep("clocked_out");
   }
 
+  async function handleManualSave() {
+    const hours = parseFloat(manualHours);
+    if (!manualMember || !manualProject || !hours || hours <= 0) return;
+    setManualSaving(true);
+
+    const project = projects.find((p) => p.id === manualProject);
+    const member = members.find((m) => m.name === manualMember);
+    const rate = member?.hourly_rate || 60;
+    const cost = Math.round(hours * rate * 100) / 100;
+
+    // Create clock_in/clock_out from date + hours
+    const clockIn = new Date(`${manualDate}T08:00:00`).toISOString();
+    const clockOutMs = new Date(clockIn).getTime() + hours * 3600000;
+    const clockOut = new Date(clockOutMs).toISOString();
+
+    const taskDesc = manualTasks.length
+      ? `${manualMember} — ${manualTasks.join(", ")}`
+      : manualMember;
+    const notesPart = manualNotes ? ` (${manualNotes})` : "";
+
+    // Insert time entry
+    await axiom.from("time_entries").insert({
+      member_name: manualMember,
+      custom_work_id: manualProject,
+      project_name: project?.project_name || "",
+      clock_in: clockIn,
+      clock_out: clockOut,
+      hours,
+      hourly_rate: rate,
+      notes: `Manual entry${notesPart}`,
+    });
+
+    // Update project labor log
+    if (project) {
+      const { data: pw } = await axiom.from("custom_work").select("labor_log, actual_cost").eq("id", project.id).single();
+      if (pw) {
+        const newEntry = {
+          date: manualDate,
+          hours,
+          rate,
+          cost,
+          description: `${taskDesc}${notesPart}`,
+          tasks: manualTasks,
+        };
+        const updatedLog = [...(pw.labor_log || []), newEntry];
+        const newActualCost = (pw.actual_cost || 0) + cost;
+        await axiom.from("custom_work").update({
+          labor_log: updatedLog,
+          actual_cost: newActualCost,
+          updated_at: new Date().toISOString(),
+        }).eq("id", project.id);
+      }
+    }
+
+    setManualSavedEntry({ member: manualMember, project: project?.project_name || "", hours, cost });
+    setManualSaving(false);
+    setStep("manual_saved");
+  }
+
   function reset() {
     setStep("select_member");
     setSelectedMember(null);
@@ -177,6 +250,13 @@ export default function TimeClockPage() {
     setCompletedEntry(null);
     setSelectedProject(null);
     setSelectedTasks([]);
+    setManualMember("");
+    setManualProject("");
+    setManualDate(new Date().toISOString().split("T")[0]);
+    setManualHours("");
+    setManualNotes("");
+    setManualTasks([]);
+    setManualSavedEntry(null);
   }
 
   const PAD = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
@@ -199,7 +279,15 @@ export default function TimeClockPage() {
       {/* ── Step: Select member ── */}
       {step === "select_member" && (
         <div className="w-full max-w-lg">
-          <h2 className="text-center text-xs uppercase tracking-widest text-muted mb-4">Who are you?</h2>
+          <div className="flex items-center justify-center mb-4">
+            <h2 className="text-xs uppercase tracking-widest text-muted">Who are you?</h2>
+            <button
+              onClick={() => setStep("manual_entry")}
+              className="absolute right-4 top-4 flex items-center gap-1.5 text-xs text-accent border border-accent/30 px-3 py-1.5 hover:bg-accent/10 transition-colors"
+            >
+              <Plus size={12} /> Manual Entry
+            </button>
+          </div>
           {members.length === 0 ? (
             <p className="text-center text-muted text-sm">No team members with PINs set up yet. Go to <a href="/axiom/settings" className="text-accent underline">Settings → Team</a> to add them.</p>
           ) : (
@@ -427,6 +515,170 @@ export default function TimeClockPage() {
           >
             Done
           </button>
+        </div>
+      )}
+
+      {/* ── Step: Manual entry ── */}
+      {step === "manual_entry" && (
+        <div className="w-full max-w-md">
+          <h2 className="text-center text-xs uppercase tracking-widest text-muted mb-1">Manual Time Entry</h2>
+          <p className="text-center text-sm text-muted mb-6">Add hours for a team member on a project</p>
+
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Team Member</label>
+              <select
+                value={manualMember}
+                onChange={(e) => setManualMember(e.target.value)}
+                className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+              >
+                <option value="">Select member...</option>
+                {members.map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Project</label>
+              <select
+                value={manualProject}
+                onChange={(e) => setManualProject(e.target.value)}
+                className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+              >
+                <option value="">Select project...</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.project_name}{p.client_name ? ` — ${p.client_name}` : ""}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Date</label>
+                <input
+                  type="date"
+                  value={manualDate}
+                  onChange={(e) => setManualDate(e.target.value)}
+                  className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Hours</label>
+                <input
+                  type="number"
+                  step="0.25"
+                  min="0.25"
+                  value={manualHours}
+                  onChange={(e) => setManualHours(e.target.value)}
+                  placeholder="e.g. 4.5"
+                  className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+            </div>
+
+            {/* Tasks */}
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted block mb-2">Tasks</label>
+              <div className="grid grid-cols-2 gap-2">
+                {TASK_OPTIONS.map((task) => {
+                  const checked = manualTasks.includes(task);
+                  return (
+                    <button
+                      key={task}
+                      type="button"
+                      onClick={() => toggleManualTask(task)}
+                      className={cn(
+                        "flex items-center gap-2 border px-3 py-2 text-xs transition-colors",
+                        checked ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:border-accent/50"
+                      )}
+                    >
+                      <span className={cn(
+                        "w-3.5 h-3.5 border flex items-center justify-center",
+                        checked ? "border-accent bg-accent" : "border-border"
+                      )}>
+                        {checked && <span className="text-[10px] text-background font-bold">✓</span>}
+                      </span>
+                      {task}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Notes</label>
+              <input
+                value={manualNotes}
+                onChange={(e) => setManualNotes(e.target.value)}
+                placeholder="Optional notes..."
+                className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+              />
+            </div>
+
+            {/* Preview */}
+            {manualMember && manualProject && manualHours && (
+              <div className="bg-card border border-border p-4 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted">Rate</span>
+                  <span className="font-mono">{money(members.find((m) => m.name === manualMember)?.hourly_rate || 60)}/hr</span>
+                </div>
+                <div className="flex justify-between mt-1">
+                  <span className="text-muted">Total Cost</span>
+                  <span className="font-mono text-accent font-bold">
+                    {money((parseFloat(manualHours) || 0) * (members.find((m) => m.name === manualMember)?.hourly_rate || 60))}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={handleManualSave}
+              disabled={!manualMember || !manualProject || !manualHours || parseFloat(manualHours) <= 0 || manualSaving}
+              className="w-full py-4 bg-accent text-background font-bold text-sm tracking-wide transition-colors hover:bg-accent/80 disabled:opacity-40 flex items-center justify-center gap-2"
+            >
+              {manualSaving ? "Saving..." : <><Plus size={16} /> Add Time Entry</>}
+            </button>
+
+            <button onClick={reset} className="text-xs text-muted hover:text-foreground flex items-center gap-1 mx-auto">
+              <X size={12} /> Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Step: Manual saved ── */}
+      {step === "manual_saved" && manualSavedEntry && (
+        <div className="w-full max-w-sm text-center">
+          <div className="bg-card border border-accent/30 p-8 mb-6">
+            <CheckCircle2 size={32} className="text-accent mx-auto mb-3" />
+            <p className="text-xs uppercase tracking-widest text-muted mb-1">Time Entry Added</p>
+            <p className="text-lg font-medium mb-1">{manualSavedEntry.member}</p>
+            <p className="text-sm text-muted mb-4">{manualSavedEntry.project}</p>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted text-xs mb-1">Hours</p>
+                <p className="font-mono font-bold text-xl">{manualSavedEntry.hours.toFixed(2)}</p>
+              </div>
+              <div>
+                <p className="text-muted text-xs mb-1">Cost</p>
+                <p className="font-mono font-bold text-xl text-accent">{money(manualSavedEntry.cost)}</p>
+              </div>
+            </div>
+            <p className="text-xs text-muted mt-4">Labor log updated on project ✓</p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => { setManualSavedEntry(null); setManualHours(""); setManualNotes(""); setManualTasks([]); setStep("manual_entry"); }}
+              className="flex-1 bg-card border border-border py-3 text-sm hover:border-accent transition-colors"
+            >
+              Add Another
+            </button>
+            <button
+              onClick={reset}
+              className="flex-1 bg-card border border-border py-3 text-sm hover:border-accent transition-colors"
+            >
+              Done
+            </button>
+          </div>
         </div>
       )}
     </div>
