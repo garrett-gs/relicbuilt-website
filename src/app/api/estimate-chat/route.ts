@@ -18,15 +18,20 @@ export async function POST(req: NextRequest) {
       { data: settings },
       { data: catalog },
       { data: vendorCatalog },
+      { data: vendorList },
       { data: recentProjects },
       { data: recentReceipts },
     ] = await Promise.all([
       supabase.from("settings").select("biz_name, team_members, deposit_percent").limit(1).single(),
-      supabase.from("inventory_items").select("*, vendors(name)").eq("active", true).order("description").limit(500),
-      supabase.from("vendor_catalog").select("*, vendors(name)").eq("active", true).order("description").limit(500),
+      supabase.from("inventory_items").select("*").eq("active", true).order("description").limit(500),
+      supabase.from("vendor_catalog").select("*").eq("active", true).order("description").limit(500),
+      supabase.from("vendors").select("id, name").eq("status", "active"),
       supabase.from("custom_work").select("project_name, quoted_amount, materials, labor_log, status").in("status", ["completed", "delivered"]).order("created_at", { ascending: false }).limit(15),
       supabase.from("receipts").select("vendor, total, line_items, receipt_date").order("receipt_date", { ascending: false }).limit(30),
     ]);
+
+    // Build vendor lookup map
+    const vendorMap = new Map((vendorList || []).map((v: { id: string; name: string }) => [v.id, v.name]));
 
     // ── Build context strings ─────────────────────────────────
 
@@ -38,7 +43,7 @@ export async function POST(req: NextRequest) {
       .join("\n") || "  - No rates configured yet";
 
     const inventoryLines = (catalog || []).map((item) => {
-      const vendor = (item.vendors as { name: string } | null)?.name || "";
+      const vendor = item.vendor_id ? vendorMap.get(item.vendor_id) || "" : "";
       const price = item.unit_cost ? `$${item.unit_cost}/${item.unit}` : "no price";
       const sku = item.item_number ? ` | SKU: ${item.item_number}` : "";
       const vendorStr = vendor ? ` | ${vendor}` : "";
@@ -47,7 +52,7 @@ export async function POST(req: NextRequest) {
     }).join("\n") || "  - No inventory items yet";
 
     const vendorCatalogLines = (vendorCatalog || []).map((item) => {
-      const vendor = (item.vendors as { name: string } | null)?.name || "";
+      const vendor = item.vendor_id ? vendorMap.get(item.vendor_id) || "" : "";
       const price = item.unit_price ? `$${item.unit_price}/${item.unit}` : "no price";
       const sku = item.item_number ? ` | SKU: ${item.item_number}` : "";
       const cat = item.category ? ` | ${item.category}` : "";
