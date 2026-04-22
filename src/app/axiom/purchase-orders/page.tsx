@@ -19,6 +19,7 @@ function money(n: number) {
 }
 
 const statusColors = { pending: "#f59e0b", approved: "#22c55e", rejected: "#ef4444" };
+const TAX_RATE = 0.07; // 7% Valley, NE sales tax
 
 // ═══════════════════════════════════════════════════════════════
 // Main Page — Two Tabs
@@ -323,7 +324,9 @@ function OrdersTab() {
                   </div>
                   <p className="text-sm"><span className="text-muted">Vendor:</span> {po.vendor_name}</p>
                   <div className="flex gap-6 mt-2 text-sm">
-                    <span className="font-bold">Total: {money(total)}</span>
+                    <span className="font-bold">Subtotal: {money(total)}</span>
+                    <span className="text-muted">Est. Tax: {money(total * TAX_RATE)}</span>
+                    <span className="font-bold text-accent">Est. Total: {money(total + total * TAX_RATE)}</span>
                     {po.need_by_date && <span className="text-muted">Need by: {po.need_by_date}</span>}
                     {po.custom_work_id && (() => {
                       const proj = projects.find((p) => p.id === po.custom_work_id);
@@ -391,8 +394,16 @@ function OrdersTab() {
                     </tbody>
                     <tfoot>
                       <tr className="border-t border-border">
-                        <td colSpan={5} className="py-2 text-right font-bold text-xs uppercase tracking-wider text-muted">Total</td>
-                        <td className="py-2 text-right font-mono font-bold">{money(total)}</td>
+                        <td colSpan={5} className="py-1.5 text-right text-xs uppercase tracking-wider text-muted">Subtotal</td>
+                        <td className="py-1.5 text-right font-mono">{money(total)}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={5} className="py-1.5 text-right text-xs uppercase tracking-wider text-muted">Est. Tax (7%)</td>
+                        <td className="py-1.5 text-right font-mono text-muted">{money(total * TAX_RATE)}</td>
+                      </tr>
+                      <tr className="border-t border-border">
+                        <td colSpan={5} className="py-2 text-right font-bold text-xs uppercase tracking-wider text-muted">Est. Total</td>
+                        <td className="py-2 text-right font-mono font-bold">{money(total + total * TAX_RATE)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -444,8 +455,10 @@ function OrdersTab() {
       </div>
 
       {filtered.length > 0 && (
-        <div className="mt-4 text-right text-sm">
-          <span className="text-muted">Grand Total:</span> <span className="font-mono font-bold">{money(grandTotal)}</span>
+        <div className="mt-4 text-right text-sm flex items-center justify-end gap-4">
+          <span><span className="text-muted">Subtotal:</span> <span className="font-mono">{money(grandTotal)}</span></span>
+          <span><span className="text-muted">Est. Tax:</span> <span className="font-mono text-muted">{money(grandTotal * TAX_RATE)}</span></span>
+          <span><span className="text-muted">Est. Total:</span> <span className="font-mono font-bold">{money(grandTotal + grandTotal * TAX_RATE)}</span></span>
         </div>
       )}
 
@@ -731,9 +744,19 @@ function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
                         </div>
                       </div>
                     ))}
-                    <div className="text-right pt-2 border-t border-border">
-                      <span className="text-sm text-muted">PO Total: </span>
-                      <span className="text-lg font-mono font-bold">{money(total)}</span>
+                    <div className="pt-2 border-t border-border space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted">Subtotal</span>
+                        <span className="font-mono">{money(total)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted">Est. Tax (7%)</span>
+                        <span className="font-mono text-muted">{money(total * TAX_RATE)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm pt-1 border-t border-border">
+                        <span className="font-bold">Est. Total</span>
+                        <span className="text-lg font-mono font-bold">{money(total + total * TAX_RATE)}</span>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -956,9 +979,19 @@ function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
                         </div>
                       </div>
                     ))}
-                    <div className="text-right pt-2 border-t border-border">
-                      <span className="text-sm text-muted">PO Total: </span>
-                      <span className="text-lg font-mono font-bold">{money(total)}</span>
+                    <div className="pt-2 border-t border-border space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted">Subtotal</span>
+                        <span className="font-mono">{money(total)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted">Est. Tax (7%)</span>
+                        <span className="font-mono text-muted">{money(total * TAX_RATE)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm pt-1 border-t border-border">
+                        <span className="font-bold">Est. Total</span>
+                        <span className="text-lg font-mono font-bold">{money(total + total * TAX_RATE)}</span>
+                      </div>
                     </div>
                   </div>
                 )}
