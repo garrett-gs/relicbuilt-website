@@ -19,6 +19,9 @@ import {
   AlertTriangle,
   Printer,
   ArrowLeft,
+  FileUp,
+  Check,
+  Loader2,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -154,6 +157,7 @@ function InventoryTab({
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState<string>("all");
   const [showAdd, setShowAdd] = useState(false);
+  const [showScan, setShowScan] = useState(false);
   const [txnModal, setTxnModal] = useState<{ item: InventoryItem; type: "in" | "out" } | null>(null);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
 
@@ -349,6 +353,9 @@ function InventoryTab({
         </select>
         <button onClick={printTakeSheet} className="flex items-center gap-1.5 border border-border text-muted hover:text-foreground px-4 py-2.5 text-sm font-medium transition-colors">
           <Printer size={14} /> Take Sheet
+        </button>
+        <button onClick={() => setShowScan(true)} className="flex items-center gap-1.5 border border-accent/50 text-accent px-4 py-2.5 text-sm font-medium hover:bg-accent/10 transition-colors">
+          <FileUp size={14} /> Scan PDF
         </button>
         <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 bg-accent text-background px-4 py-2.5 text-sm font-medium hover:bg-accent/90 transition-colors">
           <Plus size={14} /> Add Item
@@ -552,6 +559,14 @@ function InventoryTab({
           categories={categories}
           locations={locations}
           onClose={() => setEditItem(null)}
+          onSaved={onReload}
+        />
+      )}
+      {showScan && (
+        <ScanPDFModal
+          categories={categories}
+          vendors={vendors}
+          onClose={() => setShowScan(false)}
           onSaved={onReload}
         />
       )}
@@ -1008,6 +1023,369 @@ function TransactionModal({
         <button onClick={onClose} className="flex-1 border border-border px-4 py-2.5 text-sm text-muted hover:text-foreground">Cancel</button>
       </div>
     </Modal>
+  );
+}
+
+// ── Scan PDF Modal ──────────────────────────────────────────────────────────
+
+interface ScanResult {
+  item_number: string | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  unit: string;
+  status: "match" | "new";
+  matched_inventory_id: string | null;
+  matched_description: string | null;
+  notes: string | null;
+}
+
+function ScanPDFModal({
+  categories, vendors, onClose, onSaved,
+}: {
+  categories: InventoryCategory[];
+  vendors: SimpleVendor[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [step, setStep] = useState<"upload" | "scanning" | "review" | "saving" | "done">("upload");
+  const [file, setFile] = useState<File | null>(null);
+  const [results, setResults] = useState<ScanResult[]>([]);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [vendorId, setVendorId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [error, setError] = useState("");
+  const [addedCount, setAddedCount] = useState(0);
+  const [dragOver, setDragOver] = useState(false);
+
+  async function handleScan(f: File) {
+    setFile(f);
+    setStep("scanning");
+    setError("");
+
+    const formData = new FormData();
+    formData.append("file", f);
+
+    try {
+      const res = await fetch("/api/scan-to-inventory", { method: "POST", body: formData });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Scan failed");
+        setStep("upload");
+        return;
+      }
+
+      const items: ScanResult[] = data.items || [];
+      setResults(items);
+      // Auto-select all new items
+      const newIdxs = new Set<number>();
+      items.forEach((item, i) => { if (item.status === "new") newIdxs.add(i); });
+      setSelected(newIdxs);
+      setStep("review");
+    } catch {
+      setError("Failed to scan document. Please try again.");
+      setStep("upload");
+    }
+  }
+
+  function toggleItem(idx: number) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    const newIdxs = results.map((r, i) => ({ r, i })).filter(({ r }) => r.status === "new").map(({ i }) => i);
+    if (newIdxs.every((i) => selected.has(i))) {
+      // Deselect all
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(newIdxs));
+    }
+  }
+
+  async function addSelected() {
+    const toAdd = results.filter((_, i) => selected.has(i) && results[i].status === "new");
+    if (toAdd.length === 0) return;
+
+    setStep("saving");
+
+    const rows = toAdd.map((item) => ({
+      description: item.description,
+      item_number: item.item_number || null,
+      unit: item.unit || "ea",
+      unit_cost: item.unit_price || 0,
+      quantity_on_hand: 0,
+      min_stock_level: 0,
+      category_id: categoryId || null,
+      vendor_id: vendorId || null,
+      active: true,
+    }));
+
+    const { error: insertError } = await axiom.from("inventory_items").insert(rows);
+
+    if (insertError) {
+      setError("Failed to add items: " + insertError.message);
+      setStep("review");
+      return;
+    }
+
+    await logActivity({
+      action: "created",
+      entity: "inventory",
+      label: `Scanned ${toAdd.length} new item${toAdd.length !== 1 ? "s" : ""} from ${file?.name || "document"}`,
+    });
+
+    setAddedCount(toAdd.length);
+    setStep("done");
+    onSaved();
+  }
+
+  const newCount = results.filter((r) => r.status === "new").length;
+  const matchCount = results.filter((r) => r.status === "match").length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={onClose}>
+      <div
+        className="bg-background border border-border w-full max-w-3xl mx-4 p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+            <FileUp size={18} className="text-accent" />
+            {step === "upload" && "Scan Document to Inventory"}
+            {step === "scanning" && "Scanning Document…"}
+            {step === "review" && "Review Scanned Items"}
+            {step === "saving" && "Adding Items…"}
+            {step === "done" && "Items Added"}
+          </h2>
+          <button onClick={onClose} className="text-muted hover:text-foreground"><X size={18} /></button>
+        </div>
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/30 px-4 py-3 mb-4 text-sm text-red-400 flex items-start gap-2">
+            <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+            <span>{error}</span>
+          </div>
+        )}
+
+        {/* Upload Step */}
+        {step === "upload" && (
+          <div>
+            <p className="text-sm text-muted mb-4">
+              Upload a vendor quote, estimate, or price list. Items will be extracted and compared against your existing inventory.
+              New items can be added to your catalog (quantity will be set to 0).
+            </p>
+            <div
+              className={`border-2 border-dashed rounded-sm p-12 text-center transition-colors cursor-pointer ${
+                dragOver ? "border-accent bg-accent/5" : "border-border hover:border-accent/50"
+              }`}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const f = e.dataTransfer.files[0];
+                if (f) handleScan(f);
+              }}
+              onClick={() => {
+                const input = document.createElement("input");
+                input.type = "file";
+                input.accept = ".pdf,image/*";
+                input.onchange = () => {
+                  const f = input.files?.[0];
+                  if (f) handleScan(f);
+                };
+                input.click();
+              }}
+            >
+              <FileUp size={40} className="mx-auto text-muted/40 mb-3" />
+              <p className="text-sm text-foreground font-medium">Drop a PDF or image here</p>
+              <p className="text-xs text-muted mt-1">or click to browse</p>
+              <p className="text-[10px] text-muted/60 mt-3">Supports PDF, JPG, PNG</p>
+            </div>
+          </div>
+        )}
+
+        {/* Scanning Step */}
+        {step === "scanning" && (
+          <div className="py-16 text-center">
+            <Loader2 size={32} className="mx-auto text-accent animate-spin mb-4" />
+            <p className="text-sm text-foreground font-medium">Analyzing {file?.name}…</p>
+            <p className="text-xs text-muted mt-2">Extracting line items and comparing against inventory</p>
+          </div>
+        )}
+
+        {/* Review Step */}
+        {step === "review" && (
+          <div>
+            {/* Summary */}
+            <div className="flex gap-4 mb-4">
+              <div className="bg-card border border-border px-4 py-3 flex-1">
+                <p className="text-xs text-muted uppercase tracking-wider">Total Items</p>
+                <p className="text-xl font-bold text-foreground">{results.length}</p>
+              </div>
+              <div className="bg-card border border-border px-4 py-3 flex-1">
+                <p className="text-xs text-green-400 uppercase tracking-wider">Already in Inventory</p>
+                <p className="text-xl font-bold text-green-400">{matchCount}</p>
+              </div>
+              <div className="bg-card border border-border px-4 py-3 flex-1">
+                <p className="text-xs text-accent uppercase tracking-wider">New Items</p>
+                <p className="text-xl font-bold text-accent">{newCount}</p>
+              </div>
+            </div>
+
+            {/* Assign vendor/category to all new items */}
+            {newCount > 0 && (
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className={lbl}>Assign Vendor (all new items)</label>
+                  <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className={inp}>
+                    <option value="">None</option>
+                    {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={lbl}>Assign Category (all new items)</label>
+                  <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inp}>
+                    <option value="">None</option>
+                    {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* Items table */}
+            <div className="border border-border overflow-x-auto max-h-[400px] overflow-y-auto">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-background z-10">
+                  <tr className="border-b border-border">
+                    <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider text-muted font-semibold w-8">
+                      {newCount > 0 && (
+                        <input
+                          type="checkbox"
+                          checked={results.filter((r) => r.status === "new").every((_, i) => {
+                            const realIdx = results.findIndex((r2, j) => r2.status === "new" && results.slice(0, j + 1).filter((x) => x.status === "new").length === i + 1);
+                            return selected.has(realIdx);
+                          })}
+                          onChange={toggleAll}
+                          className="accent-accent"
+                        />
+                      )}
+                    </th>
+                    <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider text-muted font-semibold">Status</th>
+                    <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider text-muted font-semibold">Item #</th>
+                    <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider text-muted font-semibold">Description</th>
+                    <th className="text-right px-3 py-2 text-[11px] uppercase tracking-wider text-muted font-semibold">Price</th>
+                    <th className="text-center px-3 py-2 text-[11px] uppercase tracking-wider text-muted font-semibold">Unit</th>
+                    <th className="text-left px-3 py-2 text-[11px] uppercase tracking-wider text-muted font-semibold">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.map((item, idx) => {
+                    const isMatch = item.status === "match";
+                    const isSelected = selected.has(idx);
+                    return (
+                      <tr
+                        key={idx}
+                        className={`border-b border-border/40 transition-colors ${
+                          isMatch ? "opacity-60" : isSelected ? "bg-accent/5" : "hover:bg-background/40"
+                        }`}
+                      >
+                        <td className="px-3 py-2">
+                          {isMatch ? (
+                            <Check size={14} className="text-green-400" />
+                          ) : (
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleItem(idx)}
+                              className="accent-accent"
+                            />
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`text-xs font-semibold px-1.5 py-0.5 ${
+                            isMatch ? "bg-green-500/15 text-green-400" : "bg-accent/15 text-accent"
+                          }`}>
+                            {isMatch ? "MATCH" : "NEW"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 font-mono text-xs text-muted">{item.item_number || "—"}</td>
+                        <td className="px-3 py-2 text-foreground">
+                          <div>{item.description}</div>
+                          {isMatch && item.matched_description && (
+                            <div className="text-[10px] text-green-400/70 mt-0.5">
+                              Matched: {item.matched_description}
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono">{item.unit_price > 0 ? money(item.unit_price) : "—"}</td>
+                        <td className="px-3 py-2 text-center text-muted">{item.unit}</td>
+                        <td className="px-3 py-2 text-xs text-muted max-w-[180px] truncate">{item.notes || ""}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-between mt-5">
+              <p className="text-xs text-muted">
+                {selected.size} item{selected.size !== 1 ? "s" : ""} selected to add
+              </p>
+              <div className="flex gap-3">
+                <button onClick={onClose} className="border border-border px-4 py-2.5 text-sm text-muted hover:text-foreground">
+                  Cancel
+                </button>
+                <button
+                  onClick={addSelected}
+                  disabled={selected.size === 0}
+                  className="bg-accent text-background px-5 py-2.5 text-sm font-semibold hover:bg-accent/90 disabled:opacity-50 flex items-center gap-2"
+                >
+                  <Plus size={14} /> Add {selected.size} Item{selected.size !== 1 ? "s" : ""} to Inventory
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Saving Step */}
+        {step === "saving" && (
+          <div className="py-16 text-center">
+            <Loader2 size={32} className="mx-auto text-accent animate-spin mb-4" />
+            <p className="text-sm text-foreground font-medium">Adding items to inventory…</p>
+          </div>
+        )}
+
+        {/* Done Step */}
+        {step === "done" && (
+          <div className="py-12 text-center">
+            <div className="w-14 h-14 bg-green-500/15 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Check size={28} className="text-green-400" />
+            </div>
+            <p className="text-lg font-semibold text-foreground">
+              {addedCount} Item{addedCount !== 1 ? "s" : ""} Added
+            </p>
+            <p className="text-sm text-muted mt-2">
+              New items have been added to your inventory catalog with quantity set to 0.
+              Update stock levels through the receive flow.
+            </p>
+            <button
+              onClick={onClose}
+              className="mt-6 bg-accent text-background px-6 py-2.5 text-sm font-semibold hover:bg-accent/90"
+            >
+              Done
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
