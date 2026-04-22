@@ -11,11 +11,11 @@ import { cn } from "@/lib/utils";
 import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink } from "lucide-react";
 import { useRouter } from "next/navigation";
 
-const STATUS_COLORS: Record<Estimate["status"], string> = {
-  draft: "#888",
-  sent: "#f59e0b",
-  accepted: "#22c55e",
-  rejected: "#ef4444",
+const STATUS_STYLES: Record<Estimate["status"], { text: string; bg: string; border: string }> = {
+  draft: { text: "text-amber-300", bg: "bg-amber-400/15", border: "border-amber-400/40" },
+  sent: { text: "text-blue-400", bg: "bg-blue-400/15", border: "border-blue-400/40" },
+  accepted: { text: "text-green-400", bg: "bg-green-500/15", border: "border-green-500/40" },
+  rejected: { text: "text-red-400", bg: "bg-red-500/15", border: "border-red-500/40" },
 };
 
 function money(n: number) {
@@ -224,7 +224,7 @@ export default function EstimatorPage() {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-accent text-sm font-mono">{money(total)}</p>
-                    <span className="text-xs capitalize" style={{ color: STATUS_COLORS[est.status] }}>
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 border ${STATUS_STYLES[est.status].text} ${STATUS_STYLES[est.status].bg} ${STATUS_STYLES[est.status].border}`}>
                       {est.status}
                     </span>
                   </div>
@@ -745,10 +745,10 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
             <select
               value={status}
               onChange={(e) => { setStatus(e.target.value as Estimate["status"]); markDirty(); }}
-              className="bg-card border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
+              className={`border px-3 py-1.5 text-sm font-semibold uppercase tracking-wider focus:outline-none ${STATUS_STYLES[status].bg} ${STATUS_STYLES[status].border} ${STATUS_STYLES[status].text}`}
             >
               {(["draft", "sent", "accepted", "rejected"] as const).map((s) => (
-                <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+                <option key={s} value={s} className="bg-card text-foreground">{s.charAt(0).toUpperCase() + s.slice(1)}</option>
               ))}
             </select>
           </div>
