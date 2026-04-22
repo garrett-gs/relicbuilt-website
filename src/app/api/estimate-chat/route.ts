@@ -17,11 +17,13 @@ export async function POST(req: NextRequest) {
     const [
       { data: settings },
       { data: catalog },
+      { data: vendorCatalog },
       { data: recentProjects },
       { data: recentReceipts },
     ] = await Promise.all([
       supabase.from("settings").select("biz_name, team_members, deposit_percent").limit(1).single(),
-      supabase.from("inventory_items").select("*, vendors(name)").eq("active", true).order("description").limit(200),
+      supabase.from("inventory_items").select("*, vendors(name)").eq("active", true).order("description").limit(500),
+      supabase.from("vendor_catalog").select("*, vendors(name)").eq("active", true).order("description").limit(500),
       supabase.from("custom_work").select("project_name, quoted_amount, materials, labor_log, status").in("status", ["completed", "delivered"]).order("created_at", { ascending: false }).limit(15),
       supabase.from("receipts").select("vendor, total, line_items, receipt_date").order("receipt_date", { ascending: false }).limit(30),
     ]);
@@ -35,14 +37,22 @@ export async function POST(req: NextRequest) {
       .map((m: { name: string; role: string; hourly_rate: number }) => `  - ${m.name} (${m.role}): $${m.hourly_rate}/hr`)
       .join("\n") || "  - No rates configured yet";
 
-    const catalogLines = (catalog || []).map((item) => {
+    const inventoryLines = (catalog || []).map((item) => {
       const vendor = (item.vendors as { name: string } | null)?.name || "";
       const price = item.unit_cost ? `$${item.unit_cost}/${item.unit}` : "no price";
       const sku = item.item_number ? ` | SKU: ${item.item_number}` : "";
       const vendorStr = vendor ? ` | ${vendor}` : "";
-      const stock = item.quantity_on_hand > 0 ? ` (${item.quantity_on_hand} in stock)` : "";
+      const stock = item.quantity_on_hand > 0 ? ` (${item.quantity_on_hand} in stock)` : " (0 in stock)";
       return `  - ${item.description} | ${price}${sku}${vendorStr}${stock}`;
     }).join("\n") || "  - No inventory items yet";
+
+    const vendorCatalogLines = (vendorCatalog || []).map((item) => {
+      const vendor = (item.vendors as { name: string } | null)?.name || "";
+      const price = item.unit_price ? `$${item.unit_price}/${item.unit}` : "no price";
+      const sku = item.item_number ? ` | SKU: ${item.item_number}` : "";
+      const cat = item.category ? ` | ${item.category}` : "";
+      return `  - ${item.description} | ${price}${sku} | ${vendor}${cat}`;
+    }).join("\n") || "  - No vendor catalog items yet";
 
     const projectHistoryLines = (recentProjects || []).map((p) => {
       const matTotal = (p.materials || []).reduce((s: number, m: { cost?: number }) => s + (m.cost || 0), 0);
@@ -75,8 +85,15 @@ ${currentEstimate}
 ## Team Labor Rates
 ${teamRates}
 
-## Material Catalog (your actual priced inventory)
-${catalogLines}
+## INVENTORY — Use These Prices First
+These are materials we have on hand or have purchased before. **ALWAYS use these costs in your estimates.** Do NOT ask the user for pricing on anything that matches an item below. Use the unit_cost as your price.
+
+${inventoryLines}
+
+## VENDOR CATALOG — Additional Pricing Reference
+These are items available from our vendors with known pricing. Use these if nothing matches in inventory above.
+
+${vendorCatalogLines}
 
 ## Recent Project History (for cost reference)
 ${projectHistoryLines}
@@ -84,12 +101,20 @@ ${projectHistoryLines}
 ## Recent Material Receipts (real costs paid)
 ${receiptLines}
 
+## CRITICAL RULES FOR PRICING
+1. **Search inventory FIRST.** If a material matches or closely matches an inventory item, USE THAT PRICE. Do not ask the user what it costs.
+2. **Search vendor catalog second.** If not in inventory but in the vendor catalog, use that price.
+3. **Only ask the user for pricing** on materials that are NOT in inventory and NOT in the vendor catalog. When you do ask, be specific about which item you need a price for.
+4. When you use an inventory/catalog price, mention it: "Using [item] at [price] from inventory."
+5. For common hardware (screws, bolts, sandpaper, etc.) that isn't in inventory, estimate reasonable costs based on your knowledge — don't bother asking for every small item.
+
 ## How You Work
 1. Ask clarifying questions naturally — dimensions, materials, finish, complexity, timeline
-2. Reference catalog items by their actual prices when you can
+2. Look up materials in inventory/catalog and use those costs automatically
 3. Use team rates for labor calculations
 4. Use project history to sanity-check your totals
 5. When you have enough info, produce the estimate
+6. Only ask for pricing on items you cannot find in inventory or catalog
 
 ## Producing an Estimate
 When ready, include this block ANYWHERE in your response (can follow your explanation):
@@ -108,12 +133,13 @@ When ready, include this block ANYWHERE in your response (can follow your explan
 </estimate_data>
 
 Rules for the estimate block:
-- Use real catalog prices where items match
+- Use inventory/catalog prices — this is mandatory. Match items by description.
+- Include the item_number from inventory/catalog when available
 - Use real team rates for labor
 - cost = hours × rate for each labor item
 - markup_percent is applied to the subtotal
 - Be thorough — include all materials, hardware, finish, delivery if applicable
-- If you're not sure about something, note it in the notes field
+- Note which items came from inventory vs. estimated in the notes field
 
 Keep your tone direct and professional. You're talking to a craftsman, not a client.`;
 
