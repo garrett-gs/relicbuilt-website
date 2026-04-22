@@ -8,7 +8,7 @@ import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Ve
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const STATUS_STYLES: Record<Estimate["status"], { text: string; bg: string; border: string }> = {
@@ -993,14 +993,18 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
           disabled={wrSending}
           className={`flex items-center gap-2 px-3 py-2 border text-sm transition-colors ${
             wrSent
-              ? "border-green-500/50 text-green-400 bg-green-500/10"
+              ? dirty
+                ? "border-amber-400/50 text-amber-300 bg-amber-400/10 hover:bg-amber-400/20"
+                : "border-green-500/50 text-green-400 bg-green-500/10 hover:bg-green-500/20"
               : "border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
           }`}
         >
           {wrSending ? (
             <><Loader2 size={14} className="animate-spin" /> Sending...</>
+          ) : wrSent && dirty ? (
+            <><ExternalLink size={14} /> Update WR</>
           ) : wrSent ? (
-            <><CheckCircle2 size={14} /> Sent to WR</>
+            <><RefreshCw size={14} /> Resend to WR</>
           ) : (
             <><ExternalLink size={14} /> Send to WR Nexus</>
           )}
