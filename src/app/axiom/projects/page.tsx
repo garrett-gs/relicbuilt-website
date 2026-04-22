@@ -775,8 +775,8 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     markDirty();
   }
 
-  // ── Add non-inventory material (creates auto-task for user) ──
-  async function addNonInventoryMaterial() {
+  // ── Add project expense (non-inventory material) ──
+  async function addProjectExpense(createTask: boolean) {
     if (!niDesc.trim()) return;
     const newMaterial: Material = {
       description: niDesc.trim(),
@@ -788,22 +788,31 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     setMaterials(updated);
     onUpdate({ materials: updated });
 
-    // Auto-create task assigned to the user who added the material
-    const assigneeName = memberName || userEmail;
-    await axiom.from("tasks").insert({
-      title: `Inventory Adjustment: ${niDesc.trim()}`,
-      description: `Material "${niDesc.trim()}" was added to project "${project.project_name}" without inventory allocation. Please create an inventory entry and adjustment for this item.\n\nVendor: ${niVendor.trim() || "N/A"}\nCost: $${niCost.toFixed(2)}`,
-      status: "todo",
-      priority: "medium",
-      assignee: assigneeName,
-      custom_work_id: project.id,
-      comments: [],
-    });
+    if (createTask) {
+      const assigneeName = memberName || userEmail;
+      await axiom.from("tasks").insert({
+        title: `Inventory Adjustment: ${niDesc.trim()}`,
+        description: `Material "${niDesc.trim()}" was added to project "${project.project_name}" without inventory allocation. Please create an inventory entry and adjustment for this item.\n\nVendor: ${niVendor.trim() || "N/A"}\nCost: $${niCost.toFixed(2)}`,
+        status: "todo",
+        priority: "medium",
+        assignee: assigneeName,
+        custom_work_id: project.id,
+        comments: [],
+      });
+
+      await logActivity({
+        action: "created",
+        entity: "task",
+        label: `Auto-task: Inventory adjustment needed for "${niDesc.trim()}" on ${project.project_name} — assigned to ${assigneeName}`,
+        user_name: userEmail,
+      });
+    }
 
     await logActivity({
-      action: "created",
-      entity: "task",
-      label: `Auto-task: Inventory adjustment needed for "${niDesc.trim()}" on ${project.project_name} — assigned to ${assigneeName}`,
+      action: "updated",
+      entity: "project",
+      entity_id: project.id,
+      label: `Added project expense: ${niDesc.trim()} (${money(niCost)}) to ${project.project_name}${createTask ? " + task created" : ""}`,
       user_name: userEmail,
     });
 
@@ -1228,7 +1237,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
           <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Materials</h3>
           <div className="flex items-center gap-2">
             <button onClick={() => setShowAllocateModal(true)} className="text-accent text-xs flex items-center gap-1"><Package size={12} /> From Inventory</button>
-            <button onClick={() => setShowNonInvForm(true)} className="text-muted text-xs flex items-center gap-1 hover:text-amber-400"><AlertTriangle size={10} /> Non-Inventory</button>
+            <button onClick={() => setShowNonInvForm(true)} className="text-muted text-xs flex items-center gap-1 hover:text-foreground"><Plus size={10} /> Add Expense</button>
           </div>
         </div>
 
@@ -1346,21 +1355,19 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
           </>
         )}
 
-        {/* Non-Inventory material form */}
+        {/* Project expense form */}
         {showNonInvForm && (
-          <div className="mt-3 p-3 border border-amber-800/40 bg-amber-950/20 space-y-2">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle size={14} className="text-amber-400" />
-              <span className="text-xs text-amber-400">A task will be created for you to adjust inventory</span>
-            </div>
-            <input value={niDesc} onChange={(e) => setNiDesc(e.target.value)} placeholder="Material description…" className="w-full bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" autoFocus />
+          <div className="mt-3 p-3 border border-border bg-card space-y-2">
+            <p className="text-xs text-muted mb-1">Add a project-specific expense (paint, hardware, specialty items, etc.)</p>
+            <input value={niDesc} onChange={(e) => setNiDesc(e.target.value)} placeholder="Description — e.g. Satin Black spray paint" className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" autoFocus />
             <div className="grid grid-cols-2 gap-2">
-              <input value={niVendor} onChange={(e) => setNiVendor(e.target.value)} placeholder="Vendor" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
-              <CurrencyInput value={niCost} onChange={setNiCost} placeholder="Cost" className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
+              <input value={niVendor} onChange={(e) => setNiVendor(e.target.value)} placeholder="Vendor / source" className="bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
+              <CurrencyInput value={niCost} onChange={setNiCost} placeholder="Cost" className="bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right" />
             </div>
             <div className="flex gap-2">
-              <button onClick={() => { setShowNonInvForm(false); setNiDesc(""); setNiVendor(""); setNiCost(0); }} className="flex-1 px-3 py-2 border border-border text-xs text-muted hover:text-foreground">Cancel</button>
-              <button onClick={addNonInventoryMaterial} disabled={!niDesc.trim()} className="flex-1 px-3 py-2 bg-amber-600 text-white text-xs font-medium disabled:opacity-50">Add & Create Task</button>
+              <button onClick={() => { setShowNonInvForm(false); setNiDesc(""); setNiVendor(""); setNiCost(0); }} className="px-3 py-2 border border-border text-xs text-muted hover:text-foreground">Cancel</button>
+              <button onClick={() => addProjectExpense(false)} disabled={!niDesc.trim()} className="flex-1 px-3 py-2 bg-accent text-background text-xs font-medium disabled:opacity-50">Add to Project</button>
+              <button onClick={() => addProjectExpense(true)} disabled={!niDesc.trim()} className="flex-1 px-3 py-2 bg-amber-600 text-white text-xs font-medium disabled:opacity-50 flex items-center justify-center gap-1"><AlertTriangle size={10} /> Add & Create Task</button>
             </div>
           </div>
         )}
