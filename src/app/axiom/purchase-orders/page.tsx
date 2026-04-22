@@ -21,6 +21,47 @@ function money(n: number) {
 const statusColors = { pending: "#f59e0b", approved: "#22c55e", rejected: "#ef4444" };
 const TAX_RATE = 0.07; // 7% Valley, NE sales tax
 
+// Merge vendor catalog items with inventory items for the same vendor.
+// Inventory items that share an item_number with a catalog item update
+// the catalog entry's price; inventory-only items get appended.
+function mergeVendorItems(
+  catalogItems: CatalogItem[],
+  inventoryItems: { id: string; item_number?: string; description: string; unit_cost: number; unit: string; category_id?: string }[],
+): CatalogItem[] {
+  const merged = [...catalogItems];
+  const catalogNumbers = new Set(catalogItems.map((c) => c.item_number?.toLowerCase()).filter(Boolean));
+  const catalogDescs = new Set(catalogItems.map((c) => c.description.toLowerCase().trim()));
+
+  for (const inv of inventoryItems) {
+    const numKey = inv.item_number?.toLowerCase();
+    const descKey = inv.description.toLowerCase().trim();
+
+    // If item_number matches a catalog entry, update its price
+    if (numKey && catalogNumbers.has(numKey)) {
+      const idx = merged.findIndex((c) => c.item_number?.toLowerCase() === numKey);
+      if (idx >= 0) merged[idx] = { ...merged[idx], unit_price: inv.unit_cost };
+      continue;
+    }
+    // If description matches, skip (already in catalog)
+    if (catalogDescs.has(descKey)) continue;
+
+    // New item from inventory — add as catalog-shaped entry
+    merged.push({
+      id: `inv-${inv.id}`,
+      vendor_id: "",
+      item_number: inv.item_number || undefined,
+      description: inv.description,
+      unit_price: inv.unit_cost,
+      unit: inv.unit,
+      category: undefined,
+      active: true,
+      created_at: "",
+    } as CatalogItem);
+  }
+
+  return merged.sort((a, b) => a.description.localeCompare(b.description));
+}
+
 // ═══════════════════════════════════════════════════════════════
 // Main Page — Two Tabs
 // ═══════════════════════════════════════════════════════════════
@@ -626,11 +667,14 @@ function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
   const [shipToAddress, setShipToAddress] = useState("");
   const [projectId, setProjectId] = useState("");
 
-  // Load catalog when vendor changes
+  // Load catalog + inventory items when vendor changes
   useEffect(() => {
     if (!vendorId) { setCatalog([]); return; }
-    axiom.from("vendor_catalog").select("*").eq("vendor_id", vendorId).eq("active", true).order("description").then(({ data }) => {
-      if (data) setCatalog(data);
+    Promise.all([
+      axiom.from("vendor_catalog").select("*").eq("vendor_id", vendorId).eq("active", true).order("description"),
+      axiom.from("inventory_items").select("*").eq("vendor_id", vendorId).eq("active", true).order("description"),
+    ]).then(([{ data: catData }, { data: invData }]) => {
+      setCatalog(mergeVendorItems(catData || [], invData || []));
     });
     const v = vendors.find((v) => v.id === vendorId);
     if (v) setVendorName(v.name);
@@ -806,24 +850,24 @@ function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
               </div>
             </div>
 
-            {/* Right: Vendor catalog */}
+            {/* Right: Vendor catalog + inventory */}
             <div>
               {vendorId ? (
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-xs uppercase tracking-wider text-muted">
                       <Package size={12} className="inline mr-1" />
-                      {vendorName} Catalog ({catalog.length} items)
+                      {vendorName} Items ({catalog.length})
                     </h3>
                   </div>
                   {catalog.length > 0 && (
                     <div className="relative mb-3">
                       <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                      <input value={catalogSearch} onChange={(e) => setCatalogSearch(e.target.value)} placeholder="Search catalog..." className="w-full bg-card border border-border pl-8 pr-4 py-2 text-xs text-foreground focus:outline-none focus:border-accent" />
+                      <input value={catalogSearch} onChange={(e) => setCatalogSearch(e.target.value)} placeholder="Search items..." className="w-full bg-card border border-border pl-8 pr-4 py-2 text-xs text-foreground focus:outline-none focus:border-accent" />
                     </div>
                   )}
                   {catalog.length === 0 ? (
-                    <p className="text-muted text-sm bg-card border border-border p-4">No items in this vendor&apos;s catalog yet. Add items in the Vendors tab.</p>
+                    <p className="text-muted text-sm bg-card border border-border p-4">No items for this vendor yet. Add items in Inventory or the Vendors tab.</p>
                   ) : (
                     <div className="space-y-1 max-h-[500px] overflow-y-auto">
                       {filteredCatalog.map((item) => (
@@ -886,8 +930,11 @@ function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
 
   useEffect(() => {
     if (!vendorId) { setCatalog([]); return; }
-    axiom.from("vendor_catalog").select("*").eq("vendor_id", vendorId).eq("active", true).order("description").then(({ data }) => {
-      if (data) setCatalog(data);
+    Promise.all([
+      axiom.from("vendor_catalog").select("*").eq("vendor_id", vendorId).eq("active", true).order("description"),
+      axiom.from("inventory_items").select("*").eq("vendor_id", vendorId).eq("active", true).order("description"),
+    ]).then(([{ data: catData }, { data: invData }]) => {
+      setCatalog(mergeVendorItems(catData || [], invData || []));
     });
     const v = vendors.find((v) => v.id === vendorId);
     if (v) setVendorName(v.name);
@@ -1040,24 +1087,24 @@ function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
               </div>
             </div>
 
-            {/* Right: Vendor catalog */}
+            {/* Right: Vendor catalog + inventory */}
             <div>
               {vendorId ? (
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-xs uppercase tracking-wider text-muted">
                       <Package size={12} className="inline mr-1" />
-                      {vendorName} Catalog ({catalog.length} items)
+                      {vendorName} Items ({catalog.length})
                     </h3>
                   </div>
                   {catalog.length > 0 && (
                     <div className="relative mb-3">
                       <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                      <input value={catalogSearch} onChange={(e) => setCatalogSearch(e.target.value)} placeholder="Search catalog..." className="w-full bg-card border border-border pl-8 pr-4 py-2 text-xs text-foreground focus:outline-none focus:border-accent" />
+                      <input value={catalogSearch} onChange={(e) => setCatalogSearch(e.target.value)} placeholder="Search items..." className="w-full bg-card border border-border pl-8 pr-4 py-2 text-xs text-foreground focus:outline-none focus:border-accent" />
                     </div>
                   )}
                   {catalog.length === 0 ? (
-                    <p className="text-muted text-sm bg-card border border-border p-4">No items in this vendor&apos;s catalog yet.</p>
+                    <p className="text-muted text-sm bg-card border border-border p-4">No items for this vendor yet. Add items in Inventory or the Vendors tab.</p>
                   ) : (
                     <div className="space-y-1 max-h-[500px] overflow-y-auto">
                       {filteredCatalog.map((item) => (

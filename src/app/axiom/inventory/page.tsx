@@ -557,6 +557,7 @@ function InventoryTab({
         <EditItemModal
           item={editItem}
           categories={categories}
+          vendors={vendors}
           locations={locations}
           onClose={() => setEditItem(null)}
           onSaved={onReload}
@@ -737,18 +738,21 @@ function AddItemModal({
 // ── Edit Item Modal ──────────────────────────────────────────────────────────
 
 function EditItemModal({
-  item, categories, locations, onClose, onSaved,
+  item, categories, vendors, locations, onClose, onSaved,
 }: {
   item: InventoryItem;
   categories: InventoryCategory[];
+  vendors: SimpleVendor[];
   locations: string[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [catId, setCatId] = useState(item.category_id ?? "");
+  const [vendorId, setVendorId] = useState(item.vendor_id ?? "");
   const [location, setLocation] = useState(item.location ?? "");
   const [minStock, setMinStock] = useState(String(item.min_stock_level || ""));
   const [desc, setDesc] = useState(item.description);
+  const [itemNum, setItemNum] = useState(item.item_number ?? "");
   const [unitCost, setUnitCost] = useState(String(item.unit_cost || ""));
   const [unit, setUnit] = useState(item.unit);
   const [notes, setNotes] = useState(item.notes ?? "");
@@ -759,7 +763,9 @@ function EditItemModal({
     setSaving(true);
     await axiom.from("inventory_items").update({
       description: desc.trim(),
+      item_number: itemNum.trim() || null,
       category_id: catId || null,
+      vendor_id: vendorId || null,
       location: location.trim() || null,
       min_stock_level: Number(minStock) || 0,
       unit_cost: Number(unitCost) || 0,
@@ -787,6 +793,19 @@ function EditItemModal({
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
+            <label className={lbl}>Item #</label>
+            <input value={itemNum} onChange={(e) => setItemNum(e.target.value)} className={inp} placeholder="SKU / part number" />
+          </div>
+          <div>
+            <label className={lbl}>Vendor / Supplier</label>
+            <select value={vendorId} onChange={(e) => setVendorId(e.target.value)} className={inp}>
+              <option value="">None</option>
+              {vendors.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
             <label className={lbl}>Unit Cost ($)</label>
             <input type="number" step="0.01" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} className={inp} />
           </div>
@@ -808,7 +827,6 @@ function EditItemModal({
             <select value={location} onChange={(e) => setLocation(e.target.value)} className={inp}>
               <option value="">None</option>
               {locations.filter(Boolean).map((loc) => <option key={loc} value={loc}>{loc}</option>)}
-              {/* Show current value if not in the list (legacy free-text) */}
               {location && !locations.includes(location) && <option value={location}>{location}</option>}
             </select>
           </div>
