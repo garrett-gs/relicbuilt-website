@@ -94,7 +94,7 @@ Important:
       method: "POST",
       headers: {
         "x-api-key": apiKey,
-        "anthropic-version": "2024-10-22",
+        "anthropic-version": "2023-06-01",
         "anthropic-beta": "pdfs-2024-09-25",
         "content-type": "application/json",
       },
