@@ -241,6 +241,7 @@ export interface Estimate {
   markup_percent: number;
   unit_count?: number;
   notes?: string;
+  chat_history?: { role: "user" | "assistant"; content: string }[];
   created_at: string;
   updated_at: string;
 }

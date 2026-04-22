@@ -328,9 +328,11 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
 
   // ── Claude chat ───────────────────────────────────────────────
   const [chatOpen, setChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>([]);
+  const [chatMessages, setChatMessages] = useState<{ role: "user" | "assistant"; content: string }[]>(estimate.chat_history || []);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatSaving, setChatSaving] = useState(false);
+  const [chatSaved, setChatSaved] = useState(false);
   const [pendingEstimate, setPendingEstimate] = useState<{ line_items: EstimateLineItem[]; labor_items: EstimateLaborItem[]; markup_percent: number; notes?: string } | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -507,6 +509,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       markup_percent: markupPct,
       unit_count: unitCount,
       notes,
+      chat_history: chatMessages.length > 0 ? chatMessages : undefined,
     });
     setDirty(false);
     setSaved(true);
@@ -629,6 +632,83 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     setPendingEstimate(null);
     markDirty();
     setChatMessages((prev) => [...prev, { role: "assistant", content: "✓ Estimate applied. Review the numbers and make any adjustments, then hit Save." }]);
+  }
+
+  async function saveChat() {
+    if (chatMessages.length === 0) return;
+    setChatSaving(true);
+    setChatSaved(false);
+    try {
+      // Build estimate snapshot for the recap
+      const snapshot = {
+        materials: lineItems.map((li) => `${li.quantity}x ${li.description} @ ${money(li.unit_price)}/${li.unit}`).join("\n  "),
+        materialTotal: money(materialTotal),
+        labor: laborItems.map((l) => `${l.description}: ${l.hours}hrs @ ${money(l.rate)}/hr = ${money(l.cost)}`).join("\n  "),
+        laborTotal: money(laborTotal),
+        markup: `${markupPct}%`,
+        total: money(total),
+        unitCount,
+      };
+
+      // Ask Claude for a structured recap
+      const res = await fetch("/api/estimate-chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            ...chatMessages,
+            { role: "user", content: `Give me a structured recap of this conversation for my records. Include:
+1. **What was discussed** — key topics and project requirements
+2. **Decisions made** — materials chosen, methods, design choices
+3. **Assumptions** — anything we assumed or estimated without hard data
+4. **Open questions** — anything unresolved or to verify
+5. **Final estimate snapshot:**
+   Materials (${snapshot.materialTotal}): ${snapshot.materials || "none"}
+   Labor (${snapshot.laborTotal}): ${snapshot.labor || "none"}
+   Markup: ${snapshot.markup}, Total: ${snapshot.total}${snapshot.unitCount > 1 ? `, Units: ${snapshot.unitCount}` : ""}
+
+Keep it concise with bullet points. This is for troubleshooting later.` },
+          ],
+          estimate: { project_name: projectName, client_name: clientName, line_items: lineItems, labor_items: laborItems, markup_percent: markupPct },
+        }),
+      });
+      const data = await res.json();
+      const recap = data.message || "Chat saved (recap unavailable)";
+
+      // Append recap to notes with separator
+      const timestamp = new Date().toLocaleString();
+      const recapBlock = `\n\n══ Claude Estimator Recap — ${timestamp} ══\n${recap}`;
+      const updatedNotes = (notes || "") + recapBlock;
+      setNotes(updatedNotes);
+
+      // Save chat history + updated notes to DB
+      await axiom.from("estimates").update({
+        chat_history: chatMessages,
+        notes: updatedNotes,
+        updated_at: new Date().toISOString(),
+      }).eq("id", estimate.id);
+
+      setChatSaved(true);
+      setChatMessages((prev) => [...prev, { role: "assistant", content: "✓ Chat saved. Full conversation stored on this estimate and recap added to notes." }]);
+    } catch (err) {
+      console.error("saveChat error:", err);
+      // Fall back to saving just the raw chat without recap
+      await axiom.from("estimates").update({
+        chat_history: chatMessages,
+        updated_at: new Date().toISOString(),
+      }).eq("id", estimate.id);
+      setChatSaved(true);
+    } finally {
+      setChatSaving(false);
+    }
+  }
+
+  function closeChat() {
+    // Auto-save chat if there are messages that haven't been saved yet
+    if (chatMessages.length > 0 && !chatSaved && chatMessages.length !== (estimate.chat_history || []).length) {
+      saveChat();
+    }
+    setChatOpen(false);
   }
 
   return (
@@ -927,9 +1007,18 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
         </button>
         <button
           onClick={() => setChatOpen(true)}
-          className="flex items-center gap-2 px-3 py-2 border border-accent/50 text-accent text-sm hover:bg-accent/10 transition-colors"
+          className={cn(
+            "flex items-center gap-2 px-3 py-2 border text-sm transition-colors",
+            (estimate.chat_history && estimate.chat_history.length > 0)
+              ? "border-accent text-accent bg-accent/5 hover:bg-accent/10"
+              : "border-accent/50 text-accent hover:bg-accent/10"
+          )}
         >
-          <Sparkles size={14} /> Ask Claude
+          <Sparkles size={14} />
+          {(estimate.chat_history && estimate.chat_history.length > 0) ? "View Chat" : "Ask Claude"}
+          {(estimate.chat_history && estimate.chat_history.length > 0) && (
+            <span className="text-[10px] bg-accent/20 px-1.5 py-0.5 rounded-full">{estimate.chat_history.length}</span>
+          )}
         </button>
         {confirmDelete ? (
           <div className="flex items-center gap-2 ml-auto">
@@ -961,7 +1050,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       {/* ── Claude chat drawer ── */}
       {chatOpen && (
         <>
-          <div className="fixed inset-0 bg-black/30 z-40" onClick={() => setChatOpen(false)} />
+          <div className="fixed inset-0 bg-black/30 z-40" onClick={closeChat} />
           <div className="fixed right-0 top-0 h-full w-full max-w-md bg-background border-l border-border z-50 flex flex-col shadow-2xl">
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -969,7 +1058,29 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
                 <Sparkles size={16} className="text-accent" />
                 <span className="font-semibold text-sm">Claude — AI Estimator</span>
               </div>
-              <button onClick={() => setChatOpen(false)} className="text-muted hover:text-foreground"><X size={18} /></button>
+              <div className="flex items-center gap-2">
+                {chatMessages.length > 0 && (
+                  <button
+                    onClick={saveChat}
+                    disabled={chatSaving || chatSaved}
+                    className={cn(
+                      "text-xs px-2.5 py-1.5 border transition-colors flex items-center gap-1",
+                      chatSaved
+                        ? "border-green-500/50 text-green-400"
+                        : "border-border text-muted hover:text-accent hover:border-accent"
+                    )}
+                  >
+                    {chatSaving ? (
+                      <><Loader2 size={10} className="animate-spin" /> Saving...</>
+                    ) : chatSaved ? (
+                      <><CheckCircle2 size={10} /> Saved</>
+                    ) : (
+                      "Save Chat"
+                    )}
+                  </button>
+                )}
+                <button onClick={closeChat} className="text-muted hover:text-foreground"><X size={18} /></button>
+              </div>
             </div>
 
             {/* Messages */}
