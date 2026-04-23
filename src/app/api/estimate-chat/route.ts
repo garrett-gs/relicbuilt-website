@@ -9,9 +9,10 @@ export async function POST(req: NextRequest) {
     const { messages, estimate } = await req.json();
 
     // ── Pull live context from Axiom ──────────────────────────
+    // Use service role key if available (bypasses RLS), otherwise fall back to anon
     const supabase = createClient(
       process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
     );
 
     const [
@@ -32,6 +33,12 @@ export async function POST(req: NextRequest) {
 
     // Build vendor lookup map
     const vendorMap = new Map((vendorList || []).map((v: { id: string; name: string }) => [v.id, v.name]));
+
+    console.log("[estimate-chat] loaded context:", {
+      inventoryCount: (catalog || []).length,
+      vendorCatalogCount: (vendorCatalog || []).length,
+      vendorCount: (vendorList || []).length,
+    });
 
     // ── Build context strings ─────────────────────────────────
 
@@ -112,6 +119,18 @@ ${receiptLines}
 3. **Only ask the user for pricing** on materials that are NOT in inventory and NOT in the vendor catalog. When you do ask, be specific about which item you need a price for.
 4. When you use an inventory/catalog price, mention it: "Using [item] at [price] from inventory."
 5. For common hardware (screws, bolts, sandpaper, etc.) that isn't in inventory, estimate reasonable costs based on your knowledge — don't bother asking for every small item.
+
+## MATCHING RULES — BE FLEXIBLE
+Descriptions won't always match exactly. Use common sense:
+- **Sheet goods**: "49 x 97" = "4x8" sheet (49"×97" is the actual size of a 4'×8' sheet). So "4x8 3/4 MDF" matches "49 X 97 3/4 MDF STANDARD".
+- **Lumber**: "4/4 White Oak" matches any "4/4 OAK WHITE ..." entry. "Poplar" matches "4/4 POPLAR ...".
+- **Thickness notation**: 3/4" = .75 = 0.75. 1/2" = .5. 4/4 = 1" rough / 25/32" surfaced.
+- **Unit conversions**: board feet (bf) for hardwood, each (ea) for sheets, linear feet (lf) for moldings.
+- If you see something in inventory that COULD reasonably be what the user wants, USE IT and mention what you matched. Don't ask for confirmation on obvious matches.
+- Only ask for clarification if there's genuine ambiguity (e.g. multiple possible matches at different prices).
+
+## IF INVENTORY APPEARS EMPTY
+If the inventory section above shows "No inventory items yet" — that's a data issue, not real. Tell the user: "My inventory data isn't loading — check with Garrett." Do NOT ask them to give you prices for things they've already entered in the system.
 
 ## How You Work
 1. Ask clarifying questions naturally — dimensions, materials, finish, complexity, timeline
