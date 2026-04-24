@@ -39,6 +39,8 @@ export default function TimeClockPage() {
   const [elapsed, setElapsed] = useState("");
   const [now, setNow] = useState(new Date());
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
+  const [breakHours, setBreakHours] = useState("");
+  const [breakReason, setBreakReason] = useState("");
 
   // Manual entry state
   const [manualMember, setManualMember] = useState("");
@@ -47,6 +49,8 @@ export default function TimeClockPage() {
   const [manualHours, setManualHours] = useState("");
   const [manualNotes, setManualNotes] = useState("");
   const [manualTasks, setManualTasks] = useState<string[]>([]);
+  const [manualBreakHours, setManualBreakHours] = useState("");
+  const [manualBreakReason, setManualBreakReason] = useState("");
   const [manualSaving, setManualSaving] = useState(false);
   const [manualSavedEntry, setManualSavedEntry] = useState<{ member: string; project: string; hours: number; cost: number } | null>(null);
 
@@ -148,10 +152,22 @@ export default function TimeClockPage() {
   async function handleClockOut() {
     if (!activeEntry) return;
     const clockOut = new Date().toISOString();
-    const hours = hoursFromEntry({ ...activeEntry, clock_out: clockOut });
+    const rawHours = hoursFromEntry({ ...activeEntry, clock_out: clockOut });
 
-    // Update time entry
-    await axiom.from("time_entries").update({ clock_out: clockOut, hours, tasks: selectedTasks }).eq("id", activeEntry.id);
+    // Apply break deduction if provided
+    const deductHours = Math.max(0, parseFloat(breakHours) || 0);
+    const hours = Math.max(0, Math.round((rawHours - deductHours) * 100) / 100);
+    const breakNote = deductHours > 0
+      ? ` [break: -${deductHours}h${breakReason.trim() ? ` (${breakReason.trim()})` : ""}]`
+      : "";
+
+    // Update time entry — store adjusted hours, keep original clock_in/out, record break in notes
+    await axiom.from("time_entries").update({
+      clock_out: clockOut,
+      hours,
+      tasks: selectedTasks,
+      notes: breakNote ? breakNote.trim() : null,
+    }).eq("id", activeEntry.id);
 
     // Append to project labor log
     if (activeEntry.custom_work_id) {
@@ -159,12 +175,13 @@ export default function TimeClockPage() {
       if (project) {
         const rate = activeEntry.hourly_rate || 60;
         const cost = Math.round(hours * rate * 100) / 100;
+        const baseDesc = selectedTasks.length ? `${selectedMember!.name} — ${selectedTasks.join(", ")}` : selectedMember!.name;
         const newEntry = {
           date: new Date().toISOString().split("T")[0],
           hours,
           rate,
           cost,
-          description: selectedTasks.length ? `${selectedMember!.name} — ${selectedTasks.join(", ")}` : selectedMember!.name,
+          description: `${baseDesc}${breakNote}`,
           tasks: selectedTasks,
         };
         const updatedLog = [...(project.labor_log || []), newEntry];
@@ -179,20 +196,26 @@ export default function TimeClockPage() {
 
     setCompletedEntry({ ...activeEntry, clock_out: clockOut, hours });
     setActiveEntry(null);
+    setBreakHours("");
+    setBreakReason("");
     setStep("clocked_out");
   }
 
   async function handleManualSave() {
-    const hours = parseFloat(manualHours);
-    if (!manualMember || !manualProject || !hours || hours <= 0) return;
+    const rawHours = parseFloat(manualHours);
+    if (!manualMember || !manualProject || !rawHours || rawHours <= 0) return;
     setManualSaving(true);
+
+    // Apply break deduction
+    const deductHours = Math.max(0, parseFloat(manualBreakHours) || 0);
+    const hours = Math.max(0, Math.round((rawHours - deductHours) * 100) / 100);
 
     const project = projects.find((p) => p.id === manualProject);
     const member = members.find((m) => m.name === manualMember);
     const rate = member?.hourly_rate || 60;
     const cost = Math.round(hours * rate * 100) / 100;
 
-    // Create clock_in/clock_out from date + hours
+    // Create clock_in/clock_out from date + adjusted hours
     const clockIn = new Date(`${manualDate}T08:00:00`).toISOString();
     const clockOutMs = new Date(clockIn).getTime() + hours * 3600000;
     const clockOut = new Date(clockOutMs).toISOString();
@@ -201,6 +224,9 @@ export default function TimeClockPage() {
       ? `${manualMember} — ${manualTasks.join(", ")}`
       : manualMember;
     const notesPart = manualNotes ? ` (${manualNotes})` : "";
+    const breakNote = deductHours > 0
+      ? ` [break: -${deductHours}h${manualBreakReason.trim() ? ` (${manualBreakReason.trim()})` : ""}]`
+      : "";
 
     // Insert time entry
     await axiom.from("time_entries").insert({
@@ -211,7 +237,7 @@ export default function TimeClockPage() {
       clock_out: clockOut,
       hours,
       hourly_rate: rate,
-      notes: `Manual entry${notesPart}`,
+      notes: `Manual entry${notesPart}${breakNote}`,
     });
 
     // Update project labor log
@@ -223,7 +249,7 @@ export default function TimeClockPage() {
           hours,
           rate,
           cost,
-          description: `${taskDesc}${notesPart}`,
+          description: `${taskDesc}${notesPart}${breakNote}`,
           tasks: manualTasks,
         };
         const updatedLog = [...(pw.labor_log || []), newEntry];
@@ -250,12 +276,16 @@ export default function TimeClockPage() {
     setCompletedEntry(null);
     setSelectedProject(null);
     setSelectedTasks([]);
+    setBreakHours("");
+    setBreakReason("");
     setManualMember("");
     setManualProject("");
     setManualDate(new Date().toISOString().split("T")[0]);
     setManualHours("");
     setManualNotes("");
     setManualTasks([]);
+    setManualBreakHours("");
+    setManualBreakReason("");
     setManualSavedEntry(null);
   }
 
@@ -474,6 +504,31 @@ export default function TimeClockPage() {
                 })}
               </div>
             </div>
+            <div className="mt-6 pt-4 border-t border-border text-left">
+              <p className="text-xs uppercase tracking-widest text-muted mb-3 text-center">Break Deduction (optional)</p>
+              <div className="grid grid-cols-[90px_1fr] gap-2">
+                <input
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  value={breakHours}
+                  onChange={(e) => setBreakHours(e.target.value)}
+                  placeholder="0.0"
+                  className="bg-background border border-border px-3 py-2 text-sm text-foreground text-right focus:outline-none focus:border-accent"
+                />
+                <input
+                  value={breakReason}
+                  onChange={(e) => setBreakReason(e.target.value)}
+                  placeholder="Reason — e.g. lunch, errands"
+                  className="bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+                />
+              </div>
+              {parseFloat(breakHours) > 0 && (
+                <p className="text-[10px] text-muted mt-1.5 text-center">
+                  {parseFloat(breakHours)}h will be subtracted from your total
+                </p>
+              )}
+            </div>
           </div>
           <button
             onClick={handleClockOut}
@@ -614,21 +669,63 @@ export default function TimeClockPage() {
               />
             </div>
 
-            {/* Preview */}
-            {manualMember && manualProject && manualHours && (
-              <div className="bg-card border border-border p-4 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted">Rate</span>
-                  <span className="font-mono">{money(members.find((m) => m.name === manualMember)?.hourly_rate || 60)}/hr</span>
-                </div>
-                <div className="flex justify-between mt-1">
-                  <span className="text-muted">Total Cost</span>
-                  <span className="font-mono text-accent font-bold">
-                    {money((parseFloat(manualHours) || 0) * (members.find((m) => m.name === manualMember)?.hourly_rate || 60))}
-                  </span>
-                </div>
+            {/* Break deduction */}
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Break Deduction (optional)</label>
+              <div className="grid grid-cols-[100px_1fr] gap-2">
+                <input
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  value={manualBreakHours}
+                  onChange={(e) => setManualBreakHours(e.target.value)}
+                  placeholder="0.0"
+                  className="bg-card border border-border px-4 py-3 text-foreground text-sm text-right focus:outline-none focus:border-accent"
+                />
+                <input
+                  value={manualBreakReason}
+                  onChange={(e) => setManualBreakReason(e.target.value)}
+                  placeholder="Reason — e.g. lunch"
+                  className="bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+                />
               </div>
-            )}
+            </div>
+
+            {/* Preview */}
+            {manualMember && manualProject && manualHours && (() => {
+              const rawHrs = parseFloat(manualHours) || 0;
+              const brk = Math.max(0, parseFloat(manualBreakHours) || 0);
+              const netHrs = Math.max(0, Math.round((rawHrs - brk) * 100) / 100);
+              const rate = members.find((m) => m.name === manualMember)?.hourly_rate || 60;
+              return (
+                <div className="bg-card border border-border p-4 text-sm space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted">Rate</span>
+                    <span className="font-mono">{money(rate)}/hr</span>
+                  </div>
+                  {brk > 0 && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted">Hours Entered</span>
+                        <span className="font-mono">{rawHrs.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-amber-400">
+                        <span>Break Deduction</span>
+                        <span className="font-mono">-{brk.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between border-t border-border pt-1">
+                        <span className="text-muted">Net Hours</span>
+                        <span className="font-mono font-bold">{netHrs.toFixed(2)}</span>
+                      </div>
+                    </>
+                  )}
+                  <div className="flex justify-between mt-1">
+                    <span className="text-muted">Total Cost</span>
+                    <span className="font-mono text-accent font-bold">{money(netHrs * rate)}</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <button
               onClick={handleManualSave}
