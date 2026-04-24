@@ -10,7 +10,7 @@ import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import ImageUpload from "@/components/ui/ImageUpload";
 import { cn, formatPhone } from "@/lib/utils";
-import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle } from "lucide-react";
+import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { useRouter } from "next/navigation";
 import { generateProposalHtml } from "@/lib/proposal-html";
@@ -558,6 +558,9 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [niDesc, setNiDesc] = useState("");
   const [niVendor, setNiVendor] = useState("");
   const [niCost, setNiCost] = useState(0);
+  const [breakRowIdx, setBreakRowIdx] = useState<number | null>(null);
+  const [breakRowHours, setBreakRowHours] = useState("");
+  const [breakRowReason, setBreakRowReason] = useState("");
   const [memberName, setMemberName] = useState("");
   const [quoted, setQuoted] = useState(project.quoted_amount || 0);
   const [unitCount, setUnitCount] = useState(project.unit_count || 1);
@@ -882,6 +885,29 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     setLabor(updated); markDirty();
   }
   function removeLabor(i: number) { setLabor(labor.filter((_, idx) => idx !== i)); markDirty(); }
+
+  function applyBreakToLabor(i: number) {
+    const deduct = Math.max(0, parseFloat(breakRowHours) || 0);
+    if (deduct <= 0) { setBreakRowIdx(null); return; }
+    const updated = [...labor];
+    const current = updated[i];
+    const newHours = Math.max(0, Math.round((Number(current.hours || 0) - deduct) * 100) / 100);
+    const rate = Number(current.rate || 0);
+    const reasonStr = breakRowReason.trim() ? ` (${breakRowReason.trim()})` : "";
+    const breakTag = ` [break: -${deduct}h${reasonStr}]`;
+    const existingDesc = (current.description || "").replace(/\s*\[break:[^\]]*\]/g, "");
+    updated[i] = {
+      ...current,
+      hours: newHours,
+      cost: Math.round(newHours * rate * 100) / 100,
+      description: `${existingDesc}${breakTag}`,
+    };
+    setLabor(updated);
+    setBreakRowIdx(null);
+    setBreakRowHours("");
+    setBreakRowReason("");
+    markDirty();
+  }
 
   function addHighlight() { setProposalHighlights([...proposalHighlights, { title: "", body: "", included: true }]); markDirty(); }
   function updateHighlight(i: number, field: "title" | "body", value: string) {
@@ -1384,13 +1410,65 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         ) : (
           <div className="space-y-2">
             {labor.map((l, i) => (
-              <div key={i} className="flex gap-2 items-center">
-                <input type="date" value={l.date} onChange={(e) => updateLabor(i, "date", e.target.value)} className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent shrink-0" />
-                <input type="text" value={l.description || ""} onChange={(e) => updateLabor(i, "description", e.target.value)} placeholder="Description…" className="flex-1 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent min-w-0" />
-                <input type="number" value={l.hours || ""} onChange={(e) => updateLabor(i, "hours", Number(e.target.value))} placeholder="Hrs" className="w-16 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right shrink-0" />
-                <input type="number" value={l.rate || ""} onChange={(e) => updateLabor(i, "rate", Number(e.target.value))} placeholder="Rate" className="w-20 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right shrink-0" />
-                <span className="text-sm font-mono text-right w-20 shrink-0">{money(l.cost || 0)}</span>
-                <button onClick={() => removeLabor(i)} className="text-muted hover:text-red-500 shrink-0"><Trash2 size={14} /></button>
+              <div key={i} className="space-y-1">
+                <div className="flex gap-2 items-center">
+                  <input type="date" value={l.date} onChange={(e) => updateLabor(i, "date", e.target.value)} className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent shrink-0" />
+                  <input type="text" value={l.description || ""} onChange={(e) => updateLabor(i, "description", e.target.value)} placeholder="Description…" className="flex-1 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent min-w-0" />
+                  <input type="number" value={l.hours || ""} onChange={(e) => updateLabor(i, "hours", Number(e.target.value))} placeholder="Hrs" className="w-16 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right shrink-0" />
+                  <input type="number" value={l.rate || ""} onChange={(e) => updateLabor(i, "rate", Number(e.target.value))} placeholder="Rate" className="w-20 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right shrink-0" />
+                  <span className="text-sm font-mono text-right w-20 shrink-0">{money(l.cost || 0)}</span>
+                  <button
+                    onClick={() => {
+                      if (breakRowIdx === i) { setBreakRowIdx(null); }
+                      else { setBreakRowIdx(i); setBreakRowHours(""); setBreakRowReason(""); }
+                    }}
+                    className="text-muted hover:text-amber-400 shrink-0"
+                    title="Apply break deduction"
+                  >
+                    <Coffee size={14} />
+                  </button>
+                  <button onClick={() => removeLabor(i)} className="text-muted hover:text-red-500 shrink-0"><Trash2 size={14} /></button>
+                </div>
+                {breakRowIdx === i && (
+                  <div className="flex gap-2 items-center pl-3 pr-16 py-2 bg-amber-950/20 border border-amber-800/30">
+                    <Coffee size={12} className="text-amber-400 shrink-0" />
+                    <input
+                      type="number"
+                      step="0.25"
+                      min="0"
+                      value={breakRowHours}
+                      onChange={(e) => setBreakRowHours(e.target.value)}
+                      placeholder="Hrs to deduct"
+                      autoFocus
+                      className="w-28 bg-background border border-border px-2 py-1.5 text-xs text-foreground text-right focus:outline-none focus:border-accent"
+                    />
+                    <input
+                      value={breakRowReason}
+                      onChange={(e) => setBreakRowReason(e.target.value)}
+                      placeholder="Reason — e.g. lunch"
+                      className="flex-1 bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent"
+                      onKeyDown={(e) => { if (e.key === "Enter") applyBreakToLabor(i); }}
+                    />
+                    {parseFloat(breakRowHours) > 0 && (
+                      <span className="text-[10px] text-amber-400 whitespace-nowrap">
+                        {(Number(l.hours || 0)).toFixed(2)} → {Math.max(0, Number(l.hours || 0) - parseFloat(breakRowHours)).toFixed(2)}h
+                      </span>
+                    )}
+                    <button
+                      onClick={() => applyBreakToLabor(i)}
+                      disabled={!parseFloat(breakRowHours)}
+                      className="px-3 py-1.5 bg-amber-600 text-white text-xs font-medium disabled:opacity-40 shrink-0"
+                    >
+                      Apply
+                    </button>
+                    <button
+                      onClick={() => { setBreakRowIdx(null); setBreakRowHours(""); setBreakRowReason(""); }}
+                      className="px-2 py-1.5 text-xs text-muted hover:text-foreground shrink-0"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
             <p className="text-right text-sm font-mono text-muted">Total: {money(laborTotal)}</p>
