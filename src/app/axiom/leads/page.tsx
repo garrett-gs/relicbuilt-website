@@ -27,8 +27,7 @@ import {
 const STATUSES: { key: Lead["status"]; label: string; color: string }[] = [
   { key: "new",       label: "New",       color: "#6366f1" },
   { key: "contacted", label: "Contacted", color: "#f59e0b" },
-  { key: "quoted",    label: "Quoted",    color: "#3b82f6" },
-  { key: "converted", label: "Converted", color: "#22c55e" },
+  { key: "quoted",    label: "Quoted",    color: "#22c55e" },
   { key: "lost",      label: "Lost",      color: "#9ca3af" },
 ];
 
@@ -399,9 +398,13 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
       notes: seedNotes || null,
     }).select("id").single();
 
-    // Mark lead as converted
+    // Mark lead as quoted, link to estimate
     const { data: updatedLead } = await axiom.from("leads")
-      .update({ status: "converted", updated_at: new Date().toISOString() })
+      .update({
+        status: "quoted",
+        estimate_id: newEst?.id || null,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", lead.id)
       .select()
       .single();
@@ -602,7 +605,7 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
 
         {/* Convert to Estimate */}
         <div className="pt-2 border-t border-border">
-          {lead.status === "converted" ? (
+          {lead.estimate_id ? (
             <button
               onClick={() => router.push("/axiom/estimator")}
               className="w-full flex items-center justify-center gap-2 border border-accent/40 text-accent px-4 py-3 text-sm hover:bg-accent/10 transition-colors"

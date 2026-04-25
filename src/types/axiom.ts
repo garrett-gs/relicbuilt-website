@@ -546,7 +546,8 @@ export interface Lead {
   description?: string;
   budget_range?: string;
   inspiration_photos: string[];
-  status: "new" | "contacted" | "quoted" | "converted" | "lost";
+  status: "new" | "contacted" | "quoted" | "lost";
+  estimate_id?: string;
   source?: string;
   notes?: string;
   created_at: string;
