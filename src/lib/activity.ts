@@ -22,7 +22,8 @@ type EntityType =
   | "estimate"
   | "inventory"
   | "settings"
-  | "wallflower_work_order";
+  | "wallflower_work_order"
+  | "lead";
 
 export async function logActivity({
   action,

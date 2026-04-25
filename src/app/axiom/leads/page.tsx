@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { axiom } from "@/lib/axiom-supabase";
+import { logActivity } from "@/lib/activity";
 import { Lead, Customer } from "@/types/axiom";
 import { formatPhone } from "@/lib/utils";
 import {
@@ -19,6 +21,7 @@ import {
   Pencil,
   Trash2,
   Check,
+  FileText,
 } from "lucide-react";
 
 const STATUSES: { key: Lead["status"]; label: string; color: string }[] = [
@@ -272,6 +275,8 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesDirty, setNotesDirty] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     setEditing(false);
@@ -332,6 +337,89 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
   async function handleDelete() {
     await axiom.from("leads").delete().eq("id", lead.id);
     onDelete(lead.id);
+  }
+
+  async function convertToEstimate() {
+    setConverting(true);
+
+    // Find or create a customer for this lead
+    let customerId: string | null = null;
+    if (lead.email || lead.phone) {
+      const { data: existing } = await axiom.from("customers")
+        .select("id")
+        .or([
+          lead.email ? `email.eq.${lead.email}` : null,
+          lead.phone ? `phone.eq.${lead.phone}` : null,
+        ].filter(Boolean).join(","))
+        .limit(1)
+        .maybeSingle();
+      if (existing?.id) {
+        customerId = existing.id;
+      }
+    }
+    if (!customerId) {
+      const { data: newCust } = await axiom.from("customers").insert({
+        name: lead.name,
+        email: lead.email || null,
+        phone: lead.phone || null,
+        type: "Individual",
+        status: "active",
+        notes: [],
+      }).select("id").single();
+      if (newCust?.id) customerId = newCust.id;
+    }
+
+    // Generate estimate number
+    const year = new Date().getFullYear();
+    const { data: latest } = await axiom.from("estimates")
+      .select("estimate_number")
+      .like("estimate_number", `EST-${year}-%`)
+      .order("estimate_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const lastNum = latest?.estimate_number ? parseInt(latest.estimate_number.split("-").pop() || "0", 10) : 0;
+    const estimate_number = `EST-${year}-${String(lastNum + 1).padStart(4, "0")}`;
+
+    // Build initial notes from lead description + budget
+    const seedNotes = [
+      lead.description ? `Project: ${lead.description}` : "",
+      lead.budget_range ? `Budget: ${lead.budget_range}` : "",
+      lead.notes ? `Notes from lead: ${lead.notes}` : "",
+    ].filter(Boolean).join("\n\n");
+
+    const { data: newEst } = await axiom.from("estimates").insert({
+      estimate_number,
+      project_name: lead.description ? lead.description.slice(0, 80) : `${lead.name} project`,
+      client_name: lead.name,
+      customer_id: customerId,
+      status: "draft",
+      line_items: [],
+      labor_items: [],
+      markup_percent: 0,
+      notes: seedNotes || null,
+    }).select("id").single();
+
+    // Mark lead as converted
+    const { data: updatedLead } = await axiom.from("leads")
+      .update({ status: "converted", updated_at: new Date().toISOString() })
+      .eq("id", lead.id)
+      .select()
+      .single();
+
+    if (updatedLead) onUpdate(updatedLead as Lead);
+
+    await logActivity({
+      action: "converted",
+      entity: "lead",
+      entity_id: lead.id,
+      label: `Converted lead "${lead.name}" → estimate ${estimate_number}`,
+    });
+
+    setConverting(false);
+
+    if (newEst?.id) {
+      router.push("/axiom/estimator");
+    }
   }
 
   return (
@@ -512,12 +600,25 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
           />
         </div>
 
-        {/* Convert to Project */}
+        {/* Convert to Estimate */}
         <div className="pt-2 border-t border-border">
-          <a href="/axiom/projects" className="flex items-center gap-2 text-sm text-accent hover:underline">
-            <Plus size={14} />
-            Convert to Project (go to Projects)
-          </a>
+          {lead.status === "converted" ? (
+            <button
+              onClick={() => router.push("/axiom/estimator")}
+              className="w-full flex items-center justify-center gap-2 border border-accent/40 text-accent px-4 py-3 text-sm hover:bg-accent/10 transition-colors"
+            >
+              <FileText size={14} /> View Estimate
+            </button>
+          ) : (
+            <button
+              onClick={convertToEstimate}
+              disabled={converting}
+              className="w-full flex items-center justify-center gap-2 bg-accent text-background px-4 py-3 text-sm font-semibold hover:bg-accent/90 disabled:opacity-50 transition-colors"
+            >
+              <FileText size={14} />
+              {converting ? "Converting…" : "Convert to Estimate"}
+            </button>
+          )}
         </div>
       </div>
     </div>
