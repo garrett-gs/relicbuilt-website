@@ -398,10 +398,9 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
       notes: seedNotes || null,
     }).select("id").single();
 
-    // Mark lead as quoted, link to estimate
+    // Link the estimate to the lead (status doesn't advance until estimate is sent)
     const { data: updatedLead } = await axiom.from("leads")
       .update({
-        status: "quoted",
         estimate_id: newEst?.id || null,
         updated_at: new Date().toISOString(),
       })

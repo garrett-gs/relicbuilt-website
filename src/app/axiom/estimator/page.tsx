@@ -176,6 +176,27 @@ export default function EstimatorPage() {
 
   async function updateEstimate(id: string, updates: Partial<Estimate>) {
     await axiom.from("estimates").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
+
+    // If the estimate was just marked "sent", advance any linked lead to "quoted"
+    if (updates.status === "sent") {
+      const { data: linkedLead } = await axiom.from("leads")
+        .select("id, status")
+        .eq("estimate_id", id)
+        .maybeSingle();
+      if (linkedLead && linkedLead.status !== "quoted" && linkedLead.status !== "lost") {
+        await axiom.from("leads")
+          .update({ status: "quoted", updated_at: new Date().toISOString() })
+          .eq("id", linkedLead.id);
+        await logActivity({
+          action: "updated",
+          entity: "lead",
+          entity_id: linkedLead.id,
+          label: "Lead auto-advanced to Quoted (estimate sent)",
+          user_name: userEmail,
+        });
+      }
+    }
+
     load();
     if (selected?.id === id) setSelected((prev) => prev ? { ...prev, ...updates } : prev);
   }
