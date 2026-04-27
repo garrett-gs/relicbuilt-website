@@ -455,8 +455,14 @@ export interface Settings {
   team_members: TeamMember[];
   categories: string[];
   inventory_locations: string[];
+  delivery_addresses?: SavedAddress[];
   receipts_pin?: string;
   created_at: string;
+}
+
+export interface SavedAddress {
+  label: string;
+  address: string;
 }
 
 export interface TeamMember {

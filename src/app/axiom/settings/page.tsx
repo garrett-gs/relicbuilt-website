@@ -10,7 +10,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { cn, formatPhone } from "@/lib/utils";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 
-const TABS = ["General", "Team", "Categories", "Locations", "Terms"] as const;
+const TABS = ["General", "Team", "Categories", "Locations", "Addresses", "Terms"] as const;
 type Tab = (typeof TABS)[number];
 
 export default function SettingsPage() {
@@ -250,6 +250,61 @@ export default function SettingsPage() {
             ))}
           </div>
           <button onClick={() => updateField("inventory_locations", [...(settings.inventory_locations || []), ""])} className="text-accent text-sm flex items-center gap-1"><Plus size={14} /> Add Location</button>
+        </div>
+      )}
+
+      {tab === "Addresses" && (
+        <div className="max-w-2xl">
+          <p className="text-sm text-muted mb-4">
+            Saved delivery addresses for purchase orders. These show up as a dropdown on the PO ship-to field, so you don&apos;t have to retype common destinations.
+          </p>
+          <div className="space-y-3 mb-4">
+            {(settings.delivery_addresses || []).map((addr: { label: string; address: string }, i: number) => (
+              <div key={i} className="bg-card border border-border p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    value={addr.label}
+                    onChange={(e) => {
+                      const list = [...(settings.delivery_addresses || [])];
+                      list[i] = { ...list[i], label: e.target.value };
+                      updateField("delivery_addresses", list);
+                    }}
+                    className="flex-1 bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+                    placeholder="Label — e.g. RELIC Shop, Garrett's Garage, Main Warehouse"
+                  />
+                  <button
+                    onClick={() => {
+                      const list = (settings.delivery_addresses || []).filter((_: { label: string; address: string }, idx: number) => idx !== i);
+                      updateField("delivery_addresses", list);
+                    }}
+                    className="text-muted hover:text-red-500"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+                <AddressAutocomplete
+                  value={addr.address}
+                  onChange={(v) => {
+                    const list = [...(settings.delivery_addresses || [])];
+                    list[i] = { ...list[i], address: v };
+                    updateField("delivery_addresses", list);
+                  }}
+                  onSelect={(r) => {
+                    const list = [...(settings.delivery_addresses || [])];
+                    list[i] = { ...list[i], address: r.formatted };
+                    updateField("delivery_addresses", list);
+                  }}
+                  className="w-full bg-background border border-border px-3 py-2 text-foreground text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={() => updateField("delivery_addresses", [...(settings.delivery_addresses || []), { label: "", address: "" }])}
+            className="text-accent text-sm flex items-center gap-1"
+          >
+            <Plus size={14} /> Add Address
+          </button>
         </div>
       )}
 

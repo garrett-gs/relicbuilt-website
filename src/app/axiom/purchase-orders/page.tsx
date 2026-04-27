@@ -63,6 +63,93 @@ function mergeVendorItems(
 }
 
 // ═══════════════════════════════════════════════════════════════
+// Ship-To Picker — dropdown of saved addresses + inventory locations
+// ═══════════════════════════════════════════════════════════════
+
+interface SavedAddress { label: string; address: string }
+
+function ShipToPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([]);
+  const [invLocations, setInvLocations] = useState<string[]>([]);
+  const [mode, setMode] = useState<"select" | "custom">("custom");
+
+  useEffect(() => {
+    axiom.from("settings").select("delivery_addresses, inventory_locations").limit(1).single().then(({ data }) => {
+      if (data) {
+        setSavedAddresses((data.delivery_addresses || []).filter((a: SavedAddress) => a.label && a.address));
+        setInvLocations((data.inventory_locations || []).filter(Boolean));
+      }
+    });
+    // If existing value matches a saved address, start in select mode
+    setMode(value ? "custom" : "select");
+  }, [value]);
+
+  function handleSelect(picked: string) {
+    if (picked === "__custom__") {
+      onChange("");
+      setMode("custom");
+      return;
+    }
+    onChange(picked);
+    setMode("select");
+  }
+
+  if (mode === "select" || (!value && savedAddresses.length + invLocations.length > 0)) {
+    return (
+      <div className="space-y-2">
+        <select
+          value={value || ""}
+          onChange={(e) => handleSelect(e.target.value)}
+          className="w-full bg-background border border-border px-3 py-2 text-foreground text-sm focus:outline-none focus:border-accent"
+        >
+          <option value="">Select an address…</option>
+          {savedAddresses.length > 0 && (
+            <optgroup label="Saved Addresses">
+              {savedAddresses.map((a) => (
+                <option key={`addr-${a.label}`} value={a.address}>
+                  {a.label} — {a.address}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {invLocations.length > 0 && (
+            <optgroup label="Inventory Locations">
+              {invLocations.map((loc) => (
+                <option key={`loc-${loc}`} value={loc}>{loc}</option>
+              ))}
+            </optgroup>
+          )}
+          <option value="__custom__">— Type a custom address —</option>
+        </select>
+        {value && (
+          <p className="text-xs text-muted whitespace-pre-line bg-card border border-border px-3 py-2">{value}</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <AddressAutocomplete
+        value={value}
+        onChange={onChange}
+        onSelect={(r) => onChange(r.formatted)}
+        className="w-full bg-background border border-border px-3 py-2 text-foreground text-sm focus:outline-none focus:border-accent"
+      />
+      {(savedAddresses.length > 0 || invLocations.length > 0) && (
+        <button
+          type="button"
+          onClick={() => { onChange(""); setMode("select"); }}
+          className="text-[11px] text-accent hover:underline"
+        >
+          ← Pick a saved address instead
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Main Page — Two Tabs
 // ═══════════════════════════════════════════════════════════════
 
@@ -827,7 +914,7 @@ function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
                 {deliveryMethod === "ship" && (
                   <div>
                     <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Ship To Address</label>
-                    <AddressAutocomplete value={shipToAddress} onChange={setShipToAddress} onSelect={(r) => setShipToAddress(r.formatted)} className="w-full bg-background border border-border px-3 py-2 text-foreground text-sm focus:outline-none focus:border-accent" />
+                    <ShipToPicker value={shipToAddress} onChange={setShipToAddress} />
                   </div>
                 )}
               </div>
@@ -1064,7 +1151,7 @@ function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
                 {deliveryMethod === "ship" && (
                   <div>
                     <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Ship To Address</label>
-                    <AddressAutocomplete value={shipToAddress} onChange={setShipToAddress} onSelect={(r) => setShipToAddress(r.formatted)} className="w-full bg-background border border-border px-3 py-2 text-foreground text-sm focus:outline-none focus:border-accent" />
+                    <ShipToPicker value={shipToAddress} onChange={setShipToAddress} />
                   </div>
                 )}
               </div>
