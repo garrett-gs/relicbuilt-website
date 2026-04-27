@@ -341,7 +341,17 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [markupPct, setMarkupPct] = useState(estimate.markup_percent || 0);
   const [unitCount, setUnitCount] = useState(estimate.unit_count || 1);
   const [notes, setNotes] = useState(estimate.notes || "");
+  const [fieldNotes, setFieldNotes] = useState<string[]>(
+    (estimate as Estimate & { images?: string[] }).images || []
+  );
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  function removeFieldNote(url: string) {
+    if (!confirm("Remove this field note from the estimate?")) return;
+    const next = fieldNotes.filter((u) => u !== url);
+    setFieldNotes(next);
+    onUpdate({ images: next.length > 0 ? next : undefined } as Partial<Estimate>);
+  }
   const [showLoadQuote, setShowLoadQuote] = useState(false);
   const [laborOpen, setLaborOpen] = useState(true);
   const [dirty, setDirty] = useState(false);
@@ -1036,6 +1046,33 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
       <div>
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Notes</label>
         <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
+      </div>
+
+      {/* Field Notes — markup photos saved from the iPad app */}
+      <div>
+        <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">
+          Field Notes <span className="text-muted normal-case font-normal">({fieldNotes.length})</span>
+        </label>
+        {fieldNotes.length === 0 ? (
+          <p className="text-muted text-xs italic">No field notes yet. Photos and sketches saved to this estimate from the iPad will appear here, and they'll travel onto the project when you Send to Project.</p>
+        ) : (
+          <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+            {fieldNotes.map((url) => (
+              <div key={url} className="bg-card border border-border group relative aspect-square">
+                <a href={url} target="_blank" rel="noopener noreferrer">
+                  <img src={url} alt="Field note" className="w-full h-full object-cover hover:opacity-80 transition-opacity" />
+                </a>
+                <button
+                  onClick={() => removeFieldNote(url)}
+                  className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Remove field note"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Actions */}

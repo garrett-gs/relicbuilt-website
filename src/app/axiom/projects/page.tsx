@@ -578,6 +578,23 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [portalStage, setPortalStage] = useState(project.portal_stage || "consultation");
   const [folderUrl, setFolderUrl] = useState(project.folder_url || "");
   const [editingFolder, setEditingFolder] = useState(false);
+
+  // Field Notes (build_files) — site photos and Apple Pencil markups
+  // saved from the iPad Field Notes app, attached via custom_work_id
+  const [fieldNotes, setFieldNotes] = useState<{ id: string; file_url: string; file_name?: string; label?: string; uploaded_by?: string; created_at: string }[]>([]);
+  useEffect(() => {
+    axiom.from("build_files")
+      .select("id, file_url, file_name, label, uploaded_by, created_at")
+      .eq("custom_work_id", project.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => { if (data) setFieldNotes(data); });
+  }, [project.id]);
+
+  async function deleteFieldNote(id: string) {
+    if (!confirm("Delete this field note?")) return;
+    await axiom.from("build_files").delete().eq("id", id);
+    setFieldNotes((prev) => prev.filter((f) => f.id !== id));
+  }
   const [proposalHighlights, setProposalHighlights] = useState<ProposalHighlight[]>(project.proposal_highlights || []);
   const [proposalScope, setProposalScope] = useState<ProposalScope>(project.proposal_scope || { body: "", included: true });
   const [proposalCostSection, setProposalCostSection] = useState<ProposalCostSection>(project.proposal_cost_section || { items: [], show_total: true, included: true });
@@ -1488,6 +1505,42 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       <div>
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Internal Notes</label>
         <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
+      </div>
+
+      {/* Field Notes — markup photos and sketches saved from the iPad app */}
+      <div>
+        <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3 mb-3">
+          Field Notes <span className="text-muted text-xs font-normal">({fieldNotes.length})</span>
+        </h3>
+        {fieldNotes.length === 0 ? (
+          <p className="text-muted text-xs italic">No field notes yet. Photos and sketches saved from the Field Notes app will appear here.</p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {fieldNotes.map((fn) => (
+              <div key={fn.id} className="bg-card border border-border group">
+                <a href={fn.file_url} target="_blank" rel="noopener noreferrer" className="block aspect-square overflow-hidden">
+                  <img src={fn.file_url} alt={fn.label || "Field note"} className="w-full h-full object-cover hover:opacity-80 transition-opacity" />
+                </a>
+                <div className="p-2 flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium truncate">{fn.label || "Field Note"}</p>
+                    <p className="text-[10px] text-muted truncate">
+                      {new Date(fn.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      {fn.uploaded_by && ` · ${fn.uploaded_by.split("@")[0]}`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => deleteFieldNote(fn.id)}
+                    className="text-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                    title="Delete field note"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Checklist */}
