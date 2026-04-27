@@ -241,6 +241,7 @@ export interface Estimate {
   markup_percent: number;
   unit_count?: number;
   notes?: string;
+  images?: string[];
   chat_history?: { role: "user" | "assistant"; content: string }[];
   created_at: string;
   updated_at: string;
@@ -416,6 +417,7 @@ export interface WallflowerWorkOrder {
   quantity: number;
   estimate_id?: string;
   notes?: string;
+  images?: string[];
   submitted_by?: string;
   created_at: string;
   updated_at: string;

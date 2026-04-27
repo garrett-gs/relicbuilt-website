@@ -9,7 +9,7 @@ import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2, Calculator, ClipboardList,
-  Check,
+  Check, Image as ImageIcon, Loader2, Upload,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -135,6 +135,7 @@ export default function WallflowerPage() {
         wo.description ? `Description: ${wo.description}` : "",
         wo.quantity > 1 ? `Quantity: ${wo.quantity}` : "",
       ].filter(Boolean).join("\n"),
+      images: wo.images && wo.images.length > 0 ? wo.images : undefined,
     }).select().single();
 
     if (data) {
@@ -376,11 +377,51 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate 
   const [description, setDescription] = useState(order.description || "");
   const [quantity, setQuantity] = useState(order.quantity || 1);
   const [notes, setNotes] = useState(order.notes || "");
+  const [images, setImages] = useState<string[]>(order.images || []);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   function markDirty() { setDirty(true); setSaved(false); }
+
+  async function handleFiles(fileList: FileList | null) {
+    if (!fileList || fileList.length === 0) return;
+    setUploadError("");
+    setUploading(true);
+    const newUrls: string[] = [];
+    for (const file of Array.from(fileList)) {
+      // JPEG and PNG only — keeps the gallery clean and Supabase happy
+      if (file.type !== "image/jpeg" && file.type !== "image/png") {
+        setUploadError("Only JPEG and PNG images are supported.");
+        continue;
+      }
+      if (file.size > 15 * 1024 * 1024) {
+        setUploadError(`"${file.name}" is over 15 MB.`);
+        continue;
+      }
+      const ext = file.type === "image/png" ? "png" : "jpg";
+      const path = `wallflower-photos/${order.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await axiom.storage.from("portal-images").upload(path, file, { upsert: false, contentType: file.type });
+      if (upErr) {
+        setUploadError(`Upload failed for "${file.name}".`);
+        continue;
+      }
+      const { data } = axiom.storage.from("portal-images").getPublicUrl(path);
+      newUrls.push(data.publicUrl);
+    }
+    if (newUrls.length > 0) {
+      setImages((prev) => [...prev, ...newUrls]);
+      markDirty();
+    }
+    setUploading(false);
+  }
+
+  function removeImage(url: string) {
+    setImages((prev) => prev.filter((u) => u !== url));
+    markDirty();
+  }
 
   function save() {
     onUpdate({
@@ -394,6 +435,7 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate 
       description: description || undefined,
       quantity,
       notes: notes || undefined,
+      images: images.length > 0 ? images : undefined,
     });
     setDirty(false);
     setSaved(true);
@@ -491,6 +533,51 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate 
           className={inp + " min-h-[80px] resize-y"}
           placeholder="Internal notes (not visible to Wallflower)..."
         />
+      </div>
+
+      {/* Photos */}
+      <div>
+        <label className={lbl}>
+          <ImageIcon size={12} className="inline mr-1.5" />
+          Photos
+          {images.length > 0 && <span className="text-muted ml-2">({images.length})</span>}
+        </label>
+        {images.length > 0 && (
+          <div className="grid grid-cols-4 gap-2 mb-3">
+            {images.map((url) => (
+              <div key={url} className="relative group aspect-square">
+                <a href={url} target="_blank" rel="noopener noreferrer">
+                  <img src={url} alt="Work order photo" className="w-full h-full object-cover border border-border" />
+                </a>
+                <button
+                  type="button"
+                  onClick={() => removeImage(url)}
+                  title="Remove photo"
+                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <label className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-foreground border border-dashed border-border px-4 py-3 hover:border-accent/50 transition-colors cursor-pointer">
+          {uploading ? (
+            <><Loader2 size={13} className="animate-spin" /> Uploading…</>
+          ) : (
+            <><Upload size={13} /> Add Photos (JPEG / PNG)</>
+          )}
+          <input
+            type="file"
+            multiple
+            accept="image/jpeg,image/png"
+            className="hidden"
+            disabled={uploading}
+            onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }}
+          />
+        </label>
+        {uploadError && <p className="text-xs text-red-500 mt-2">{uploadError}</p>}
+        <p className="text-xs text-muted mt-2">Photos transfer to the estimate and project when you convert this work order.</p>
       </div>
 
       {/* Linked estimate */}

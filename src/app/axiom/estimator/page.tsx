@@ -591,6 +591,10 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       }
     }
 
+    // Forward any photos that came from a Wallflower work order through the
+    // estimate so they continue traveling onto the project as inspiration.
+    const carriedImages = (estimate as Estimate & { images?: string[] }).images || [];
+
     const { data } = await axiom.from("custom_work").insert({
       project_name: projectName || "Untitled Project",
       client_name: clientName || "",
@@ -599,6 +603,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       customer_id: customerId || undefined,
       quoted_amount: quotedAmount,
       project_description: notes || undefined,
+      inspiration_images: carriedImages.length > 0 ? carriedImages : undefined,
       status: "new",
     }).select().single();
 
