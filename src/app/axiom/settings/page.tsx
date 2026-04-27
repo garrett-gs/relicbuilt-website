@@ -32,7 +32,12 @@ export default function SettingsPage() {
 
   async function save() {
     if (!settings) return;
-    await axiom.from("settings").update(settings).eq("id", settings.id);
+    const { error } = await axiom.from("settings").update(settings).eq("id", settings.id);
+    if (error) {
+      alert(`Save failed: ${error.message}`);
+      console.error("[settings save] error:", error);
+      return;
+    }
     setDirty(false);
     setSaved(true);
   }
