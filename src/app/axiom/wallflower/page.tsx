@@ -6,7 +6,7 @@ import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { WallflowerWorkOrder, TeamMember } from "@/types/axiom";
 import Button from "@/components/ui/Button";
-import { cn } from "@/lib/utils";
+import { cn, formatDueDate } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2, Calculator, ClipboardList,
   Check, Image as ImageIcon, Loader2, Upload,
@@ -220,9 +220,14 @@ export default function WallflowerPage() {
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-sm truncate">{wo.item_name}</p>
                     <p className="text-muted text-xs">{wo.work_type} · {wo.scope}</p>
-                    {wo.deadline && (
-                      <p className="text-xs text-muted mt-0.5">Due: {new Date(wo.deadline).toLocaleDateString()}</p>
-                    )}
+                    {wo.deadline && (() => {
+                      const due = formatDueDate(wo.deadline);
+                      return (
+                        <p className={`text-xs mt-0.5 ${due.soon ? "text-orange-400 font-medium" : "text-muted"}`}>
+                          Due: {due.text}
+                        </p>
+                      );
+                    })()}
                   </div>
                   <span
                     className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 border shrink-0"

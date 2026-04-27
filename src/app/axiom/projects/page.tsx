@@ -9,7 +9,7 @@ import ChecklistPanel from "@/components/axiom/ChecklistPanel";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import ImageUpload from "@/components/ui/ImageUpload";
-import { cn, formatPhone } from "@/lib/utils";
+import { cn, formatPhone, formatDueDate } from "@/lib/utils";
 import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { useRouter } from "next/navigation";
@@ -239,6 +239,14 @@ export default function ProjectsPage() {
                     <p className="font-medium mb-1 truncate">{p.project_name}</p>
                     <p className="text-muted text-xs truncate">{p.client_name}</p>
                     {p.company_name && <p className="text-muted text-xs truncate italic">{p.company_name}</p>}
+                    {p.due_date && (() => {
+                      const due = formatDueDate(p.due_date);
+                      return (
+                        <p className={`text-xs mt-0.5 ${due.soon ? "text-orange-400 font-medium" : "text-muted"}`}>
+                          Due: {due.text}
+                        </p>
+                      );
+                    })()}
                     {p.quoted_amount > 0 && (
                       <p className="text-accent text-xs mt-1 font-mono">{money(p.quoted_amount)}</p>
                     )}
