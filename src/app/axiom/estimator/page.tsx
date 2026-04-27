@@ -372,11 +372,46 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     });
   }, []);
 
-  // Load catalog when vendor changes
+  // Load catalog + inventory items for this vendor when vendor changes.
+  // Items added via Inventory (or the PDF scan) live in inventory_items —
+  // we merge both sources so every Liberty SKU shows up here.
   useEffect(() => {
     if (!vendorId) { setCatalog([]); return; }
-    axiom.from("vendor_catalog").select("*").eq("vendor_id", vendorId).eq("active", true).order("description").then(({ data }) => {
-      if (data) setCatalog(data);
+    Promise.all([
+      axiom.from("vendor_catalog").select("*").eq("vendor_id", vendorId).eq("active", true).order("description").limit(1000),
+      axiom.from("inventory_items").select("*").eq("vendor_id", vendorId).eq("active", true).order("description").limit(1000),
+    ]).then(([{ data: catData }, { data: invData }]) => {
+      const cat = (catData || []) as CatalogItem[];
+      const inv = (invData || []) as Array<{ id: string; item_number?: string; description: string; unit_cost: number; unit: string }>;
+      // Merge: catalog items kept as-is; inventory items appended unless an
+      // item_number or description already exists in the catalog (in which
+      // case we update the price from inventory if available).
+      const numKeys = new Set(cat.map((c) => c.item_number?.toLowerCase()).filter(Boolean));
+      const descKeys = new Set(cat.map((c) => c.description.toLowerCase().trim()));
+      const merged: CatalogItem[] = [...cat];
+      for (const i of inv) {
+        const numKey = i.item_number?.toLowerCase();
+        const descKey = i.description.toLowerCase().trim();
+        if (numKey && numKeys.has(numKey)) {
+          const idx = merged.findIndex((c) => c.item_number?.toLowerCase() === numKey);
+          if (idx >= 0 && i.unit_cost) merged[idx] = { ...merged[idx], unit_price: i.unit_cost };
+          continue;
+        }
+        if (descKeys.has(descKey)) continue;
+        merged.push({
+          id: `inv-${i.id}`,
+          vendor_id: vendorId,
+          item_number: i.item_number || undefined,
+          description: i.description,
+          unit_price: i.unit_cost,
+          unit: i.unit,
+          category: undefined,
+          active: true,
+          created_at: "",
+        } as CatalogItem);
+      }
+      merged.sort((a, b) => a.description.localeCompare(b.description));
+      setCatalog(merged);
     });
     const v = vendors.find((v) => v.id === vendorId);
     if (v) setVendorName(v.name);
