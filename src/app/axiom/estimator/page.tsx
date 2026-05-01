@@ -428,32 +428,25 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       setProposalSentAt(sentAt);
       if (status === "draft") setStatus("sent");
 
-      const url = `${window.location.origin}/proposal/${token}`;
-
-      // Try to email the proposal directly to the client. Fall back to
-      // clipboard copy if no email is set or the send fails.
-      let emailedTo = "";
-      if (clientEmail) {
-        const emailRes = await fetch("/api/send-proposal-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ estimate_id: estimate.id }),
-        });
-        if (emailRes.ok) {
-          const emailData = await emailRes.json();
-          emailedTo = emailData.sent_to || clientEmail;
-        }
+      // Email the proposal directly to the client with the PDF attached.
+      // No more clipboard juggling — if there's no client email, we tell
+      // the user to add one before sending.
+      if (!clientEmail) {
+        alert("Add a client email above before sending the proposal.");
+        return;
       }
 
-      try {
-        await navigator.clipboard.writeText(url);
-      } catch { /* clipboard might be unavailable in some contexts */ }
-
-      alert(
-        emailedTo
-          ? `Proposal sent to ${emailedTo}.\n\nLink also copied to clipboard:\n${url}`
-          : `Proposal link copied to clipboard:\n${url}\n\nNo client email on the estimate — paste the link wherever you need.`
-      );
+      const emailRes = await fetch("/api/send-proposal-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estimate_id: estimate.id }),
+      });
+      const emailData = await emailRes.json();
+      if (!emailRes.ok) {
+        alert(`Could not send proposal: ${emailData.error || "unknown error"}`);
+        return;
+      }
+      alert(`Proposal sent to ${emailData.sent_to || clientEmail} with PDF attached.`);
 
       await logActivity({
         action: "sent",
@@ -1448,8 +1441,8 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
           <Button variant="outline" onClick={previewProposalPdf}>
             <FileText size={14} className="mr-1" /> Preview PDF
           </Button>
-          <Button onClick={sendProposal} disabled={sendingProposal || !clientName}>
-            {sendingProposal ? "Sending…" : proposalStatus === "draft" ? "Send Proposal to Client" : "Re-Send Proposal Link"}
+          <Button onClick={sendProposal} disabled={sendingProposal || !clientName || !clientEmail}>
+            {sendingProposal ? "Sending…" : proposalStatus === "draft" ? "Send Proposal to Client" : "Re-Send Proposal"}
           </Button>
           {proposalToken && (
             <>
@@ -1462,8 +1455,10 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
             </>
           )}
         </div>
-        {!clientName && (
-          <p className="text-xs text-muted mt-2 italic">Add a client name above before sending the proposal.</p>
+        {(!clientName || !clientEmail) && (
+          <p className="text-xs text-muted mt-2 italic">
+            Add a client {!clientName && !clientEmail ? "name and email" : !clientName ? "name" : "email"} above before sending the proposal.
+          </p>
         )}
 
         {/* Deposit paid → creates the project. Only shown after acceptance. */}
