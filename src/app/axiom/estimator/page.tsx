@@ -4,11 +4,11 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
-import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem } from "@/types/axiom";
+import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const STATUS_STYLES: Record<Estimate["status"], { text: string; bg: string; border: string }> = {
@@ -344,6 +344,27 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [fieldNotes, setFieldNotes] = useState<string[]>(
     (estimate as Estimate & { images?: string[] }).images || []
   );
+
+  // ── Proposal state (moved from project) ─────────────────────────────
+  const [proposalHighlights, setProposalHighlights] = useState<ProposalHighlight[]>(
+    estimate.proposal_highlights || []
+  );
+  const [proposalScope, setProposalScope] = useState<ProposalScope>(
+    estimate.proposal_scope || { body: "", included: true }
+  );
+  const [proposalImagesIncluded, setProposalImagesIncluded] = useState<boolean>(
+    estimate.proposal_images_included !== false
+  );
+  const [proposalToken, setProposalToken] = useState<string>(estimate.proposal_token || "");
+  const [proposalStatus, setProposalStatus] = useState<"draft" | "sent" | "approved">(
+    estimate.proposal_status || "draft"
+  );
+  const [proposalSentAt, setProposalSentAt] = useState<string>(estimate.proposal_sent_at || "");
+  const [proposalApprovedAt, setProposalApprovedAt] = useState<string>(
+    estimate.proposal_approved_at || ""
+  );
+  const [sendingProposal, setSendingProposal] = useState(false);
+
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   function removeFieldNote(url: string) {
@@ -351,6 +372,76 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     const next = fieldNotes.filter((u) => u !== url);
     setFieldNotes(next);
     onUpdate({ images: next.length > 0 ? next : undefined } as Partial<Estimate>);
+  }
+
+  // ── Proposal helpers ────────────────────────────────────────────────
+  function addHighlight() {
+    setProposalHighlights([...proposalHighlights, { title: "", body: "", included: true }]);
+    markDirty();
+  }
+  function updateHighlight(i: number, field: "title" | "body", value: string) {
+    const updated = [...proposalHighlights];
+    updated[i] = { ...updated[i], [field]: value };
+    setProposalHighlights(updated);
+    markDirty();
+  }
+  function removeHighlight(i: number) {
+    setProposalHighlights(proposalHighlights.filter((_, idx) => idx !== i));
+    markDirty();
+  }
+
+  // Generate a public proposal URL token; copy a shareable link
+  async function sendProposal() {
+    if (sendingProposal) return;
+    setSendingProposal(true);
+    try {
+      // Save any unsaved edits first so the proposal page reads fresh data
+      if (dirty) await save();
+
+      let token = proposalToken;
+      if (!token) {
+        token = `prop_${crypto.randomUUID().replace(/-/g, "")}`;
+      }
+      const sentAt = new Date().toISOString();
+      const updates: Partial<Estimate> = {
+        proposal_token: token,
+        proposal_status: "sent",
+        proposal_sent_at: sentAt,
+      };
+      const { error } = await axiom.from("estimates").update({ ...updates, updated_at: sentAt }).eq("id", estimate.id);
+      if (error) {
+        alert(`Could not send proposal: ${error.message}`);
+        return;
+      }
+      setProposalToken(token);
+      setProposalStatus("sent");
+      setProposalSentAt(sentAt);
+
+      const url = `${window.location.origin}/proposal/${token}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        alert(`Proposal link copied to clipboard:\n${url}\n\nSend it to your client.`);
+      } catch {
+        prompt("Copy this proposal link and send to your client:", url);
+      }
+
+      await logActivity({
+        action: "sent",
+        entity: "estimate",
+        entity_id: estimate.id,
+        label: `Sent proposal for estimate ${estimate.estimate_number}`,
+        user_name: detailUserEmail,
+      });
+    } finally {
+      setSendingProposal(false);
+    }
+  }
+
+  function copyProposalUrl() {
+    if (!proposalToken) return;
+    const url = `${window.location.origin}/proposal/${proposalToken}`;
+    navigator.clipboard.writeText(url).catch(() => {});
+    alert(`Copied: ${url}`);
   }
   const [showLoadQuote, setShowLoadQuote] = useState(false);
   const [laborOpen, setLaborOpen] = useState(true);
@@ -576,6 +667,10 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       unit_count: unitCount,
       notes,
       chat_history: chatMessages.length > 0 ? chatMessages : undefined,
+      proposal_highlights: proposalHighlights,
+      proposal_scope: proposalScope,
+      proposal_images_included: proposalImagesIncluded,
+      proposal_status: proposalStatus,
     });
     setDirty(false);
     setSaved(true);
@@ -1072,6 +1167,134 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      {/* Proposal — moved from project detail. Build the client-facing proposal here. */}
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">
+            Proposal
+          </h3>
+          <span
+            className={`text-[10px] uppercase tracking-wider px-2 py-1 border ${
+              proposalStatus === "approved" ? "border-green-500 text-green-400 bg-green-500/10"
+                : proposalStatus === "sent" ? "border-blue-400 text-blue-400 bg-blue-400/10"
+                : "border-muted text-muted"
+            }`}
+          >
+            {proposalStatus === "approved" ? "Approved by Client" : proposalStatus === "sent" ? "Sent" : "Draft"}
+          </span>
+        </div>
+
+        {proposalStatus === "approved" && proposalApprovedAt && (
+          <p className="text-xs text-green-400 mb-3">
+            Approved {new Date(proposalApprovedAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+          </p>
+        )}
+        {proposalStatus === "sent" && proposalSentAt && (
+          <p className="text-xs text-blue-400 mb-3">
+            Sent {new Date(proposalSentAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+          </p>
+        )}
+
+        {/* Highlights */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs uppercase tracking-wider text-muted">Highlights</p>
+            <button onClick={addHighlight} className="text-accent text-xs flex items-center gap-1">
+              <Plus size={12} /> Add Highlight
+            </button>
+          </div>
+          {proposalHighlights.length === 0 ? (
+            <p className="text-muted text-xs italic">No highlights yet. Add bullet points the client should see (e.g. &ldquo;Premium hardware&rdquo;, &ldquo;On-site finish&rdquo;).</p>
+          ) : (
+            <div className="space-y-2">
+              {proposalHighlights.map((h, i) => (
+                <div key={i} className="bg-background border border-border p-2">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <input
+                      value={h.title}
+                      onChange={(e) => updateHighlight(i, "title", e.target.value)}
+                      placeholder="Title"
+                      className="flex-1 bg-card border border-border px-2 py-1.5 text-sm font-medium text-foreground focus:outline-none focus:border-accent"
+                    />
+                    <button onClick={() => removeHighlight(i)} className="text-muted hover:text-red-500">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                  <textarea
+                    value={h.body}
+                    onChange={(e) => updateHighlight(i, "body", e.target.value)}
+                    placeholder="Description"
+                    className="w-full bg-card border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent min-h-[50px] resize-y"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Scope */}
+        <div className="mb-4">
+          <p className="text-xs uppercase tracking-wider text-muted mb-1.5">Scope of Work</p>
+          <textarea
+            value={proposalScope.body}
+            onChange={(e) => { setProposalScope({ ...proposalScope, body: e.target.value }); markDirty(); }}
+            placeholder="Describe what's included in the project — materials, dimensions, finish, delivery, etc."
+            className="w-full bg-background border border-border px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-accent min-h-[100px] resize-y"
+          />
+        </div>
+
+        {/* Include images toggle */}
+        <div className="mb-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={proposalImagesIncluded}
+              onChange={(e) => { setProposalImagesIncluded(e.target.checked); markDirty(); }}
+              className="accent-accent"
+            />
+            <span className="text-xs text-foreground">
+              Include {fieldNotes.length} field note{fieldNotes.length === 1 ? "" : "s"} in the proposal
+            </span>
+          </label>
+        </div>
+
+        {/* Cost preview — auto-calculated from line items + labor + markup */}
+        <div className="bg-background border border-border p-3 mb-4">
+          <p className="text-xs uppercase tracking-wider text-muted mb-2">Cost (auto-calculated)</p>
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between"><span className="text-muted">Materials</span><span className="font-mono">{money(materialTotal)}</span></div>
+            <div className="flex justify-between"><span className="text-muted">Labor</span><span className="font-mono">{money(laborTotal)}</span></div>
+            {markupPct > 0 && (
+              <div className="flex justify-between"><span className="text-muted">Markup ({markupPct}%)</span><span className="font-mono">{money(markupAmount)}</span></div>
+            )}
+            <div className="flex justify-between border-t border-border pt-1 mt-1">
+              <span className="font-semibold">Total</span>
+              <span className="font-mono font-bold text-accent">{money(total)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 flex-wrap">
+          <Button onClick={sendProposal} disabled={sendingProposal || !clientName}>
+            {sendingProposal ? "Sending…" : proposalStatus === "draft" ? "Send Proposal to Client" : "Re-Send Proposal Link"}
+          </Button>
+          {proposalToken && (
+            <>
+              <Button variant="outline" onClick={copyProposalUrl}>
+                <Copy size={14} className="mr-1" /> Copy Link
+              </Button>
+              <Button variant="outline" onClick={() => window.open(`/proposal/${proposalToken}`, "_blank")}>
+                <ExternalLink size={14} className="mr-1" /> Preview
+              </Button>
+            </>
+          )}
+        </div>
+        {!clientName && (
+          <p className="text-xs text-muted mt-2 italic">Add a client name above before sending the proposal.</p>
         )}
       </div>
 

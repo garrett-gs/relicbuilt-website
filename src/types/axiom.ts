@@ -243,6 +243,17 @@ export interface Estimate {
   notes?: string;
   images?: string[];
   chat_history?: { role: "user" | "assistant"; content: string }[];
+  // Proposal — moved from CustomWork. Lets us send a proposal directly
+  // from the estimate; only on client acceptance does it become a project.
+  proposal_highlights?: ProposalHighlight[];
+  proposal_scope?: ProposalScope;
+  proposal_cost_section?: ProposalCostSection;
+  proposal_images?: string[];
+  proposal_images_included?: boolean;
+  proposal_token?: string;
+  proposal_status?: "draft" | "sent" | "approved";
+  proposal_sent_at?: string;
+  proposal_approved_at?: string;
   created_at: string;
   updated_at: string;
 }
