@@ -600,6 +600,11 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [proposalCostSection, setProposalCostSection] = useState<ProposalCostSection>(project.proposal_cost_section || { items: [], show_total: true, included: true });
   const [proposalImages, setProposalImages] = useState<string[]>(project.proposal_images || []);
   const [proposalImagesIncluded, setProposalImagesIncluded] = useState<boolean>(project.proposal_images_included !== false);
+
+  // Lock proposal content once the client has accepted — no edits post-acceptance
+  // so the project always reflects what was signed. Override is still possible
+  // by changing the status manually if there's a legitimate need.
+  const proposalLocked = project.proposal_status === "approved" && !!project.proposal_approved_at;
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -1625,10 +1630,36 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         <div className="bg-card px-4 py-3 flex items-center justify-between border-b border-border">
           <div>
             <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Proposal Content</h3>
-            <p className="text-xs text-muted mt-0.5 opacity-60">Highlights and visuals shown in the generated proposal</p>
+            <p className="text-xs text-muted mt-0.5 opacity-60">
+              {proposalLocked
+                ? "Locked — this is what the client signed."
+                : "Highlights and visuals shown in the generated proposal"}
+            </p>
           </div>
           <ClipboardList size={14} className="text-muted" />
         </div>
+
+        {proposalLocked && (
+          <div className="bg-green-500/10 border-b border-green-500/30 px-4 py-3 flex items-start gap-2">
+            <CheckCircle size={14} className="text-green-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-green-400 leading-relaxed">
+              <strong>Proposal accepted by client</strong>
+              {project.proposal_approved_at && (
+                <> on {new Date(project.proposal_approved_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</>
+              )}
+              . The content below is read-only — it&apos;s what the client signed off on.
+              To make changes, work in the linked estimate and resend the proposal.
+            </div>
+          </div>
+        )}
+
+        <fieldset
+          disabled={proposalLocked}
+          className={cn(
+            "border-0 p-0 m-0",
+            proposalLocked && "[&_input]:cursor-not-allowed [&_textarea]:cursor-not-allowed [&_button]:cursor-not-allowed"
+          )}
+        >
 
         {/* Highlights */}
         <div className="p-4 border-b border-border">
@@ -1882,6 +1913,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             <p className="text-sm text-muted">Upload images above to add visuals to the proposal.</p>
           )}
         </div>
+        </fieldset>
       </div>
 
       {/* Portal */}
