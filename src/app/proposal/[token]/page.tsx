@@ -67,23 +67,13 @@ export default function ProposalPage() {
         if ((estRes.data as Estimate).proposal_status === "approved") {
           setAlreadyApproved(true);
         }
-        // Look up the customer's linked company so the proposal can show
-        // "Prepared for [Customer] of [Company]"
-        const est = estRes.data as Estimate;
-        if (est.customer_id) {
-          axiom.from("customers")
-            .select("company_id,company_name")
-            .eq("id", est.customer_id)
-            .single()
-            .then(({ data: cust }) => {
-              if (cust?.company_name) {
-                setClientCompany(cust.company_name);
-              } else if (cust?.company_id) {
-                axiom.from("companies").select("name").eq("id", cust.company_id).single()
-                  .then(({ data: co }) => { if (co?.name) setClientCompany(co.name); });
-              }
-            });
-        }
+        // Look up the customer's linked company via a server-side route
+        // (uses service role so no anon RLS policy needed on customers).
+        // Failures are silent — proposal still renders without the company.
+        fetch(`/api/proposal-context/${token}`)
+          .then((r) => r.json())
+          .then((d) => { if (d?.clientCompany) setClientCompany(d.clientCompany); })
+          .catch(() => {});
       }
       const e = estRes.data as Estimate | null;
       if (e?.proposal_expires_at && new Date(e.proposal_expires_at).getTime() < Date.now() && e.proposal_status !== "approved") {
