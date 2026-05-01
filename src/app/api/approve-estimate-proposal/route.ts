@@ -92,7 +92,9 @@ export async function POST(req: NextRequest) {
       .from("invoices")
       .insert({
         invoice_number: depositInvoiceNum,
+        estimate_id: estimate.id,
         client_name: estimate.client_name || "",
+        client_email: estimate.client_email || null,
         description: `Deposit — ${estimate.project_name || estimate.estimate_number}`,
         subtotal: depositAmount > 0 ? depositAmount : totalAmount,
         issued_date: today,
@@ -111,7 +113,9 @@ export async function POST(req: NextRequest) {
     if (balanceAmount > 0) {
       await supabase.from("invoices").insert({
         invoice_number: finalInvoiceNum,
+        estimate_id: estimate.id,
         client_name: estimate.client_name || "",
+        client_email: estimate.client_email || null,
         description: `Balance — ${estimate.project_name || estimate.estimate_number}`,
         subtotal: balanceAmount,
         issued_date: today,
@@ -157,6 +161,8 @@ export async function POST(req: NextRequest) {
         : "";
       const bizName = settings?.biz_name || "RELIC Custom Fabrications";
       const bizPhone = settings?.biz_phone || "";
+      const origin = req.headers.get("origin") || `https://${req.headers.get("host") || "relicbuilt.com"}`;
+      const payUrl = `${origin}/pay/${depositInvoice.id}`;
 
       const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
@@ -196,12 +202,20 @@ export async function POST(req: NextRequest) {
       </table>
     </div>
 
+    <div style="text-align:center;margin:24px 0;">
+      <a href="${payUrl}" style="display:inline-block;background:#c4a24d;color:#0a0a0a;padding:16px 36px;text-decoration:none;font-weight:bold;letter-spacing:0.08em;font-size:14px;text-transform:uppercase;">
+        Pay Deposit by Card
+      </a>
+    </div>
+    <p style="font-size:11px;color:#aaa;text-align:center;margin:0 0 24px;">
+      Card processing fee (2.9% + $0.30) applies. Prefer check or other method? Just reply.
+    </p>
+
     <p style="font-size:13px;color:#888;margin:0 0 12px;line-height:1.6;">
       <strong style="color:#7a5a00;">Balances are due prior to delivery.</strong>
     </p>
 
     <p style="font-size:13px;color:#888;margin:0;line-height:1.6;">
-      We&apos;ll be in touch shortly with payment instructions.
       Questions? Reply to this email or call ${bizPhone ? esc(bizPhone) : "us"}.
     </p>
   </div>

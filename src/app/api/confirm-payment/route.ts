@@ -136,6 +136,76 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to record payment" }, { status: 500 });
     }
 
+    // ── Auto-create project when an estimate's deposit invoice is paid
+    // This is the "deposit paid → project exists" gate. Now that the
+    // client has paid the deposit via Stripe, we promote the accepted
+    // estimate to a real custom_work record without Garrett having to
+    // click anything in Axiom.
+    if (invoice.invoice_type === "deposit" && invoice.estimate_id) {
+      try {
+        const { data: estimate } = await supabase
+          .from("estimates")
+          .select("*")
+          .eq("id", invoice.estimate_id)
+          .single();
+
+        if (estimate && !estimate.deposit_paid_at && estimate.proposal_status === "approved") {
+          // Inline calc to avoid circular imports
+          interface Li { quantity?: number; unit_price?: number }
+          interface La { cost?: number }
+          const m = (estimate.line_items as Li[] || []).reduce((s, li) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
+          const l = (estimate.labor_items as La[] || []).reduce((s, li) => s + (li.cost || 0), 0);
+          const total = Math.round((m + l) * (1 + (estimate.markup_percent || 0) / 100) * 100) / 100;
+
+          let customWorkId = estimate.custom_work_id;
+          if (!customWorkId) {
+            const { data: newProject } = await supabase
+              .from("custom_work")
+              .insert({
+                project_name: estimate.project_name || "Untitled Project",
+                client_name: estimate.client_name || "",
+                client_email: estimate.client_email || null,
+                client_phone: estimate.client_phone || null,
+                customer_id: estimate.customer_id || null,
+                quoted_amount: total,
+                project_description: estimate.notes || null,
+                inspiration_images: estimate.images || [],
+                proposal_highlights: estimate.proposal_highlights || [],
+                proposal_scope: estimate.proposal_scope || null,
+                proposal_images: estimate.images || [],
+                proposal_images_included: estimate.proposal_images_included !== false,
+                proposal_status: "approved",
+                proposal_approved_at: estimate.proposal_approved_at || new Date().toISOString(),
+                status: "in_progress",
+              })
+              .select("id")
+              .single();
+            if (newProject) customWorkId = newProject.id;
+          }
+
+          if (customWorkId) {
+            // Stamp estimate as paid and link to project
+            await supabase.from("estimates").update({
+              deposit_paid_at: new Date().toISOString(),
+              custom_work_id: customWorkId,
+              updated_at: new Date().toISOString(),
+            }).eq("id", estimate.id);
+
+            // Link this invoice + the balance invoice to the new project
+            await supabase.from("invoices").update({ custom_work_id: customWorkId }).eq("id", invoiceId);
+            await supabase.from("invoices")
+              .update({ custom_work_id: customWorkId })
+              .eq("estimate_id", estimate.id)
+              .eq("invoice_type", "final");
+          }
+        }
+      } catch (autoErr) {
+        // Non-fatal — payment is still recorded; Garrett can manually create
+        // the project from the estimator if this fails for any reason
+        console.error("confirm-payment auto-project error:", autoErr);
+      }
+    }
+
     // Send receipt email if client email exists
     if (invoice.client_email) {
       const resendKey = process.env.RESEND_API_KEY;
