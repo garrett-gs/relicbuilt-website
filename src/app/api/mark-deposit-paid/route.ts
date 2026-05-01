@@ -58,8 +58,14 @@ export async function POST(req: NextRequest) {
 
     const totalAmount = calcTotal(estimate);
 
-    // ── Create the project (custom_work) ─────────────────────────────
+    // ── Resolve the project (custom_work) ────────────────────────────
+    // If this estimate is a change order, attach to the parent project
+    // — never create a new one. Otherwise, create a fresh project.
     let customWorkId = estimate.custom_work_id;
+    const isChangeOrder = !!estimate.change_order_for_id;
+    if (!customWorkId && isChangeOrder) {
+      customWorkId = estimate.change_order_for_id;
+    }
     if (!customWorkId) {
       const { data: newProject, error: projErr } = await supabase
         .from("custom_work")

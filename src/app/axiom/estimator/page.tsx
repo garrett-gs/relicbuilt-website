@@ -46,6 +46,27 @@ type SearchResult = {
   type: "customer" | "company";
 };
 
+// Inline badge that resolves the parent project name and links back to it.
+// Shown on a change order estimate so the team always knows the scope context.
+function ChangeOrderBadge({ projectId }: { projectId: string }) {
+  const router = useRouter();
+  const [name, setName] = useState<string | null>(null);
+  useEffect(() => {
+    axiom.from("custom_work").select("project_name").eq("id", projectId).single().then(({ data }) => {
+      if (data?.project_name) setName(data.project_name);
+    });
+  }, [projectId]);
+  return (
+    <button
+      onClick={() => router.push("/axiom/projects")}
+      title="Click to view the parent project"
+      className="text-xs px-2.5 py-1 border border-purple-400/40 bg-purple-400/10 text-purple-300 hover:bg-purple-400/20 transition-colors"
+    >
+      Change Order for: <strong className="text-purple-200">{name || "…"}</strong>
+    </button>
+  );
+}
+
 function CustomerSearch({ onSelect, initialName }: { onSelect: (c: SearchResult) => void; initialName?: string }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -147,21 +168,24 @@ export default function EstimatorPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  async function createEstimate(form: { project_name: string; client_name: string; customer_id: string }) {
+  async function createEstimate(form: { project_name: string; client_name: string; customer_id: string; change_order_for_id?: string }) {
     const year = new Date().getFullYear();
+    const isChangeOrder = !!form.change_order_for_id;
+    const prefix = isChangeOrder ? "CO" : "EST";
     const { data: latest } = await axiom.from("estimates")
       .select("estimate_number")
-      .like("estimate_number", `EST-${year}-%`)
+      .like("estimate_number", `${prefix}-${year}-%`)
       .order("estimate_number", { ascending: false })
       .limit(1)
       .single();
     const lastNum = latest?.estimate_number ? parseInt(latest.estimate_number.split("-").pop() || "0", 10) : 0;
-    const estimate_number = `EST-${year}-${String(lastNum + 1).padStart(4, "0")}`;
+    const estimate_number = `${prefix}-${year}-${String(lastNum + 1).padStart(4, "0")}`;
     const { data } = await axiom.from("estimates").insert({
       estimate_number,
       project_name: form.project_name,
       client_name: form.client_name,
       customer_id: form.customer_id || null,
+      change_order_for_id: form.change_order_for_id || null,
       status: "draft",
       line_items: [],
       labor_items: [],
@@ -284,36 +308,126 @@ export default function EstimatorPage() {
 // ── Create modal ──────────────────────────────────────────────
 
 function CreateModal({ onSubmit, onClose }: {
-  onSubmit: (f: { project_name: string; client_name: string; customer_id: string }) => void;
+  onSubmit: (f: { project_name: string; client_name: string; customer_id: string; change_order_for_id?: string }) => void;
   onClose: () => void;
 }) {
-  const [form, setForm] = useState({ project_name: "", client_name: "", customer_id: "" });
+  const [form, setForm] = useState({ project_name: "", client_name: "", customer_id: "", change_order_for_id: "" });
+  const [estimateType, setEstimateType] = useState<"new" | "change_order">("new");
+  const [activeProjects, setActiveProjects] = useState<Array<{ id: string; project_name: string; client_name?: string }>>([]);
+
+  // Load active projects for the change order picker
+  useEffect(() => {
+    if (estimateType !== "change_order") return;
+    axiom
+      .from("custom_work")
+      .select("id,project_name,client_name")
+      .in("status", ["new", "in_review", "quoted", "in_progress"])
+      .order("project_name")
+      .then(({ data }) => {
+        if (data) setActiveProjects(data as Array<{ id: string; project_name: string; client_name?: string }>);
+      });
+  }, [estimateType]);
+
+  // When user picks a project for a change order, auto-fill the project_name
+  // and client_name so they don't have to retype
+  useEffect(() => {
+    if (estimateType !== "change_order" || !form.change_order_for_id) return;
+    const proj = activeProjects.find((p) => p.id === form.change_order_for_id);
+    if (proj) {
+      setForm((f) => ({
+        ...f,
+        project_name: f.project_name || `Change Order — ${proj.project_name}`,
+        client_name: f.client_name || proj.client_name || "",
+      }));
+    }
+  }, [form.change_order_for_id, estimateType, activeProjects]);
 
   function handleCustomerSelect(c: SearchResult) {
     if (!c.id) {
       setForm((f) => ({ ...f, customer_id: "" }));
     } else if (c.type === "company") {
-      // Company — don't set customer_id (FK mismatch), just track selection
       setForm((f) => ({ ...f, customer_id: "" }));
     } else {
       setForm((f) => ({ ...f, customer_id: c.id }));
     }
   }
 
+  function submit() {
+    onSubmit({
+      project_name: form.project_name,
+      client_name: form.client_name,
+      customer_id: form.customer_id,
+      change_order_for_id: estimateType === "change_order" ? form.change_order_for_id : undefined,
+    });
+  }
+
+  const submitDisabled = !form.project_name || (estimateType === "change_order" && !form.change_order_for_id);
+
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-50" onClick={onClose} />
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-background border border-border p-6 w-full max-w-sm">
+      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-background border border-border p-6 w-full max-w-md">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-heading font-bold">New Estimate</h2>
           <button onClick={onClose} className="text-muted hover:text-foreground"><X size={18} /></button>
         </div>
         <div className="space-y-4">
-          <Field label="Project / Description" value={form.project_name} onChange={(v) => setForm((f) => ({ ...f, project_name: v }))} required />
+          {/* Estimate type tabs */}
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted block mb-2">Type</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEstimateType("new")}
+                className={cn(
+                  "flex-1 border px-4 py-2.5 text-sm transition-colors",
+                  estimateType === "new" ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:text-foreground"
+                )}
+              >
+                New Project
+              </button>
+              <button
+                onClick={() => setEstimateType("change_order")}
+                className={cn(
+                  "flex-1 border px-4 py-2.5 text-sm transition-colors",
+                  estimateType === "change_order" ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:text-foreground"
+                )}
+              >
+                Change Order
+              </button>
+            </div>
+          </div>
+
+          {estimateType === "change_order" && (
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">For Project *</label>
+              <select
+                value={form.change_order_for_id}
+                onChange={(e) => setForm((f) => ({ ...f, change_order_for_id: e.target.value }))}
+                className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+              >
+                <option value="">Select active project…</option>
+                {activeProjects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.project_name}{p.client_name ? ` — ${p.client_name}` : ""}
+                  </option>
+                ))}
+              </select>
+              {activeProjects.length === 0 && (
+                <p className="text-xs text-muted mt-1.5 italic">No active projects to attach a change order to.</p>
+              )}
+            </div>
+          )}
+
+          <Field
+            label={estimateType === "change_order" ? "Change Order Description" : "Project / Description"}
+            value={form.project_name}
+            onChange={(v) => setForm((f) => ({ ...f, project_name: v }))}
+            required
+          />
           <CustomerSearch onSelect={handleCustomerSelect} />
           <Field label="Contact" value={form.client_name} onChange={(v) => setForm((f) => ({ ...f, client_name: v }))} />
           <div className="flex gap-3">
-            <Button onClick={() => onSubmit(form)} disabled={!form.project_name}>Create</Button>
+            <Button onClick={submit} disabled={submitDisabled}>Create</Button>
             <Button variant="outline" onClick={onClose}>Cancel</Button>
           </div>
         </div>
@@ -1043,6 +1157,10 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
               />
             </div>
           </div>
+          {/* Change Order badge — links back to parent project */}
+          {estimate.change_order_for_id && (
+            <ChangeOrderBadge projectId={estimate.change_order_for_id} />
+          )}
           <div className="flex items-center gap-4">
             <p className="text-xs text-muted font-mono">{estimate.estimate_number}</p>
             <select

@@ -157,7 +157,8 @@ export async function POST(req: NextRequest) {
           const l = (estimate.labor_items as La[] || []).reduce((s, li) => s + (li.cost || 0), 0);
           const total = Math.round((m + l) * (1 + (estimate.markup_percent || 0) / 100) * 100) / 100;
 
-          let customWorkId = estimate.custom_work_id;
+          // Change orders attach to the parent project — don't create a new one
+          let customWorkId = estimate.custom_work_id || estimate.change_order_for_id;
           if (!customWorkId) {
             const { data: newProject } = await supabase
               .from("custom_work")

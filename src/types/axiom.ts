@@ -265,6 +265,10 @@ export interface Estimate {
   // Set when the deposit invoice is marked paid. The custom_work
   // project is created at this moment, not at proposal acceptance.
   deposit_paid_at?: string;
+  // If set, this estimate is a CHANGE ORDER for an existing project,
+  // not a brand-new project. On acceptance/payment, no new custom_work
+  // is created — the change order is associated with this existing one.
+  change_order_for_id?: string;
   created_at: string;
   updated_at: string;
 }

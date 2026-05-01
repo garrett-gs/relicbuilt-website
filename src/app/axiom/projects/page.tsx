@@ -48,6 +48,93 @@ function fmt(n: number) {
   return n ? n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "";
 }
 
+// ── Change Orders panel ──────────────────────────────────────────
+// Lists every estimate where change_order_for_id matches this project.
+// Estimates can be created as change orders from the estimator's "New
+// Estimate" modal — they reuse the same proposal/sign/deposit flow but
+// don't spawn a new project on payment, just attach to this one.
+function ChangeOrdersPanel({ projectId }: { projectId: string }) {
+  const [orders, setOrders] = useState<{
+    id: string;
+    estimate_number: string;
+    project_name?: string;
+    status: string;
+    proposal_status?: string;
+    deposit_paid_at?: string;
+    line_items?: { quantity?: number; unit_price?: number }[];
+    labor_items?: { cost?: number }[];
+    markup_percent?: number;
+  }[]>([]);
+  const router = useRouter();
+
+  useEffect(() => {
+    axiom.from("estimates")
+      .select("id,estimate_number,project_name,status,proposal_status,deposit_paid_at,line_items,labor_items,markup_percent")
+      .eq("change_order_for_id", projectId)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setOrders(data as typeof orders);
+      });
+  }, [projectId]);
+
+  function totalFor(o: typeof orders[number]) {
+    const m = (o.line_items || []).reduce((s, li) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
+    const l = (o.labor_items || []).reduce((s, li) => s + (li.cost || 0), 0);
+    return Math.round((m + l) * (1 + (o.markup_percent || 0) / 100) * 100) / 100;
+  }
+
+  function statusBadge(o: typeof orders[number]) {
+    if (o.deposit_paid_at) return { text: "Paid", color: "bg-green-500/20 text-green-400" };
+    if (o.proposal_status === "approved") return { text: "Approved", color: "bg-accent/20 text-accent" };
+    if (o.status === "sent" || o.proposal_status === "sent") return { text: "Sent", color: "bg-blue-400/20 text-blue-400" };
+    if (o.status === "rejected") return { text: "Rejected", color: "bg-red-500/20 text-red-400" };
+    return { text: "Draft", color: "bg-muted/30 text-muted" };
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">
+          Change Orders <span className="text-muted text-xs font-normal">({orders.length})</span>
+        </h3>
+        <button
+          onClick={() => router.push("/axiom/estimator")}
+          className="text-accent text-xs flex items-center gap-1"
+        >
+          <Plus size={12} /> New Change Order
+        </button>
+      </div>
+      {orders.length === 0 ? (
+        <p className="text-muted text-sm italic">
+          No change orders yet. Create one from the Estimator and pick &ldquo;Change Order&rdquo; with this project as the target.
+        </p>
+      ) : (
+        <div className="space-y-2">
+          {orders.map((o) => {
+            const total = totalFor(o);
+            const badge = statusBadge(o);
+            return (
+              <button
+                key={o.id}
+                onClick={() => router.push("/axiom/estimator")}
+                className="w-full flex items-center gap-3 px-3 py-2.5 bg-card border border-border hover:border-accent/50 transition-colors text-sm"
+              >
+                <span className="font-mono text-xs text-muted">{o.estimate_number}</span>
+                <span className="flex-1 text-left text-foreground truncate">{o.project_name || "Change Order"}</span>
+                <span className={cn("text-xs px-2 py-0.5 font-medium", badge.color)}>{badge.text}</span>
+                <span className="font-mono text-sm text-accent w-24 text-right">{money(total)}</span>
+              </button>
+            );
+          })}
+          <p className="text-right text-xs text-muted mt-2">
+            Combined: <strong className="text-accent font-mono">{money(orders.reduce((s, o) => s + totalFor(o), 0))}</strong>
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CurrencyInput({ value, onChange, placeholder = "0.00", className }: {
   value: number;
   onChange: (v: number) => void;
@@ -1549,6 +1636,8 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       </div>
 
       {/* Checklist */}
+      <ChangeOrdersPanel projectId={project.id} />
+
       <ChecklistPanel projectId={project.id} initial={project.checklist || { sections: [] }} />
 
       {/* Proposal & Invoices */}
