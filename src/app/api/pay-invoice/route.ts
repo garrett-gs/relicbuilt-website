@@ -43,7 +43,17 @@ export async function POST(req: NextRequest) {
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      payment_method_types: ["card"],
+      // Card and ACH both available — client picks at Stripe Checkout.
+      // ACH uses Stripe's instant bank verification (Plaid-style) plus
+      // a microdeposit fallback. Funds settle in ~3-5 business days vs
+      // instant for card. Lower fee for the merchant on ACH (~0.8% capped
+      // at $5) than card (2.9% + $0.30).
+      payment_method_types: ["card", "us_bank_account"],
+      payment_method_options: {
+        us_bank_account: {
+          verification_method: "instant",
+        },
+      },
       line_items: [
         {
           price_data: {
@@ -59,7 +69,7 @@ export async function POST(req: NextRequest) {
           price_data: {
             currency: "usd",
             product_data: {
-              name: "Card Processing Fee (2.9% + $0.30)",
+              name: "Processing Fee (2.9% + $0.30 if card)",
             },
             unit_amount: feeCents,
           },

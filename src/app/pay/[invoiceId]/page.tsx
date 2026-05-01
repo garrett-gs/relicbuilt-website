@@ -228,8 +228,13 @@ export default function PayInvoicePage() {
 
           {/* Payment Section */}
           <div style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: "#111", margin: "0 0 14px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Pay by Card
+            <p style={{ fontSize: 14, fontWeight: 700, color: "#111", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Pay by Card or ACH
+            </p>
+            <p style={{ fontSize: 12, color: "#888", margin: "0 0 14px", lineHeight: 1.5 }}>
+              You&apos;ll choose your payment method (credit/debit card or US bank ACH)
+              on the next screen. ACH transfers take 3–5 business days to clear; card
+              payments are immediate.
             </p>
 
             {/* Fee Breakdown */}
@@ -244,7 +249,7 @@ export default function PayInvoicePage() {
                 <span style={{ fontFamily: "monospace" }}>{money(invoiceTotal)}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, color: "#888", fontSize: 13 }}>
-                <span>Card processing fee (2.9% + $0.30)</span>
+                <span>Processing fee (2.9% + $0.30 if card)</span>
                 <span style={{ fontFamily: "monospace" }}>{money(fee)}</span>
               </div>
               <div style={{

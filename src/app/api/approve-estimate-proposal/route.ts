@@ -204,11 +204,12 @@ export async function POST(req: NextRequest) {
 
     <div style="text-align:center;margin:24px 0;">
       <a href="${payUrl}" style="display:inline-block;background:#c4a24d;color:#0a0a0a;padding:16px 36px;text-decoration:none;font-weight:bold;letter-spacing:0.08em;font-size:14px;text-transform:uppercase;">
-        Pay Deposit by Card
+        Pay Deposit Now → Card or ACH
       </a>
     </div>
-    <p style="font-size:11px;color:#aaa;text-align:center;margin:0 0 24px;">
-      Card processing fee (2.9% + $0.30) applies. Prefer check or other method? Just reply.
+    <p style="font-size:11px;color:#aaa;text-align:center;margin:0 0 24px;line-height:1.5;">
+      Card (instant, 2.9% + $0.30 fee) or ACH bank transfer (3–5 days, lower fee).
+      Prefer check or other method? Just reply.
     </p>
 
     <p style="font-size:13px;color:#888;margin:0 0 12px;line-height:1.6;">
@@ -249,6 +250,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       project_name: estimate.project_name || estimate.estimate_number,
+      deposit_invoice_id: depositInvoice.id,
       deposit_invoice_number: depositInvoice.invoice_number,
       deposit_amount: depositAmount,
       balance_amount: balanceAmount,

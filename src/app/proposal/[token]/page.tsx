@@ -8,6 +8,7 @@ import { generateEstimateProposalHtml } from "@/lib/proposal-html";
 
 interface ApprovalResult {
   project_name: string;
+  deposit_invoice_id: string;
   deposit_invoice_number: string;
   deposit_amount: number;
   balance_amount: number;
@@ -165,12 +166,41 @@ export default function ProposalPage() {
             )}
           </div>
 
+          {/* Pay Now button — strike while the iron is hot */}
+          {result.deposit_invoice_id && (
+            <>
+              <a
+                href={`/pay/${result.deposit_invoice_id}`}
+                style={{
+                  display: "block",
+                  background: "#c4a24d",
+                  color: "#0a0a0a",
+                  padding: "18px 24px",
+                  textDecoration: "none",
+                  fontSize: 16,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  textAlign: "center",
+                  marginBottom: 12,
+                }}
+              >
+                Pay Deposit Now → Card or ACH
+              </a>
+              <p style={{ margin: "0 0 24px", color: "#888", fontSize: 11, textAlign: "center", lineHeight: 1.5 }}>
+                Choose card (instant, 2.9% + $0.30 fee) or ACH bank transfer (3–5 days, lower fee)
+                on the next screen. We&apos;ve also emailed you the payment link.
+              </p>
+            </>
+          )}
+
           <p style={{ margin: "0 0 16px", padding: "12px 16px", background: "#fff8e1", border: "1px solid #f0d896", color: "#7a5a00", fontSize: 13, fontWeight: 500, textAlign: "left" }}>
             Balances are due prior to delivery.
           </p>
 
           <p style={{ margin: 0, color: "#666", fontSize: 13, lineHeight: 1.6 }}>
-            {result.biz_name} will be in touch with payment instructions for the deposit shortly.
+            Prefer to pay by check or other method? Just reply to your email confirmation
+            and {result.biz_name} will be in touch.
           </p>
         </div>
       </div>
