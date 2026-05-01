@@ -240,6 +240,10 @@ interface EstimateProposalArgs {
   totals: { materialTotal: number; laborTotal: number; markupAmount: number; total: number };
   approveUrl?: string;
   forEmail?: boolean;
+  // If the customer on this estimate works for a company, pass the
+  // company's display name so the proposal can show "[Client] of [Company]"
+  // in the "Prepared for" sections of the cover and body pages.
+  clientCompany?: string;
 }
 
 export function generateEstimateProposalHtml({
@@ -248,7 +252,15 @@ export function generateEstimateProposalHtml({
   totals,
   approveUrl,
   forEmail = false,
+  clientCompany,
 }: EstimateProposalArgs): string {
+  // Build a "Prepared for" string that includes the company if present.
+  // Example: "Sarah Johnson of Acme Events"
+  const preparedFor = estimate.client_name
+    ? clientCompany
+      ? `${estimate.client_name} of ${clientCompany}`
+      : estimate.client_name
+    : (clientCompany || "—");
   const highlights: ProposalHighlight[] = (estimate.proposal_highlights || []).filter((h) => h.included !== false);
   const scope = estimate.proposal_scope?.included !== false ? (estimate.proposal_scope?.body || "") : "";
   const includeImages = estimate.proposal_images_included !== false;
@@ -386,7 +398,7 @@ export function generateEstimateProposalHtml({
     <div style="margin-bottom:18px;">
       <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.16em;color:#bbb;">Proposal</p>
       <h1 style="margin:6px 0 0;font-size:30px;font-weight:bold;color:#111;letter-spacing:0.02em;">${esc(estimate.project_name || "")}</h1>
-      <p style="margin:10px 0 0;font-size:17px;color:#555;">Prepared for ${esc(estimate.client_name || "—")}</p>
+      <p style="margin:10px 0 0;font-size:17px;color:#555;">Prepared for ${esc(preparedFor)}</p>
       <p style="margin:10px 0 0;font-size:12px;color:#999;font-family:monospace;">${esc(estimate.estimate_number)} &nbsp;·&nbsp; ${dateText}</p>
     </div>
     <div style="flex:1;display:flex;align-items:center;justify-content:center;width:100%;">
@@ -456,7 +468,7 @@ export function generateEstimateProposalHtml({
   <div style="display:flex;gap:24px;margin-bottom:32px;">
     <div style="flex:1;">
       <p style="margin:0 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Prepared For</p>
-      <p style="margin:0;font-size:15px;font-weight:bold;color:#111;">${esc(estimate.client_name || "—")}</p>
+      <p style="margin:0;font-size:15px;font-weight:bold;color:#111;">${esc(preparedFor)}</p>
     </div>
     <div style="flex:1;">
       <p style="margin:0 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Project</p>

@@ -446,6 +446,10 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const { userEmail: detailUserEmail } = useAuth();
   const [customerId, setCustomerId] = useState(estimate.customer_id || "");
   const [customerName, setCustomerName] = useState("");
+  // If the selected customer is linked to a company, this carries the
+  // company's display info onto the estimate so it shows in the UI and
+  // the proposal ("Prepared for [Customer] of [Company]").
+  const [linkedCompanyName, setLinkedCompanyName] = useState("");
   const [clientEmail, setClientEmail] = useState(estimate.client_email || "");
   const [clientPhone, setClientPhone] = useState(estimate.client_phone || "");
   const [projectName, setProjectName] = useState(estimate.project_name || "");
@@ -719,6 +723,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       } as Estimate,
       biz: settings || {},
       totals: { materialTotal, laborTotal, markupAmount, total },
+      clientCompany: linkedCompanyName || undefined,
     });
 
     const html = `
@@ -825,18 +830,26 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
 
   // Resolve customer name for display if we have a customer_id.
   // Also auto-fill the estimate's client_email and client_phone from
-  // the customer record IF they're not already set. This means picking
-  // a customer once flows their contact info onto the estimate without
-  // the user having to retype it.
+  // the customer record IF they're not already set, and pull in the
+  // linked company name if the customer works for one.
   useEffect(() => {
     if (!estimate.customer_id) return;
     axiom.from("customers")
-      .select("name,email,phone")
+      .select("name,email,phone,company_id,company_name")
       .eq("id", estimate.customer_id)
       .single()
       .then(({ data }) => {
         if (!data) return;
         setCustomerName(data.name);
+        // If customer has a linked company, show it on the estimate.
+        // Prefer the cached company_name; fall back to looking up the
+        // company table if only company_id is set.
+        if (data.company_name) {
+          setLinkedCompanyName(data.company_name);
+        } else if (data.company_id) {
+          axiom.from("companies").select("name").eq("id", data.company_id).single()
+            .then(({ data: co }) => { if (co?.name) setLinkedCompanyName(co.name); });
+        }
         // Only fill if the user hasn't already entered something
         // (preserves any per-estimate override they made by hand)
         setClientEmail((prev) => prev || data.email || "");
@@ -923,6 +936,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       setCustomerId("");
       setCustomerName(c.name);
       setSelectedType("company");
+      setLinkedCompanyName(c.name);
       // Load contacts at this company for suggestions
       axiom.from("customers").select("name,email,phone").eq("company_id", c.id).order("name").then(({ data }) => {
         if (data) setCompanyContacts(data);
@@ -933,7 +947,8 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     } else {
       // Individual customer — pre-fill the contact name AND pull their
       // email/phone onto the estimate so the proposal email can fire
-      // without manual entry.
+      // without manual entry. Also pull in their linked company so the
+      // proposal shows "Prepared for [Customer] of [Company]".
       setCustomerId(c.id);
       setCustomerName(c.name);
       setSelectedType("customer");
@@ -941,6 +956,21 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       if (!clientName) setClientName(c.name);
       if (c.email && !clientEmail) setClientEmail(c.email);
       if (c.phone && !clientPhone) setClientPhone(c.phone);
+      // Look up the customer's linked company (if any)
+      axiom.from("customers")
+        .select("company_id,company_name")
+        .eq("id", c.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.company_name) {
+            setLinkedCompanyName(data.company_name);
+          } else if (data?.company_id) {
+            axiom.from("companies").select("name").eq("id", data.company_id).single()
+              .then(({ data: co }) => { if (co?.name) setLinkedCompanyName(co.name); });
+          } else {
+            setLinkedCompanyName("");
+          }
+        });
     }
     markDirty();
   }
@@ -1212,6 +1242,13 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 space-y-3">
           <Field label="Project / Description" value={projectName} onChange={(v) => { setProjectName(v); markDirty(); }} />
+          {linkedCompanyName && customerId && selectedType === "customer" && (
+            <div className="bg-accent/10 border border-accent/30 px-3 py-2 text-xs flex items-center gap-2">
+              <span className="text-muted">Customer is linked to company:</span>
+              <span className="text-accent font-semibold">{linkedCompanyName}</span>
+              <span className="text-muted ml-auto">— shown on proposal</span>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <CustomerSearch onSelect={handleCustomerSelect} initialName={customerName} />
             <div ref={contactRef} className="relative">

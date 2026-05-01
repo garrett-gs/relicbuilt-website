@@ -154,6 +154,22 @@ export async function POST(req: NextRequest) {
     let documentHash: string | null = null;
     let documentSnapshotUrl: string | null = null;
     try {
+      // Look up linked company for the audit snapshot
+      let clientCompany: string | undefined;
+      if (estimate.customer_id) {
+        const { data: cust } = await supabase
+          .from("customers")
+          .select("company_id,company_name")
+          .eq("id", estimate.customer_id)
+          .single();
+        if (cust?.company_name) {
+          clientCompany = cust.company_name;
+        } else if (cust?.company_id) {
+          const { data: co } = await supabase.from("companies").select("name").eq("id", cust.company_id).single();
+          if (co?.name) clientCompany = co.name;
+        }
+      }
+
       const proposalHtml = generateEstimateProposalHtml({
         estimate: estimate as Estimate & {
           proposal_highlights?: ProposalHighlight[];
@@ -161,6 +177,7 @@ export async function POST(req: NextRequest) {
         },
         biz: settings || {},
         totals: { materialTotal: totals.materialTotal, laborTotal: totals.laborTotal, markupAmount: totals.markup, total: totals.total },
+        clientCompany,
       });
       documentHash = sha256(proposalHtml);
 

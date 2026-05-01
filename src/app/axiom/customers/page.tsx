@@ -333,6 +333,7 @@ export default function CustomersPage() {
           <CustomerDetail
             customer={selectedCustomer}
             company={selectedCustomerCompany}
+            companies={companies}
             projects={detailProjects}
             invoices={detailInvoices}
             onDelete={() => deleteCustomer(selectedCustomer.id)}
@@ -638,9 +639,10 @@ function CompanyPortalSection({ company, onUpdate }: { company: Company; onUpdat
 
 // ── Customer / Contact detail panel ─────────────────────────
 
-function CustomerDetail({ customer, company, projects, invoices, onDelete, onAddNote, onUpdate }: {
+function CustomerDetail({ customer, company, companies, projects, invoices, onDelete, onAddNote, onUpdate }: {
   customer: Customer;
   company: Company | null;
+  companies: Company[];
   projects: CustomWork[];
   invoices: Invoice[];
   onDelete: () => void;
@@ -649,12 +651,29 @@ function CustomerDetail({ customer, company, projects, invoices, onDelete, onAdd
 }) {
   const [confirmDel, setConfirmDel] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: customer.name, title: customer.title ?? "", email: customer.email ?? "", phone: customer.phone ?? "", address: customer.address ?? "" });
+  const [form, setForm] = useState({
+    name: customer.name,
+    title: customer.title ?? "",
+    email: customer.email ?? "",
+    phone: customer.phone ?? "",
+    address: customer.address ?? "",
+    company_id: customer.company_id ?? "",
+  });
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
   const totalSpend = projects.reduce((s, p) => s + (p.quoted_amount || 0), 0);
 
   function saveEdit() {
-    onUpdate({ name: form.name, title: form.title || undefined, email: form.email || undefined, phone: form.phone || undefined, address: form.address || undefined });
+    const linkedCompany = form.company_id ? companies.find((c) => c.id === form.company_id) : null;
+    // Pass null (not undefined) so Supabase actually clears the column when unlinking.
+    onUpdate({
+      name: form.name,
+      title: form.title || undefined,
+      email: form.email || undefined,
+      phone: form.phone || undefined,
+      address: form.address || undefined,
+      company_id: (form.company_id || null) as unknown as string,
+      company_name: (linkedCompany?.name || null) as unknown as string,
+    });
     setEditing(false);
   }
 
@@ -677,7 +696,7 @@ function CustomerDetail({ customer, company, projects, invoices, onDelete, onAdd
         </div>
         <div className="flex items-center gap-2">
           {!editing && !confirmDel && (
-            <button onClick={() => { setForm({ name: customer.name, title: customer.title ?? "", email: customer.email ?? "", phone: customer.phone ?? "", address: customer.address ?? "" }); setEditing(true); }} className="text-muted hover:text-accent flex items-center gap-1 text-xs border border-border px-2 py-1">
+            <button onClick={() => { setForm({ name: customer.name, title: customer.title ?? "", email: customer.email ?? "", phone: customer.phone ?? "", address: customer.address ?? "", company_id: customer.company_id ?? "" }); setEditing(true); }} className="text-muted hover:text-accent flex items-center gap-1 text-xs border border-border px-2 py-1">
               <Pencil size={11} /> Edit
             </button>
           )}
@@ -697,8 +716,20 @@ function CustomerDetail({ customer, company, projects, invoices, onDelete, onAdd
       {editing ? (
         <div className="bg-card border border-border p-4 space-y-3">
           <div><label className={lbl}>Name</label><input value={form.name} onChange={(e) => set("name", e.target.value)} className={inp} /></div>
-          {customer.type === "Contact" && (
-            <div><label className={lbl}>Title / Role</label><input value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Project Manager" className={inp} /></div>
+          <div>
+            <label className={lbl}>Company</label>
+            <select value={form.company_id} onChange={(e) => set("company_id", e.target.value)} className={inp}>
+              <option value="">— None (Individual) —</option>
+              {companies.map((co) => (
+                <option key={co.id} value={co.id}>{co.name}</option>
+              ))}
+            </select>
+            <p className="text-[11px] text-muted mt-1 italic">
+              Link this customer to a company they work for. The company name will appear on proposals alongside the customer.
+            </p>
+          </div>
+          {(customer.type === "Contact" || form.company_id) && (
+            <div><label className={lbl}>Title / Role</label><input value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Event Coordinator, Project Manager" className={inp} /></div>
           )}
           <div className="grid grid-cols-2 gap-3">
             <div><label className={lbl}>Email</label><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inp} /></div>

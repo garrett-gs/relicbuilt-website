@@ -90,6 +90,22 @@ export async function POST(req: NextRequest) {
     let pdfBase64 = "";
     let pdfFilename = `Proposal-${(estimate.estimate_number || "RELIC").replace(/[^A-Za-z0-9-]/g, "")}.pdf`;
     try {
+      // Look up linked company so the proposal shows "[Client] of [Company]"
+      let clientCompany: string | undefined;
+      if (estimate.customer_id) {
+        const { data: cust } = await supabase
+          .from("customers")
+          .select("company_id,company_name")
+          .eq("id", estimate.customer_id)
+          .single();
+        if (cust?.company_name) {
+          clientCompany = cust.company_name;
+        } else if (cust?.company_id) {
+          const { data: co } = await supabase.from("companies").select("name").eq("id", cust.company_id).single();
+          if (co?.name) clientCompany = co.name;
+        }
+      }
+
       const proposalHtml = generateEstimateProposalHtml({
         estimate: estimate as Estimate & {
           proposal_highlights?: ProposalHighlight[];
@@ -97,6 +113,7 @@ export async function POST(req: NextRequest) {
         },
         biz: settings || {},
         totals,
+        clientCompany,
       });
       const pdfBuffer = await renderHtmlToPdf(proposalHtml);
       pdfBase64 = pdfBuffer.toString("base64");

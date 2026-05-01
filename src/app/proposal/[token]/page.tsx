@@ -45,6 +45,7 @@ export default function ProposalPage() {
   const [result, setResult] = useState<ApprovalResult | null>(null);
   const [alreadyApproved, setAlreadyApproved] = useState(false);
   const [expired, setExpired] = useState(false);
+  const [clientCompany, setClientCompany] = useState<string>("");
 
   useEffect(() => {
     if (!token) return;
@@ -65,6 +66,23 @@ export default function ProposalPage() {
         setEstimate(estRes.data as Estimate);
         if ((estRes.data as Estimate).proposal_status === "approved") {
           setAlreadyApproved(true);
+        }
+        // Look up the customer's linked company so the proposal can show
+        // "Prepared for [Customer] of [Company]"
+        const est = estRes.data as Estimate;
+        if (est.customer_id) {
+          axiom.from("customers")
+            .select("company_id,company_name")
+            .eq("id", est.customer_id)
+            .single()
+            .then(({ data: cust }) => {
+              if (cust?.company_name) {
+                setClientCompany(cust.company_name);
+              } else if (cust?.company_id) {
+                axiom.from("companies").select("name").eq("id", cust.company_id).single()
+                  .then(({ data: co }) => { if (co?.name) setClientCompany(co.name); });
+              }
+            });
         }
       }
       const e = estRes.data as Estimate | null;
@@ -264,6 +282,7 @@ export default function ProposalPage() {
             estimate,
             biz: settings || {},
             totals,
+            clientCompany: clientCompany || undefined,
           }),
         }}
       />
