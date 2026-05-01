@@ -1570,6 +1570,9 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
               <Button variant="outline" onClick={() => window.open(`/proposal/${proposalToken}`, "_blank")}>
                 <ExternalLink size={14} className="mr-1" /> Open Live Proposal
               </Button>
+              <Button variant="outline" onClick={() => window.open(`/api/audit-trail/${estimate.id}`, "_blank")}>
+                <FileText size={14} className="mr-1" /> Audit Trail
+              </Button>
             </>
           )}
         </div>

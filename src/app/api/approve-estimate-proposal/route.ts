@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { generateEstimateProposalHtml } from "@/lib/proposal-html";
+import { renderHtmlToPdf } from "@/lib/render-pdf";
+import { logProposalEvent, ipFromHeaders, sha256 } from "@/lib/audit";
+import type { Estimate, ProposalHighlight, ProposalScope } from "@/types/axiom";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
@@ -139,6 +146,58 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", estimate.id);
+
+    // ── Audit trail: capture signed document snapshot + hash ─────────
+    // Render the proposal as it appeared to the client at signing time,
+    // hash the HTML for tamper detection, and upload the PDF to storage
+    // so we can produce "this is what they signed" on demand.
+    let documentHash: string | null = null;
+    let documentSnapshotUrl: string | null = null;
+    try {
+      const proposalHtml = generateEstimateProposalHtml({
+        estimate: estimate as Estimate & {
+          proposal_highlights?: ProposalHighlight[];
+          proposal_scope?: ProposalScope;
+        },
+        biz: settings || {},
+        totals: { materialTotal: totals.materialTotal, laborTotal: totals.laborTotal, markupAmount: totals.markup, total: totals.total },
+      });
+      documentHash = sha256(proposalHtml);
+
+      const pdfBuffer = await renderHtmlToPdf(proposalHtml);
+      const path = `proposal-snapshots/${estimate.id}/${Date.now()}-signed.pdf`;
+      const { error: uploadErr } = await supabase.storage
+        .from("portal-images")
+        .upload(path, pdfBuffer, { contentType: "application/pdf", upsert: false });
+      if (!uploadErr) {
+        const { data: pub } = supabase.storage.from("portal-images").getPublicUrl(path);
+        documentSnapshotUrl = pub.publicUrl;
+      } else {
+        console.error("[approve-estimate-proposal] snapshot upload failed:", uploadErr.message);
+      }
+    } catch (snapErr) {
+      console.error("[approve-estimate-proposal] snapshot render failed:", snapErr);
+    }
+
+    await logProposalEvent({
+      supabase,
+      estimateId: estimate.id,
+      eventType: "signed",
+      signerName: signatureName.trim(),
+      signerEmail: estimate.client_email || null,
+      ipAddress: ipFromHeaders(req.headers),
+      userAgent: req.headers.get("user-agent") || null,
+      documentHash,
+      documentSnapshotUrl,
+      metadata: {
+        proposal_token: estimate.proposal_token,
+        total_amount: totalAmount,
+        deposit_amount: depositAmount,
+        deposit_percent: depositPct,
+        deposit_invoice_id: depositInvoice.id,
+        deposit_invoice_number: depositInvoice.invoice_number,
+      },
+    });
 
     // ── Email the deposit invoice ────────────────────────────────────
     // Try to email immediately on acceptance so the client has it in

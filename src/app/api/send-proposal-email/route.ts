@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateEstimateProposalHtml } from "@/lib/proposal-html";
 import { renderHtmlToPdf } from "@/lib/render-pdf";
+import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 import type { Estimate, ProposalHighlight, ProposalScope } from "@/types/axiom";
 
 // Allow up to 60 seconds for the PDF generation step. Vercel Hobby has a
@@ -175,6 +176,28 @@ export async function POST(req: NextRequest) {
       const err = await res.json().catch(() => ({}));
       return NextResponse.json({ error: err.message || `Resend returned ${res.status}` }, { status: 500 });
     }
+
+    // Log audit event — was this the first send or a re-send?
+    const { data: priorSends } = await supabase
+      .from("proposal_audit_events")
+      .select("id")
+      .eq("estimate_id", estimate.id)
+      .eq("event_type", "sent")
+      .limit(1);
+    const eventType = priorSends && priorSends.length > 0 ? "resent" : "sent";
+    await logProposalEvent({
+      supabase,
+      estimateId: estimate.id,
+      eventType,
+      signerEmail: toEmail,
+      ipAddress: ipFromHeaders(req.headers),
+      userAgent: req.headers.get("user-agent") || null,
+      metadata: {
+        recipient: toEmail,
+        proposal_token: estimate.proposal_token,
+        had_pdf_attachment: !!pdfBase64,
+      },
+    });
 
     return NextResponse.json({ success: true, sent_to: toEmail });
   } catch (err) {

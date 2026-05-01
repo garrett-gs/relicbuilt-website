@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 
 interface EstimateLineItem { quantity?: number; unit_price?: number }
 interface EstimateLaborItem { cost?: number }
@@ -143,6 +144,21 @@ export async function POST(req: NextRequest) {
       custom_work_id: customWorkId,
       updated_at: paidAt,
     }).eq("id", estimate_id);
+
+    // Audit log — deposit marked paid manually
+    await logProposalEvent({
+      supabase,
+      estimateId: estimate_id,
+      eventType: "deposit_paid",
+      signerEmail: estimate.client_email || null,
+      ipAddress: ipFromHeaders(req.headers),
+      userAgent: req.headers.get("user-agent") || null,
+      metadata: {
+        method: "manual",
+        custom_work_id: customWorkId,
+        marked_by: "axiom_user",
+      },
+    });
 
     return NextResponse.json({
       success: true,

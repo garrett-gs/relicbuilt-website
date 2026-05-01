@@ -48,6 +48,13 @@ export default function ProposalPage() {
 
   useEffect(() => {
     if (!token) return;
+    // Fire-and-forget audit log for "viewed" — we record IP + UA server-side
+    fetch("/api/log-proposal-view", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token }),
+    }).catch(() => {});
+
     Promise.all([
       axiom.from("estimates").select("*").eq("proposal_token", token).single(),
       axiom.from("settings").select("*").limit(1).single(),

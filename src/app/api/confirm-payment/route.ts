@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getStripe } from "@/lib/stripe";
+import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
@@ -198,6 +199,24 @@ export async function POST(req: NextRequest) {
               .update({ custom_work_id: customWorkId })
               .eq("estimate_id", estimate.id)
               .eq("invoice_type", "final");
+
+            // Audit trail: deposit was paid via Stripe
+            await logProposalEvent({
+              supabase,
+              estimateId: estimate.id,
+              eventType: "deposit_paid",
+              signerEmail: estimate.client_email || null,
+              ipAddress: ipFromHeaders(req.headers),
+              userAgent: req.headers.get("user-agent") || null,
+              metadata: {
+                amount: totalPaid,
+                method: "card",
+                stripe_session_id: sessionId,
+                invoice_id: invoiceId,
+                invoice_number: invoice.invoice_number,
+                custom_work_id: customWorkId,
+              },
+            });
           }
         }
       } catch (autoErr) {
