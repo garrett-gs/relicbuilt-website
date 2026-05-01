@@ -244,6 +244,9 @@ export interface Estimate {
   unit_count?: number;
   notes?: string;
   images?: string[];
+  // Append-only timestamped sales communication log — phone calls, emails,
+  // visits, anything worth recording for context on this estimate.
+  sales_notes?: SalesNote[];
   chat_history?: { role: "user" | "assistant"; content: string }[];
   // Proposal — moved from CustomWork. Lets us send a proposal directly
   // from the estimate; only on client acceptance does it become a project.
@@ -274,6 +277,12 @@ export interface Estimate {
   change_order_for_id?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface SalesNote {
+  text: string;
+  author?: string;
+  created_at: string;
 }
 
 // ── Invoices ────────────────────────────────────────────────

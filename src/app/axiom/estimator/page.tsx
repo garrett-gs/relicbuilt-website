@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
-import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope } from "@/types/axiom";
+import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, SalesNote } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
@@ -456,6 +456,11 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [markupPct, setMarkupPct] = useState(estimate.markup_percent || 0);
   const [unitCount, setUnitCount] = useState(estimate.unit_count || 1);
   const [notes, setNotes] = useState(estimate.notes || "");
+
+  // Sales notes — append-only communication log
+  const [salesNotes, setSalesNotes] = useState<SalesNote[]>(estimate.sales_notes || []);
+  const [newSalesNote, setNewSalesNote] = useState("");
+  const [addingSalesNote, setAddingSalesNote] = useState(false);
   const [fieldNotes, setFieldNotes] = useState<string[]>(
     (estimate as Estimate & { images?: string[] }).images || []
   );
@@ -509,6 +514,33 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   function removeHighlight(i: number) {
     setProposalHighlights(proposalHighlights.filter((_, idx) => idx !== i));
     markDirty();
+  }
+
+  // Append a timestamped note to the sales log. Saves directly to the DB
+  // so notes are durable even if the user navigates away without saving
+  // — they're a communication record, not a draft field.
+  async function addSalesNote() {
+    const text = newSalesNote.trim();
+    if (!text || addingSalesNote) return;
+    setAddingSalesNote(true);
+    const note: SalesNote = {
+      text,
+      author: detailUserEmail || undefined,
+      created_at: new Date().toISOString(),
+    };
+    const next = [...salesNotes, note];
+    const { error } = await axiom
+      .from("estimates")
+      .update({ sales_notes: next, updated_at: new Date().toISOString() })
+      .eq("id", estimate.id);
+    if (error) {
+      alert(`Could not save note: ${error.message}`);
+      setAddingSalesNote(false);
+      return;
+    }
+    setSalesNotes(next);
+    setNewSalesNote("");
+    setAddingSalesNote(false);
   }
 
   // ── Project images for the proposal ─────────────────────────────────
@@ -1251,6 +1283,70 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
           <p className="text-xs uppercase tracking-wider text-muted mb-1">Total</p>
           <p className="text-3xl font-mono font-bold text-accent">{money(total)}</p>
         </div>
+      </div>
+
+      {/* Sales Notes — append-only communication log under client info */}
+      <div className="bg-card border border-border p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">
+            Sales Notes <span className="text-muted text-xs font-normal ml-1.5">({salesNotes.length})</span>
+          </h3>
+        </div>
+        <p className="text-xs text-muted mb-3">
+          Track communication, calls, site visits, and decisions on this estimate. Notes are timestamped and cannot be edited once added.
+        </p>
+
+        {/* Add note form */}
+        <div className="flex gap-2 mb-4">
+          <textarea
+            value={newSalesNote}
+            onChange={(e) => setNewSalesNote(e.target.value)}
+            onKeyDown={(e) => {
+              // ⌘/Ctrl + Enter to submit quickly
+              if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+                e.preventDefault();
+                addSalesNote();
+              }
+            }}
+            placeholder="Note — e.g. Called client 2pm, agreed to add the corner cabinet at +$400. Wants painted finish."
+            rows={2}
+            className="flex-1 bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent resize-y min-h-[60px]"
+          />
+          <Button
+            onClick={addSalesNote}
+            disabled={!newSalesNote.trim() || addingSalesNote}
+            className="self-stretch"
+          >
+            {addingSalesNote ? "Adding…" : "Add Note"}
+          </Button>
+        </div>
+
+        {/* Notes list — newest first, read-only */}
+        {salesNotes.length === 0 ? (
+          <p className="text-xs text-muted italic">No notes yet. Add one above.</p>
+        ) : (
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {[...salesNotes].reverse().map((n, i) => {
+              const dt = new Date(n.created_at);
+              return (
+                <div key={`${n.created_at}-${i}`} className="bg-background border-l-2 border-accent/40 px-3 py-2">
+                  <div className="flex items-center justify-between mb-1 text-xs text-muted">
+                    <span className="font-medium text-foreground/80">
+                      {n.author ? n.author.split("@")[0] : "Team"}
+                    </span>
+                    <span title={dt.toISOString()}>
+                      {dt.toLocaleString("en-US", {
+                        month: "short", day: "numeric", year: "numeric",
+                        hour: "numeric", minute: "2-digit",
+                      })}
+                    </span>
+                  </div>
+                  <p className="text-sm text-foreground whitespace-pre-wrap">{n.text}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Materials / Line Items — two-column with vendor catalog */}
