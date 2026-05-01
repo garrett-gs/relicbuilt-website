@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { axiom } from "@/lib/axiom-supabase";
 import { Estimate, Settings } from "@/types/axiom";
 import { generateEstimateProposalHtml } from "@/lib/proposal-html";
 
@@ -56,32 +55,35 @@ export default function ProposalPage() {
       body: JSON.stringify({ token }),
     }).catch(() => {});
 
-    Promise.all([
-      axiom.from("estimates").select("*").eq("proposal_token", token).single(),
-      axiom.from("settings").select("*").limit(1).single(),
-    ]).then(([estRes, setRes]) => {
-      if (estRes.error || !estRes.data) {
-        setNotFound(true);
-      } else {
-        setEstimate(estRes.data as Estimate);
-        if ((estRes.data as Estimate).proposal_status === "approved") {
-          setAlreadyApproved(true);
+    // Single server-side fetch via service role — works regardless of
+    // whether estimates / customers / companies / settings have anon
+    // RLS policies. The proposal_token IS the access control.
+    fetch(`/api/proposal-context/${token}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data?.estimate) {
+          setNotFound(true);
+          setLoading(false);
+          return;
         }
-        // Look up the customer's linked company via a server-side route
-        // (uses service role so no anon RLS policy needed on customers).
-        // Failures are silent — proposal still renders without the company.
-        fetch(`/api/proposal-context/${token}`)
-          .then((r) => r.json())
-          .then((d) => { if (d?.clientCompany) setClientCompany(d.clientCompany); })
-          .catch(() => {});
-      }
-      const e = estRes.data as Estimate | null;
-      if (e?.proposal_expires_at && new Date(e.proposal_expires_at).getTime() < Date.now() && e.proposal_status !== "approved") {
-        setExpired(true);
-      }
-      if (setRes.data) setSettings(setRes.data as Settings);
-      setLoading(false);
-    });
+        const e = data.estimate as Estimate;
+        setEstimate(e);
+        if (e.proposal_status === "approved") setAlreadyApproved(true);
+        if (
+          e.proposal_expires_at &&
+          new Date(e.proposal_expires_at).getTime() < Date.now() &&
+          e.proposal_status !== "approved"
+        ) {
+          setExpired(true);
+        }
+        if (data.settings) setSettings(data.settings as Settings);
+        if (data.clientCompany) setClientCompany(data.clientCompany);
+        setLoading(false);
+      })
+      .catch(() => {
+        setNotFound(true);
+        setLoading(false);
+      });
   }, [token]);
 
   async function handleAccept() {

@@ -2,12 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
 /**
- * Public endpoint that the /proposal/[token] page calls to resolve
- * additional context (linked company, etc.) using the service role
- * so we don't have to expose the customers/companies tables to anon
- * RLS reads.
+ * Public endpoint the /proposal/[token] page calls to fetch everything
+ * it needs in one shot, using the service role so no anon RLS policies
+ * are required on estimates / customers / companies / settings.
  *
- * Returns minimal display data only — never sensitive PII.
+ * Returns:
+ *   - estimate: the full row (the page needs all proposal fields)
+ *   - settings: business info for the header (logo / phone / address)
+ *   - clientCompany: linked-company display name if applicable
+ *
+ * Only returns data when proposal_token matches an existing estimate —
+ * the token IS the access control. Nothing here is exposed publicly
+ * unless the merchant explicitly clicked "Send Proposal" (which is
+ * what creates the token).
  */
 export async function GET(
   _req: NextRequest,
@@ -22,13 +29,15 @@ export async function GET(
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!,
     );
 
-    const { data: estimate } = await supabase
+    const { data: estimate, error: estErr } = await supabase
       .from("estimates")
-      .select("id,customer_id")
+      .select("*")
       .eq("proposal_token", token)
       .single();
 
-    if (!estimate) return NextResponse.json({ clientCompany: null });
+    if (estErr || !estimate) {
+      return NextResponse.json({ estimate: null, settings: null, clientCompany: null });
+    }
 
     let clientCompany: string | null = null;
     if (estimate.customer_id) {
@@ -49,9 +58,15 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({ clientCompany });
+    const { data: settings } = await supabase
+      .from("settings")
+      .select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text")
+      .limit(1)
+      .single();
+
+    return NextResponse.json({ estimate, settings: settings || null, clientCompany });
   } catch (err) {
     console.error("[proposal-context] error:", err);
-    return NextResponse.json({ clientCompany: null });
+    return NextResponse.json({ estimate: null, settings: null, clientCompany: null });
   }
 }
