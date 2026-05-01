@@ -8,7 +8,8 @@ import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Ve
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
-import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy } from "lucide-react";
+import { generateEstimateProposalHtml } from "@/lib/proposal-html";
+import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const STATUS_STYLES: Record<Estimate["status"], { text: string; bg: string; border: string }> = {
@@ -355,6 +356,9 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [proposalImagesIncluded, setProposalImagesIncluded] = useState<boolean>(
     estimate.proposal_images_included !== false
   );
+  const [depositPercent, setDepositPercent] = useState<string>(
+    estimate.deposit_percent != null ? String(estimate.deposit_percent) : ""
+  );
   const [proposalToken, setProposalToken] = useState<string>(estimate.proposal_token || "");
   const [proposalStatus, setProposalStatus] = useState<"draft" | "sent" | "approved">(
     estimate.proposal_status || "draft"
@@ -442,6 +446,63 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     const url = `${window.location.origin}/proposal/${proposalToken}`;
     navigator.clipboard.writeText(url).catch(() => {});
     alert(`Copied: ${url}`);
+  }
+
+  async function previewProposalPdf() {
+    // Pull business info from settings so the proposal header is filled in
+    const { data: settings } = await axiom
+      .from("settings")
+      .select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text")
+      .limit(1)
+      .single();
+
+    // Build a self-contained HTML document with the print dialog auto-fired
+    const proposalBody = generateEstimateProposalHtml({
+      estimate: {
+        ...estimate,
+        project_name: projectName,
+        client_name: clientName,
+        line_items: lineItems,
+        labor_items: laborItems,
+        markup_percent: markupPct,
+        notes,
+        images: fieldNotes,
+        proposal_highlights: proposalHighlights,
+        proposal_scope: proposalScope,
+        proposal_images_included: proposalImagesIncluded,
+        deposit_percent: depositPercent !== "" ? Number(depositPercent) : undefined,
+      } as Estimate,
+      biz: settings || {},
+      totals: { materialTotal, laborTotal, markupAmount, total },
+    });
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Proposal — ${(projectName || estimate.estimate_number).replace(/[<>"']/g, "")}</title>
+  <style>
+    @page { margin: 0.5in; }
+    @media print { .no-print { display: none !important; } body { background: #fff; } }
+    body { margin: 0; padding: 0; background: #f0f0f0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="position:sticky;top:0;background:#111;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;z-index:1000;">
+    <span style="color:#fff;font-size:14px;letter-spacing:1px;">Proposal Preview</span>
+    <button onclick="window.print()" style="background:#c4a24d;color:#0a0a0a;border:none;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:1px;">SAVE AS PDF / PRINT</button>
+  </div>
+  ${proposalBody}
+  <script>setTimeout(function(){window.print();},700);</script>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank");
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
   }
   const [showLoadQuote, setShowLoadQuote] = useState(false);
   const [laborOpen, setLaborOpen] = useState(true);
@@ -671,6 +732,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       proposal_scope: proposalScope,
       proposal_images_included: proposalImagesIncluded,
       proposal_status: proposalStatus,
+      deposit_percent: depositPercent !== "" ? Number(depositPercent) : undefined,
     });
     setDirty(false);
     setSaved(true);
@@ -1261,6 +1323,28 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
           </label>
         </div>
 
+        {/* Deposit % — overrides the global default for this estimate */}
+        <div className="mb-4">
+          <p className="text-xs uppercase tracking-wider text-muted mb-1.5">Deposit %</p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={1}
+              value={depositPercent}
+              onChange={(e) => { setDepositPercent(e.target.value); markDirty(); }}
+              placeholder="Use business default"
+              className="w-32 bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+            />
+            <span className="text-xs text-muted">
+              {depositPercent
+                ? `Deposit ${money((total * Number(depositPercent)) / 100)} · Balance ${money(total - (total * Number(depositPercent)) / 100)}`
+                : "Leave blank to use the deposit % from Settings"}
+            </span>
+          </div>
+        </div>
+
         {/* Cost preview — auto-calculated from line items + labor + markup */}
         <div className="bg-background border border-border p-3 mb-4">
           <p className="text-xs uppercase tracking-wider text-muted mb-2">Cost (auto-calculated)</p>
@@ -1279,6 +1363,9 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
 
         {/* Actions */}
         <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={previewProposalPdf}>
+            <FileText size={14} className="mr-1" /> Preview PDF
+          </Button>
           <Button onClick={sendProposal} disabled={sendingProposal || !clientName}>
             {sendingProposal ? "Sending…" : proposalStatus === "draft" ? "Send Proposal to Client" : "Re-Send Proposal Link"}
           </Button>
@@ -1288,7 +1375,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
                 <Copy size={14} className="mr-1" /> Copy Link
               </Button>
               <Button variant="outline" onClick={() => window.open(`/proposal/${proposalToken}`, "_blank")}>
-                <ExternalLink size={14} className="mr-1" /> Preview
+                <ExternalLink size={14} className="mr-1" /> Open Live Proposal
               </Button>
             </>
           )}

@@ -254,6 +254,9 @@ export interface Estimate {
   proposal_status?: "draft" | "sent" | "approved";
   proposal_sent_at?: string;
   proposal_approved_at?: string;
+  // Override the business default deposit % for this specific estimate.
+  // Falls back to settings.deposit_percent when null.
+  deposit_percent?: number;
   created_at: string;
   updated_at: string;
 }

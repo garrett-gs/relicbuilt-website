@@ -1,4 +1,4 @@
-import { CustomWork, ProposalHighlight } from "@/types/axiom";
+import { CustomWork, Estimate, ProposalHighlight } from "@/types/axiom";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -222,6 +222,179 @@ export function generateProposalHtml(
   </div>` : ""}
 
   <!-- Footer -->
+  <div style="margin-top:36px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#ccc;text-align:center;">
+    R&ensp;E&ensp;L&ensp;I&ensp;C &nbsp;&middot;&nbsp; Custom Fabrications &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; relicbuilt.com
+  </div>
+
+</div>`;
+}
+
+// ── Estimate-based proposal (new flow) ────────────────────────────────
+// Used by the estimator page to render a print-friendly proposal directly
+// from the estimate. Pulls in the estimate's proposal_* fields and computes
+// totals from line_items + labor_items + markup.
+
+interface EstimateProposalArgs {
+  estimate: Estimate;
+  biz?: BizInfo & { biz_email?: string; deposit_percent?: number };
+  totals: { materialTotal: number; laborTotal: number; markupAmount: number; total: number };
+  approveUrl?: string;
+  forEmail?: boolean;
+}
+
+export function generateEstimateProposalHtml({
+  estimate,
+  biz = {},
+  totals,
+  approveUrl,
+  forEmail = false,
+}: EstimateProposalArgs): string {
+  const highlights: ProposalHighlight[] = (estimate.proposal_highlights || []).filter((h) => h.included !== false);
+  const scope = estimate.proposal_scope?.included !== false ? (estimate.proposal_scope?.body || "") : "";
+  const includeImages = estimate.proposal_images_included !== false;
+  const images: string[] = includeImages ? (estimate.images || []) : [];
+  const logoUrl = "https://relicbuilt.com/logo-full.png";
+
+  const depositPct = estimate.deposit_percent ?? biz.deposit_percent ?? 50;
+  const depositAmount = Math.round((totals.total * depositPct)) / 100;
+  const balanceDue = Math.round((totals.total - depositAmount) * 100) / 100;
+
+  const sentDate = estimate.proposal_sent_at
+    ? new Date(estimate.proposal_sent_at)
+    : new Date();
+  const dateText = sentDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+  const addressLine2 = [biz.biz_city, biz.biz_state, biz.biz_zip].filter(Boolean).join(", ");
+
+  const wrap = forEmail
+    ? `style="max-width:680px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;background:#fff;"`
+    : `style="max-width:760px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;background:#fff;padding:48px;"`;
+
+  const acceptanceSection = approveUrl
+    ? `
+  <div style="margin-top:36px;padding:24px;background:#fafafa;border:1px solid #e5e5e5;border-left:3px solid #c4a24d;page-break-inside:avoid;">
+    <h2 style="margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:0.16em;color:#111;font-weight:bold;">Accept This Proposal</h2>
+    <p style="margin:0 0 16px;font-size:13px;color:#555;line-height:1.6;">
+      Click below to review and sign electronically. A ${depositPct}% deposit will start the project.
+    </p>
+    <a href="${approveUrl}" style="display:inline-block;background:#c4a24d;color:#0a0a0a;padding:14px 28px;text-decoration:none;font-weight:bold;letter-spacing:0.08em;font-size:13px;text-transform:uppercase;">
+      Review &amp; Sign
+    </a>
+  </div>`
+    : `
+  <div style="margin-top:36px;border-top:2px solid #111;padding-top:24px;page-break-inside:avoid;">
+    <h2 style="margin:0 0 16px;font-size:13px;text-transform:uppercase;letter-spacing:0.16em;color:#111;font-weight:bold;">Acceptance</h2>
+    <p style="margin:0 0 32px;font-size:12px;color:#444;line-height:1.6;">
+      By signing below, the client authorizes ${esc(biz.biz_name || "RELIC")} to begin work as outlined in this proposal.
+      A ${depositPct}% deposit (${money(depositAmount)}) is due to commence work.
+    </p>
+    <div style="display:flex;gap:32px;">
+      <div style="flex:1;">
+        <div style="border-bottom:1px solid #999;height:32px;"></div>
+        <p style="margin:6px 0 0;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.1em;">Client Signature</p>
+      </div>
+      <div style="width:160px;">
+        <div style="border-bottom:1px solid #999;height:32px;"></div>
+        <p style="margin:6px 0 0;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.1em;">Date</p>
+      </div>
+    </div>
+  </div>`;
+
+  const highlightsHtml = highlights.length > 0 ? `
+  <section style="margin-bottom:32px;">
+    <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Highlights</p>
+    ${highlights.map((h) => `
+      <div style="margin-bottom:16px;page-break-inside:avoid;">
+        ${h.title ? `<h3 style="margin:0 0 4px;font-size:15px;color:#111;font-weight:bold;">${esc(h.title)}</h3>` : ""}
+        ${h.body ? `<p style="margin:0;font-size:13px;color:#444;line-height:1.7;white-space:pre-wrap;">${esc(h.body)}</p>` : ""}
+      </div>
+    `).join("")}
+  </section>
+  ` : "";
+
+  const scopeHtml = scope ? `
+  <section style="margin-bottom:32px;page-break-inside:avoid;">
+    <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Scope of Work</p>
+    <p style="margin:0;font-size:13px;color:#444;line-height:1.7;white-space:pre-wrap;">${esc(scope)}</p>
+  </section>
+  ` : "";
+
+  const imagesHtml = images.length > 0 ? `
+  <section style="margin-bottom:32px;">
+    <p style="margin:0 0 12px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Reference Images</p>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">
+      ${images.map((url) => `
+        <img src="${url}" alt="Reference" style="width:100%;border:1px solid #e5e5e5;display:block;page-break-inside:avoid;" />
+      `).join("")}
+    </div>
+  </section>
+  ` : "";
+
+  const costHtml = `
+  <section style="margin-bottom:32px;page-break-inside:avoid;">
+    <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Investment</p>
+    <table style="width:100%;border-collapse:collapse;">
+      <tr><td style="padding:6px 0;font-size:13px;color:#666;">Materials</td><td style="padding:6px 0;text-align:right;font-size:13px;font-family:monospace;">${money(totals.materialTotal)}</td></tr>
+      <tr><td style="padding:6px 0;font-size:13px;color:#666;">Labor</td><td style="padding:6px 0;text-align:right;font-size:13px;font-family:monospace;">${money(totals.laborTotal)}</td></tr>
+      ${totals.markupAmount > 0 ? `<tr><td style="padding:6px 0;font-size:13px;color:#666;">Markup</td><td style="padding:6px 0;text-align:right;font-size:13px;font-family:monospace;">${money(totals.markupAmount)}</td></tr>` : ""}
+      <tr style="border-top:2px solid #c4a24d;">
+        <td style="padding:12px 0 6px;font-size:16px;font-weight:bold;color:#111;">Total</td>
+        <td style="padding:12px 0 6px;text-align:right;font-size:18px;font-family:monospace;font-weight:bold;color:#111;">${money(totals.total)}</td>
+      </tr>
+      <tr><td style="padding:4px 0;font-size:12px;color:#888;">Deposit (${depositPct}%) due to start</td><td style="padding:4px 0;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(depositAmount)}</td></tr>
+      <tr><td style="padding:4px 0;font-size:12px;color:#888;">Balance on completion</td><td style="padding:4px 0;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(balanceDue)}</td></tr>
+    </table>
+  </section>
+  `;
+
+  const termsHtml = biz.terms_text ? `
+  <section style="margin-bottom:24px;page-break-inside:avoid;">
+    <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Terms</p>
+    <p style="margin:0;font-size:11px;color:#888;white-space:pre-wrap;line-height:1.7;">${esc(biz.terms_text)}</p>
+  </section>
+  ` : "";
+
+  return `
+<div ${wrap}>
+
+  <!-- Header -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
+    <img src="${logoUrl}" alt="RELIC Custom Fabrications" style="height:72px;object-fit:contain;" />
+    <div style="text-align:right;">
+      <h1 style="margin:0 0 10px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
+      ${biz.biz_name ? `<p style="margin:0;font-size:13px;font-weight:bold;color:#222;">${esc(biz.biz_name)}</p>` : ""}
+      ${biz.biz_address ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(biz.biz_address)}</p>` : ""}
+      ${addressLine2 ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(addressLine2)}</p>` : ""}
+      ${biz.biz_phone ? `<p style="margin:6px 0 0;font-size:12px;color:#666;">${esc(biz.biz_phone)}</p>` : ""}
+    </div>
+  </div>
+
+  <div style="border-top:1px solid #e5e5e5;margin-bottom:28px;"></div>
+
+  <!-- Project / Client / Number -->
+  <div style="display:flex;gap:24px;margin-bottom:32px;">
+    <div style="flex:1;">
+      <p style="margin:0 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Prepared For</p>
+      <p style="margin:0;font-size:15px;font-weight:bold;color:#111;">${esc(estimate.client_name || "—")}</p>
+    </div>
+    <div style="flex:1;">
+      <p style="margin:0 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Project</p>
+      <p style="margin:0;font-size:15px;font-weight:bold;color:#111;">${esc(estimate.project_name || "—")}</p>
+    </div>
+    <div style="text-align:right;">
+      <p style="margin:0 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Proposal #</p>
+      <p style="margin:0;font-size:13px;font-family:monospace;color:#555;">${esc(estimate.estimate_number)}</p>
+      <p style="margin:4px 0 0;font-size:12px;color:#666;">${dateText}</p>
+    </div>
+  </div>
+
+  ${highlightsHtml}
+  ${scopeHtml}
+  ${imagesHtml}
+  ${costHtml}
+  ${termsHtml}
+  ${acceptanceSection}
+
   <div style="margin-top:36px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#ccc;text-align:center;">
     R&ensp;E&ensp;L&ensp;I&ensp;C &nbsp;&middot;&nbsp; Custom Fabrications &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; relicbuilt.com
   </div>
