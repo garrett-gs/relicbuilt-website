@@ -337,22 +337,22 @@ export function generateEstimateProposalHtml({
   </section>
   ` : "";
 
+  // Lump-sum cost — client sees just the total + deposit + balance.
+  // The materials/labor/markup breakdown is intentionally hidden so the
+  // proposal reads as a fixed-price quote.
   const costHtml = `
   <section style="margin-bottom:32px;page-break-inside:avoid;">
     <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Investment</p>
     <table style="width:100%;border-collapse:collapse;">
-      <tr><td style="padding:6px 0;font-size:13px;color:#666;">Materials</td><td style="padding:6px 0;text-align:right;font-size:13px;font-family:monospace;">${money(totals.materialTotal)}</td></tr>
-      <tr><td style="padding:6px 0;font-size:13px;color:#666;">Labor</td><td style="padding:6px 0;text-align:right;font-size:13px;font-family:monospace;">${money(totals.laborTotal)}</td></tr>
-      ${totals.markupAmount > 0 ? `<tr><td style="padding:6px 0;font-size:13px;color:#666;">Markup</td><td style="padding:6px 0;text-align:right;font-size:13px;font-family:monospace;">${money(totals.markupAmount)}</td></tr>` : ""}
-      <tr style="border-top:2px solid #c4a24d;">
-        <td style="padding:12px 0 6px;font-size:16px;font-weight:bold;color:#111;">Total</td>
-        <td style="padding:12px 0 6px;text-align:right;font-size:18px;font-family:monospace;font-weight:bold;color:#111;">${money(totals.total)}</td>
+      <tr style="border-top:2px solid #c4a24d;border-bottom:2px solid #c4a24d;">
+        <td style="padding:14px 0;font-size:18px;font-weight:bold;color:#111;">Project Total</td>
+        <td style="padding:14px 0;text-align:right;font-size:22px;font-family:monospace;font-weight:bold;color:#111;">${money(totals.total)}</td>
       </tr>
-      <tr><td style="padding:4px 0;font-size:12px;color:#888;">Deposit (${depositPct}%) due to start</td><td style="padding:4px 0;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(depositAmount)}</td></tr>
-      <tr><td style="padding:4px 0;font-size:12px;color:#888;">Balance on completion</td><td style="padding:4px 0;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(balanceDue)}</td></tr>
+      <tr><td style="padding:8px 0 4px;font-size:12px;color:#888;">Deposit (${depositPct}%) due to start</td><td style="padding:8px 0 4px;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(depositAmount)}</td></tr>
+      <tr><td style="padding:4px 0;font-size:12px;color:#888;">Balance prior to delivery</td><td style="padding:4px 0;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(balanceDue)}</td></tr>
     </table>
     <p style="margin:14px 0 0;font-size:11px;color:#999;font-style:italic;line-height:1.5;">
-      Balances are due prior to delivery. This proposal is valid through <strong style="color:#555;font-style:normal;">${expiresText}</strong>.
+      This proposal is valid through <strong style="color:#555;font-style:normal;">${expiresText}</strong>.
     </p>
   </section>
   `;
