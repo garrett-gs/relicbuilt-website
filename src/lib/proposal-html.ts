@@ -252,7 +252,12 @@ export function generateEstimateProposalHtml({
   const highlights: ProposalHighlight[] = (estimate.proposal_highlights || []).filter((h) => h.included !== false);
   const scope = estimate.proposal_scope?.included !== false ? (estimate.proposal_scope?.body || "") : "";
   const includeImages = estimate.proposal_images_included !== false;
-  const images: string[] = includeImages ? (estimate.images || []) : [];
+  const fieldNoteImages: string[] = includeImages ? (estimate.images || []) : [];
+  // Project images — uploaded specifically for the proposal (separate
+  // from field notes). Used in the body gallery and as a candidate for
+  // the cover. Cover image is filtered out so it doesn't repeat.
+  const coverImage = estimate.proposal_cover_image_url || "";
+  const projectImages: string[] = (estimate.proposal_images || []).filter((u) => u !== coverImage);
   const logoUrl = "https://relicbuilt.com/logo-full.png";
 
   const depositPct = estimate.deposit_percent ?? biz.deposit_percent ?? 50;
@@ -326,13 +331,44 @@ export function generateEstimateProposalHtml({
   </section>
   ` : "";
 
-  const imagesHtml = images.length > 0 ? `
+  // Project images: dedicated proposal images, excluding the cover (which
+  // gets its own page). Two-column gallery in the body of the proposal.
+  const projectImagesHtml = projectImages.length > 0 ? `
   <section style="margin-bottom:32px;">
-    <p style="margin:0 0 12px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Reference Images</p>
+    <p style="margin:0 0 12px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Project Images</p>
     <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">
-      ${images.map((url) => `
-        <img src="${url}" alt="Reference" style="width:100%;border:1px solid #e5e5e5;display:block;page-break-inside:avoid;" />
+      ${projectImages.map((url) => `
+        <img src="${url}" alt="Project image" style="width:100%;border:1px solid #e5e5e5;display:block;page-break-inside:avoid;" />
       `).join("")}
+    </div>
+  </section>
+  ` : "";
+
+  // Field-note images: from iPad markup app, optional inclusion.
+  const fieldNoteImagesHtml = fieldNoteImages.length > 0 ? `
+  <section style="margin-bottom:32px;">
+    <p style="margin:0 0 12px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Reference Notes</p>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;">
+      ${fieldNoteImages.map((url) => `
+        <img src="${url}" alt="Field note" style="width:100%;border:1px solid #e5e5e5;display:block;page-break-inside:avoid;" />
+      `).join("")}
+    </div>
+  </section>
+  ` : "";
+
+  // Cover page: full-page hero with the cover image, project name,
+  // and client name. Renders only if a cover image is selected.
+  const coverPageHtml = coverImage ? `
+  <section style="page-break-after:always;display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 16px;min-height:9.5in;">
+    <img src="${logoUrl}" alt="${esc(biz.biz_name || "RELIC")}" style="height:60px;object-fit:contain;margin-bottom:24px;" />
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;width:100%;margin:8px 0;">
+      <img src="${coverImage}" alt="Project cover" style="max-width:100%;max-height:6.5in;object-fit:contain;border:1px solid #e5e5e5;" />
+    </div>
+    <div style="margin-top:24px;">
+      <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.16em;color:#bbb;">Proposal</p>
+      <h1 style="margin:8px 0 0;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.02em;">${esc(estimate.project_name || "")}</h1>
+      <p style="margin:14px 0 0;font-size:18px;color:#555;">Prepared for ${esc(estimate.client_name || "—")}</p>
+      <p style="margin:18px 0 0;font-size:12px;color:#999;font-family:monospace;">${esc(estimate.estimate_number)} &nbsp;·&nbsp; ${dateText}</p>
     </div>
   </section>
   ` : "";
@@ -367,6 +403,8 @@ export function generateEstimateProposalHtml({
   return `
 <div ${wrap}>
 
+  ${coverPageHtml}
+
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
     <img src="${logoUrl}" alt="RELIC Custom Fabrications" style="height:72px;object-fit:contain;" />
@@ -400,7 +438,8 @@ export function generateEstimateProposalHtml({
 
   ${highlightsHtml}
   ${scopeHtml}
-  ${imagesHtml}
+  ${projectImagesHtml}
+  ${fieldNoteImagesHtml}
   ${costHtml}
   ${termsHtml}
   ${acceptanceSection}

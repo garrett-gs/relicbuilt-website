@@ -252,6 +252,9 @@ export interface Estimate {
   proposal_cost_section?: ProposalCostSection;
   proposal_images?: string[];
   proposal_images_included?: boolean;
+  // URL of the cover image — renders as a full-page hero on page 1
+  // of the proposal PDF with project + client name beneath
+  proposal_cover_image_url?: string;
   proposal_token?: string;
   proposal_status?: "draft" | "sent" | "approved";
   proposal_sent_at?: string;

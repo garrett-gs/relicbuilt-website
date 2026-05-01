@@ -470,6 +470,9 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [proposalImagesIncluded, setProposalImagesIncluded] = useState<boolean>(
     estimate.proposal_images_included !== false
   );
+  const [proposalImages, setProposalImages] = useState<string[]>(estimate.proposal_images || []);
+  const [coverImageUrl, setCoverImageUrl] = useState<string>(estimate.proposal_cover_image_url || "");
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [depositPercent, setDepositPercent] = useState<string>(
     estimate.deposit_percent != null ? String(estimate.deposit_percent) : ""
   );
@@ -505,6 +508,52 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   }
   function removeHighlight(i: number) {
     setProposalHighlights(proposalHighlights.filter((_, idx) => idx !== i));
+    markDirty();
+  }
+
+  // ── Project images for the proposal ─────────────────────────────────
+  async function uploadProposalImage(file: File) {
+    if (!file.type.startsWith("image/")) {
+      alert("Please pick an image file (JPG, PNG, etc.).");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      alert("Image must be under 15 MB.");
+      return;
+    }
+    setUploadingImage(true);
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const path = `proposal-images/${estimate.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await axiom.storage.from("portal-images").upload(path, file, { upsert: false, contentType: file.type });
+      if (upErr) {
+        alert(`Upload failed: ${upErr.message}`);
+        return;
+      }
+      const { data } = axiom.storage.from("portal-images").getPublicUrl(path);
+      const next = [...proposalImages, data.publicUrl];
+      setProposalImages(next);
+      // Auto-set the first image as cover if none chosen yet
+      if (!coverImageUrl) setCoverImageUrl(data.publicUrl);
+      markDirty();
+    } finally {
+      setUploadingImage(false);
+    }
+  }
+
+  function removeProposalImage(url: string) {
+    if (!confirm("Remove this image from the proposal?")) return;
+    const next = proposalImages.filter((u) => u !== url);
+    setProposalImages(next);
+    // Clear cover if that's the one removed; pick the next image as cover
+    if (coverImageUrl === url) {
+      setCoverImageUrl(next[0] || "");
+    }
+    markDirty();
+  }
+
+  function setAsCover(url: string) {
+    setCoverImageUrl(url);
     markDirty();
   }
 
@@ -632,6 +681,8 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
         proposal_highlights: proposalHighlights,
         proposal_scope: proposalScope,
         proposal_images_included: proposalImagesIncluded,
+      proposal_images: proposalImages,
+      proposal_cover_image_url: coverImageUrl || undefined,
         deposit_percent: depositPercent !== "" ? Number(depositPercent) : undefined,
       } as Estimate,
       biz: settings || {},
@@ -913,6 +964,8 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       proposal_highlights: proposalHighlights,
       proposal_scope: proposalScope,
       proposal_images_included: proposalImagesIncluded,
+      proposal_images: proposalImages,
+      proposal_cover_image_url: coverImageUrl || undefined,
       proposal_status: proposalStatus,
       deposit_percent: depositPercent !== "" ? Number(depositPercent) : undefined,
     });
@@ -1520,7 +1573,72 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
           />
         </div>
 
-        {/* Include images toggle */}
+        {/* Project Images — uploads for the proposal cover + body gallery */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs uppercase tracking-wider text-muted">
+              Project Images <span className="text-muted/60 normal-case ml-1.5">({proposalImages.length})</span>
+            </p>
+            <label className="text-accent text-xs flex items-center gap-1 cursor-pointer hover:text-accent/80">
+              <Plus size={12} /> {uploadingImage ? "Uploading…" : "Upload Image"}
+              <input
+                type="file"
+                accept="image/*"
+                disabled={uploadingImage}
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadProposalImage(file);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+          {proposalImages.length === 0 ? (
+            <p className="text-muted text-xs italic">
+              Upload photos of similar work to show the client what to expect. The first image becomes the cover by default — click any image to mark it as the cover.
+            </p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {proposalImages.map((url) => {
+                const isCover = url === coverImageUrl;
+                return (
+                  <div
+                    key={url}
+                    className={cn(
+                      "relative aspect-square border-2 group cursor-pointer",
+                      isCover ? "border-accent" : "border-border hover:border-accent/50"
+                    )}
+                    onClick={() => setAsCover(url)}
+                    title={isCover ? "Cover image" : "Click to set as cover"}
+                  >
+                    <img src={url} alt="Project" className="w-full h-full object-cover" />
+                    {isCover && (
+                      <div className="absolute top-1 left-1 bg-accent text-background text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5">
+                        Cover
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); removeProposalImage(url); }}
+                      className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                      title="Remove image"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          {coverImageUrl && proposalImages.length > 0 && (
+            <p className="text-[11px] text-muted mt-2 italic">
+              Cover image renders as a full first page in the proposal PDF, with the project + client name beneath.
+            </p>
+          )}
+        </div>
+
+        {/* Include field notes toggle */}
         <div className="mb-4">
           <label className="flex items-center gap-2 cursor-pointer">
             <input
