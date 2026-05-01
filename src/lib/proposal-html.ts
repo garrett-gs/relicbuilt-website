@@ -356,19 +356,19 @@ export function generateEstimateProposalHtml({
   </section>
   ` : "";
 
-  // Cover page: full-page hero with the cover image, project name,
-  // and client name. Renders only if a cover image is selected.
+  // Cover page: logo + title block at the top, large hero image below.
+  // Renders only if a cover image is selected.
   const coverPageHtml = coverImage ? `
   <section style="page-break-after:always;display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 16px;min-height:9.5in;">
-    <img src="${logoUrl}" alt="${esc(biz.biz_name || "RELIC")}" style="height:60px;object-fit:contain;margin-bottom:24px;" />
-    <div style="flex:1;display:flex;align-items:center;justify-content:center;width:100%;margin:8px 0;">
-      <img src="${coverImage}" alt="Project cover" style="max-width:100%;max-height:6.5in;object-fit:contain;border:1px solid #e5e5e5;" />
-    </div>
-    <div style="margin-top:24px;">
+    <img src="${logoUrl}" alt="${esc(biz.biz_name || "RELIC")}" style="height:60px;object-fit:contain;margin-bottom:18px;" />
+    <div style="margin-bottom:24px;">
       <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.16em;color:#bbb;">Proposal</p>
       <h1 style="margin:8px 0 0;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.02em;">${esc(estimate.project_name || "")}</h1>
-      <p style="margin:14px 0 0;font-size:18px;color:#555;">Prepared for ${esc(estimate.client_name || "—")}</p>
-      <p style="margin:18px 0 0;font-size:12px;color:#999;font-family:monospace;">${esc(estimate.estimate_number)} &nbsp;·&nbsp; ${dateText}</p>
+      <p style="margin:12px 0 0;font-size:18px;color:#555;">Prepared for ${esc(estimate.client_name || "—")}</p>
+      <p style="margin:14px 0 0;font-size:12px;color:#999;font-family:monospace;">${esc(estimate.estimate_number)} &nbsp;·&nbsp; ${dateText}</p>
+    </div>
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;width:100%;">
+      <img src="${coverImage}" alt="Project cover" style="max-width:100%;max-height:6.5in;object-fit:contain;border:1px solid #e5e5e5;" />
     </div>
   </section>
   ` : "";
