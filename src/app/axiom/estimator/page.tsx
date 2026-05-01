@@ -740,13 +740,25 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     if (v) setVendorName(v.name);
   }, [vendorId, vendors]);
 
-  // Resolve customer name for display if we have a customer_id
+  // Resolve customer name for display if we have a customer_id.
+  // Also auto-fill the estimate's client_email and client_phone from
+  // the customer record IF they're not already set. This means picking
+  // a customer once flows their contact info onto the estimate without
+  // the user having to retype it.
   useEffect(() => {
-    if (estimate.customer_id) {
-      axiom.from("customers").select("name").eq("id", estimate.customer_id).single().then(({ data }) => {
-        if (data) setCustomerName(data.name);
+    if (!estimate.customer_id) return;
+    axiom.from("customers")
+      .select("name,email,phone")
+      .eq("id", estimate.customer_id)
+      .single()
+      .then(({ data }) => {
+        if (!data) return;
+        setCustomerName(data.name);
+        // Only fill if the user hasn't already entered something
+        // (preserves any per-estimate override they made by hand)
+        setClientEmail((prev) => prev || data.email || "");
+        setClientPhone((prev) => prev || data.phone || "");
       });
-    }
   }, [estimate.customer_id]);
 
   function addFromCatalog(item: CatalogItem) {
@@ -832,14 +844,21 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       axiom.from("customers").select("name,email,phone").eq("company_id", c.id).order("name").then(({ data }) => {
         if (data) setCompanyContacts(data);
       });
+      // Copy company-level email/phone if available
+      if (c.email && !clientEmail) setClientEmail(c.email);
+      if (c.phone && !clientPhone) setClientPhone(c.phone);
     } else {
-      // Individual customer
+      // Individual customer — pre-fill the contact name AND pull their
+      // email/phone onto the estimate so the proposal email can fire
+      // without manual entry.
       setCustomerId(c.id);
       setCustomerName(c.name);
       setSelectedType("customer");
       setCompanyContacts([]);
+      if (!clientName) setClientName(c.name);
+      if (c.email && !clientEmail) setClientEmail(c.email);
+      if (c.phone && !clientPhone) setClientPhone(c.phone);
     }
-    // Don't auto-fill the Contact field — let the user type it
     markDirty();
   }
 
