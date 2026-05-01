@@ -13,6 +13,7 @@ interface ApprovalResult {
   balance_amount: number;
   total_amount: number;
   deposit_percent: number;
+  deposit_due_date?: string;
   biz_name: string;
 }
 
@@ -42,6 +43,7 @@ export default function ProposalPage() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<ApprovalResult | null>(null);
   const [alreadyApproved, setAlreadyApproved] = useState(false);
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -56,6 +58,10 @@ export default function ProposalPage() {
         if ((estRes.data as Estimate).proposal_status === "approved") {
           setAlreadyApproved(true);
         }
+      }
+      const e = estRes.data as Estimate | null;
+      if (e?.proposal_expires_at && new Date(e.proposal_expires_at).getTime() < Date.now() && e.proposal_status !== "approved") {
+        setExpired(true);
       }
       if (setRes.data) setSettings(setRes.data as Settings);
       setLoading(false);
@@ -118,6 +124,9 @@ export default function ProposalPage() {
 
   // ── Approval confirmation screen ─────────────────────────────────────
   if (result) {
+    const dueByText = result.deposit_due_date
+      ? new Date(result.deposit_due_date + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+      : null;
     return (
       <div style={{ minHeight: "100vh", background: "#f5f5f5", padding: "48px 16px", fontFamily: "Arial,Helvetica,sans-serif" }}>
         <div style={{ maxWidth: 600, margin: "0 auto", background: "#fff", padding: 48, textAlign: "center", borderTop: "4px solid #c4a24d" }}>
@@ -132,7 +141,7 @@ export default function ProposalPage() {
             Thank you, {signatureName}. <strong>{result.project_name}</strong> is approved.
           </p>
 
-          <div style={{ background: "#f8f6f0", padding: 24, marginBottom: 24, textAlign: "left" }}>
+          <div style={{ background: "#f8f6f0", padding: 24, marginBottom: 16, textAlign: "left" }}>
             <h2 style={{ margin: "0 0 16px", fontSize: 13, textTransform: "uppercase", letterSpacing: "0.12em", color: "#888" }}>Deposit Invoice</h2>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid #e5e0d8" }}>
               <span style={{ color: "#666", fontSize: 14 }}>Invoice #</span>
@@ -142,6 +151,12 @@ export default function ProposalPage() {
               <span style={{ fontSize: 15, fontWeight: 600, color: "#111" }}>Deposit Due</span>
               <span style={{ fontSize: 18, fontWeight: 700, fontFamily: "monospace", color: "#c4a24d" }}>{money(result.deposit_amount)}</span>
             </div>
+            {dueByText && (
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #e5e0d8" }}>
+                <span style={{ fontSize: 13, color: "#666" }}>Deposit Due By</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "#111" }}>{dueByText}</span>
+              </div>
+            )}
             {result.balance_amount > 0 && (
               <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", color: "#888", fontSize: 12 }}>
                 <span>Balance at Completion</span>
@@ -150,8 +165,34 @@ export default function ProposalPage() {
             )}
           </div>
 
+          <p style={{ margin: "0 0 16px", padding: "12px 16px", background: "#fff8e1", border: "1px solid #f0d896", color: "#7a5a00", fontSize: 13, fontWeight: 500, textAlign: "left" }}>
+            Balances are due prior to delivery.
+          </p>
+
           <p style={{ margin: 0, color: "#666", fontSize: 13, lineHeight: 1.6 }}>
             {result.biz_name} will be in touch with payment instructions for the deposit shortly.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Expired ─────────────────────────────────────────────────────────
+  if (expired) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#f5f5f5", padding: "48px 16px", fontFamily: "Arial,Helvetica,sans-serif" }}>
+        <div style={{ maxWidth: 540, margin: "0 auto", background: "#fff", padding: 48, textAlign: "center", borderTop: "4px solid #f59e0b" }}>
+          <h1 style={{ margin: "0 0 12px", fontSize: 22, color: "#111" }}>Proposal Expired</h1>
+          <p style={{ margin: "0 0 16px", color: "#666", fontSize: 14, lineHeight: 1.6 }}>
+            This proposal for <strong>{estimate.project_name || ""}</strong> expired on{" "}
+            <strong>
+              {estimate.proposal_expires_at
+                ? new Date(estimate.proposal_expires_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+                : "an earlier date"}
+            </strong>.
+          </p>
+          <p style={{ margin: 0, color: "#666", fontSize: 13, lineHeight: 1.6 }}>
+            Please reach out and we&apos;ll send you an updated proposal.
           </p>
         </div>
       </div>

@@ -254,9 +254,15 @@ export interface Estimate {
   proposal_status?: "draft" | "sent" | "approved";
   proposal_sent_at?: string;
   proposal_approved_at?: string;
+  // 30 days from proposal_sent_at — also serves as the deposit due date
+  // once the client accepts.
+  proposal_expires_at?: string;
   // Override the business default deposit % for this specific estimate.
   // Falls back to settings.deposit_percent when null.
   deposit_percent?: number;
+  // Set when the deposit invoice is marked paid. The custom_work
+  // project is created at this moment, not at proposal acceptance.
+  deposit_paid_at?: string;
   created_at: string;
   updated_at: string;
 }

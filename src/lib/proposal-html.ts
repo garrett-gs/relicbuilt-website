@@ -264,6 +264,13 @@ export function generateEstimateProposalHtml({
     : new Date();
   const dateText = sentDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
+  // Proposal expires 30 days after it's sent. Same date is used as the
+  // deposit due date once the client accepts.
+  const expiresDate = estimate.proposal_expires_at
+    ? new Date(estimate.proposal_expires_at)
+    : new Date(sentDate.getTime() + 30 * 86400000);
+  const expiresText = expiresDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
   const addressLine2 = [biz.biz_city, biz.biz_state, biz.biz_zip].filter(Boolean).join(", ");
 
   const wrap = forEmail
@@ -344,6 +351,9 @@ export function generateEstimateProposalHtml({
       <tr><td style="padding:4px 0;font-size:12px;color:#888;">Deposit (${depositPct}%) due to start</td><td style="padding:4px 0;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(depositAmount)}</td></tr>
       <tr><td style="padding:4px 0;font-size:12px;color:#888;">Balance on completion</td><td style="padding:4px 0;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(balanceDue)}</td></tr>
     </table>
+    <p style="margin:14px 0 0;font-size:11px;color:#999;font-style:italic;line-height:1.5;">
+      Balances are due prior to delivery. This proposal is valid through <strong style="color:#555;font-style:normal;">${expiresText}</strong>.
+    </p>
   </section>
   `;
 

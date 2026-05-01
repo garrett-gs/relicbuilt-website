@@ -407,10 +407,16 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
         token = `prop_${crypto.randomUUID().replace(/-/g, "")}`;
       }
       const sentAt = new Date().toISOString();
+      // 30-day expiration — also doubles as the deposit due date when accepted
+      const expiresAt = new Date(Date.now() + 30 * 86400000).toISOString();
       const updates: Partial<Estimate> = {
         proposal_token: token,
         proposal_status: "sent",
         proposal_sent_at: sentAt,
+        proposal_expires_at: expiresAt,
+        // Auto-advance the estimate's overall status from draft to sent
+        // so the list view shows the right state without manual edits.
+        status: status === "draft" ? "sent" : status,
       };
       const { error } = await axiom.from("estimates").update({ ...updates, updated_at: sentAt }).eq("id", estimate.id);
       if (error) {
@@ -420,6 +426,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       setProposalToken(token);
       setProposalStatus("sent");
       setProposalSentAt(sentAt);
+      if (status === "draft") setStatus("sent");
 
       const url = `${window.location.origin}/proposal/${token}`;
       try {
@@ -438,6 +445,35 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       });
     } finally {
       setSendingProposal(false);
+    }
+  }
+
+  // Mark deposit paid → creates the project (custom_work) and stamps
+  // deposit_paid_at on the estimate. Until this is clicked, an accepted
+  // estimate doesn't appear in the projects tab.
+  async function markDepositPaid() {
+    if (proposalStatus !== "approved") {
+      alert("This proposal hasn't been accepted yet.");
+      return;
+    }
+    if (!confirm("Mark deposit as paid and create the project?")) return;
+
+    try {
+      const res = await fetch("/api/mark-deposit-paid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estimate_id: estimate.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`Could not mark paid: ${data.error || "unknown"}`);
+        return;
+      }
+      alert(`Project created: ${data.project_name}`);
+      // Refresh the local estimate so the button hides
+      onUpdate({ deposit_paid_at: data.deposit_paid_at, custom_work_id: data.custom_work_id } as Partial<Estimate>);
+    } catch (err) {
+      alert(`Network error: ${err instanceof Error ? err.message : "unknown"}`);
     }
   }
 
@@ -494,7 +530,6 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     <button onclick="window.print()" style="background:#c4a24d;color:#0a0a0a;border:none;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:1px;">SAVE AS PDF / PRINT</button>
   </div>
   ${proposalBody}
-  <script>setTimeout(function(){window.print();},700);</script>
 </body>
 </html>`;
 
@@ -1382,6 +1417,29 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
         </div>
         {!clientName && (
           <p className="text-xs text-muted mt-2 italic">Add a client name above before sending the proposal.</p>
+        )}
+
+        {/* Deposit paid → creates the project. Only shown after acceptance. */}
+        {proposalStatus === "approved" && !estimate.deposit_paid_at && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <p className="text-xs uppercase tracking-wider text-muted mb-2">Next Step</p>
+            <p className="text-sm text-foreground mb-3">
+              Once the deposit is paid, mark it here to create the project.
+            </p>
+            <Button onClick={markDepositPaid} className="bg-green-600 hover:bg-green-700 text-white">
+              <CheckCircle2 size={14} className="mr-1" /> Mark Deposit Paid &amp; Create Project
+            </Button>
+          </div>
+        )}
+        {estimate.deposit_paid_at && estimate.custom_work_id && (
+          <div className="mt-4 pt-4 border-t border-border">
+            <p className="text-xs text-green-400 mb-2">
+              ✓ Deposit paid {new Date(estimate.deposit_paid_at).toLocaleDateString()}
+            </p>
+            <Button variant="outline" onClick={() => router.push("/axiom/projects")}>
+              <Hammer size={14} className="mr-1" /> View Project
+            </Button>
+          </div>
         )}
       </div>
 

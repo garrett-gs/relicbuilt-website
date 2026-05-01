@@ -62,58 +62,41 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .single();
 
+    // ── Check expiration ─────────────────────────────────────────────
+    if (estimate.proposal_expires_at) {
+      const expiresAt = new Date(estimate.proposal_expires_at);
+      if (Date.now() > expiresAt.getTime()) {
+        return NextResponse.json({ error: "This proposal has expired. Please contact us for an updated quote." }, { status: 410 });
+      }
+    }
+
     const depositPct = estimate.deposit_percent ?? settings?.deposit_percent ?? 50;
     const depositAmount = Math.round(totalAmount * depositPct) / 100;
     const balanceAmount = Math.round((totalAmount - depositAmount) * 100) / 100;
 
-    // ── Create the project (custom_work) ─────────────────────────────
-    // This is what makes the estimate "real" — at this point it shows up
-    // in the projects tab. Estimates that aren't accepted never become
-    // projects.
-    let customWorkId = estimate.custom_work_id;
-    if (!customWorkId) {
-      const { data: newProject, error: projErr } = await supabase
-        .from("custom_work")
-        .insert({
-          project_name: estimate.project_name || "Untitled Project",
-          client_name: estimate.client_name || "",
-          customer_id: estimate.customer_id || null,
-          quoted_amount: totalAmount,
-          project_description: estimate.notes || null,
-          inspiration_images: estimate.images || [],
-          // Carry the proposal content onto the project so it stays visible
-          proposal_highlights: estimate.proposal_highlights || [],
-          proposal_scope: estimate.proposal_scope || null,
-          proposal_images: estimate.images || [],
-          proposal_images_included: estimate.proposal_images_included !== false,
-          proposal_status: "approved",
-          proposal_approved_at: new Date().toISOString(),
-          status: "new",
-        })
-        .select()
-        .single();
-      if (projErr || !newProject) {
-        console.error("[approve-estimate-proposal] project create failed:", projErr);
-        return NextResponse.json({ error: `Could not create project: ${projErr?.message || "unknown"}` }, { status: 500 });
-      }
-      customWorkId = newProject.id;
-    }
-
     // ── Create deposit and final invoices ────────────────────────────
+    // Note: NO project (custom_work) is created here. Project creation
+    // is deferred until the user marks the deposit paid in Axiom — that
+    // way the projects tab only shows projects with money down.
     const y = new Date().getFullYear();
     const today = new Date().toISOString().split("T")[0];
     const depositInvoiceNum = `INV-${y}-${Math.floor(1000 + Math.random() * 9000)}`;
     const finalInvoiceNum = `INV-${y}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    // Deposit invoice — due date = proposal expiration (same date)
+    const depositDueDate = estimate.proposal_expires_at
+      ? new Date(estimate.proposal_expires_at).toISOString().split("T")[0]
+      : today;
+
     const { data: depositInvoice, error: depErr } = await supabase
       .from("invoices")
       .insert({
         invoice_number: depositInvoiceNum,
-        custom_work_id: customWorkId,
         client_name: estimate.client_name || "",
         description: `Deposit — ${estimate.project_name || estimate.estimate_number}`,
         subtotal: depositAmount > 0 ? depositAmount : totalAmount,
         issued_date: today,
+        due_date: depositDueDate,
         tax_rate: 0,
         status: "unpaid",
         invoice_type: "deposit",
@@ -128,7 +111,6 @@ export async function POST(req: NextRequest) {
     if (balanceAmount > 0) {
       await supabase.from("invoices").insert({
         invoice_number: finalInvoiceNum,
-        custom_work_id: customWorkId,
         client_name: estimate.client_name || "",
         description: `Balance — ${estimate.project_name || estimate.estimate_number}`,
         subtotal: balanceAmount,
@@ -139,14 +121,13 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ── Mark estimate approved + link to the new project ──────────────
+    // ── Mark estimate approved (project NOT created yet) ──────────────
     await supabase
       .from("estimates")
       .update({
         proposal_status: "approved",
         proposal_approved_at: new Date().toISOString(),
         status: "accepted",
-        custom_work_id: customWorkId,
         notes: [
           estimate.notes || "",
           `Signed by ${signatureName.trim()} on ${new Date().toLocaleDateString("en-US", { dateStyle: "long" })}`,
@@ -158,12 +139,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       project_name: estimate.project_name || estimate.estimate_number,
-      custom_work_id: customWorkId,
       deposit_invoice_number: depositInvoice.invoice_number,
       deposit_amount: depositAmount,
       balance_amount: balanceAmount,
       total_amount: totalAmount,
       deposit_percent: depositPct,
+      deposit_due_date: depositDueDate,
       biz_name: settings?.biz_name || "RELIC",
     });
   } catch (err) {
