@@ -278,9 +278,17 @@ export function generateEstimateProposalHtml({
 
   const addressLine2 = [biz.biz_city, biz.biz_state, biz.biz_zip].filter(Boolean).join(", ");
 
+  // For email rendering, keep the layout simple (no shadows, no gaps).
+  // For everything else (preview / public proposal page / PDF), render
+  // each "page" as a separate sheet-of-paper card so it's obvious where
+  // page 1 ends and page 2 begins. Print CSS resets the cards back to a
+  // continuous flow so the PDF still page-breaks cleanly.
   const wrap = forEmail
     ? `style="max-width:680px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;background:#fff;"`
-    : `style="max-width:760px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;background:#fff;padding:48px;"`;
+    : `style="max-width:760px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;"`;
+  const pageGapHtml = forEmail
+    ? ""
+    : `<div class="proposal-page-gap" style="height:32px;background:transparent;"></div>`;
 
   const acceptanceSection = approveUrl
     ? `
@@ -356,19 +364,33 @@ export function generateEstimateProposalHtml({
   </section>
   ` : "";
 
+  // Inline styles for the cover and body cards. They share the page card
+  // look (white bg, padding, shadow on screen) but the cover layout is
+  // a centered flex column and forces a page break after.
+  const cardBaseStyle = forEmail
+    ? "background:#fff;padding:32px 40px;"
+    : "background:#fff;padding:48px;box-shadow:0 2px 12px rgba(0,0,0,0.08);";
+
   // Cover page: logo + title block at the top, large hero image below.
-  // Renders only if a cover image is selected.
+  // Renders only if a cover image is selected. Wrapped in its own page
+  // card so it visually separates from the body on screen, and uses
+  // page-break-after for the printed PDF.
+  //
+  // Sizing: Letter is 11in tall. With 0.5in @page margins on each side
+  // and the page card's 48px padding, the available area is ~9in. Keep
+  // the section min-height comfortably under that so it doesn't
+  // overflow into a second page before the page-break-after fires.
   const coverPageHtml = coverImage ? `
-  <section style="page-break-after:always;display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 16px;min-height:9.5in;">
-    <img src="${logoUrl}" alt="${esc(biz.biz_name || "RELIC")}" style="height:60px;object-fit:contain;margin-bottom:18px;" />
-    <div style="margin-bottom:24px;">
+  <section class="proposal-page proposal-cover" style="${cardBaseStyle}page-break-after:always;display:flex;flex-direction:column;align-items:center;text-align:center;min-height:8.25in;">
+    <img src="${logoUrl}" alt="${esc(biz.biz_name || "RELIC")}" style="width:75%;max-width:520px;height:auto;object-fit:contain;margin-bottom:18px;" />
+    <div style="margin-bottom:18px;">
       <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.16em;color:#bbb;">Proposal</p>
-      <h1 style="margin:8px 0 0;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.02em;">${esc(estimate.project_name || "")}</h1>
-      <p style="margin:12px 0 0;font-size:18px;color:#555;">Prepared for ${esc(estimate.client_name || "—")}</p>
-      <p style="margin:14px 0 0;font-size:12px;color:#999;font-family:monospace;">${esc(estimate.estimate_number)} &nbsp;·&nbsp; ${dateText}</p>
+      <h1 style="margin:6px 0 0;font-size:30px;font-weight:bold;color:#111;letter-spacing:0.02em;">${esc(estimate.project_name || "")}</h1>
+      <p style="margin:10px 0 0;font-size:17px;color:#555;">Prepared for ${esc(estimate.client_name || "—")}</p>
+      <p style="margin:10px 0 0;font-size:12px;color:#999;font-family:monospace;">${esc(estimate.estimate_number)} &nbsp;·&nbsp; ${dateText}</p>
     </div>
     <div style="flex:1;display:flex;align-items:center;justify-content:center;width:100%;">
-      <img src="${coverImage}" alt="Project cover" style="max-width:100%;max-height:6.5in;object-fit:contain;border:1px solid #e5e5e5;" />
+      <img src="${coverImage}" alt="Project cover" style="max-width:100%;max-height:5.25in;object-fit:contain;border:1px solid #e5e5e5;" />
     </div>
   </section>
   ` : "";
@@ -401,9 +423,20 @@ export function generateEstimateProposalHtml({
   ` : "";
 
   return `
+<style>
+  /* On screen: each "page" is a sheet of paper with shadow + gap.
+     In print/PDF: collapse those styles so pages render seamlessly. */
+  @media print {
+    .proposal-page { box-shadow: none !important; padding: 0 !important; min-height: 0 !important; }
+    .proposal-page-gap { display: none !important; }
+  }
+</style>
 <div ${wrap}>
 
   ${coverPageHtml}
+  ${coverImage ? pageGapHtml : ""}
+
+  <section class="proposal-page proposal-body" style="${cardBaseStyle}">
 
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
@@ -447,6 +480,8 @@ export function generateEstimateProposalHtml({
   <div style="margin-top:36px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#ccc;text-align:center;">
     R&ensp;E&ensp;L&ensp;I&ensp;C &nbsp;&middot;&nbsp; Custom Fabrications &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; relicbuilt.com
   </div>
+
+  </section>
 
 </div>`;
 }
