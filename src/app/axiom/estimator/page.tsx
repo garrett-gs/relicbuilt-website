@@ -332,8 +332,8 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const { userEmail: detailUserEmail } = useAuth();
   const [customerId, setCustomerId] = useState(estimate.customer_id || "");
   const [customerName, setCustomerName] = useState("");
-  const [clientEmail, setClientEmail] = useState("");
-  const [clientPhone, setClientPhone] = useState("");
+  const [clientEmail, setClientEmail] = useState(estimate.client_email || "");
+  const [clientPhone, setClientPhone] = useState(estimate.client_phone || "");
   const [projectName, setProjectName] = useState(estimate.project_name || "");
   const [clientName, setClientName] = useState(estimate.client_name || "");
   const [status, setStatus] = useState<Estimate["status"]>(estimate.status);
@@ -429,12 +429,31 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       if (status === "draft") setStatus("sent");
 
       const url = `${window.location.origin}/proposal/${token}`;
+
+      // Try to email the proposal directly to the client. Fall back to
+      // clipboard copy if no email is set or the send fails.
+      let emailedTo = "";
+      if (clientEmail) {
+        const emailRes = await fetch("/api/send-proposal-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ estimate_id: estimate.id }),
+        });
+        if (emailRes.ok) {
+          const emailData = await emailRes.json();
+          emailedTo = emailData.sent_to || clientEmail;
+        }
+      }
+
       try {
         await navigator.clipboard.writeText(url);
-        alert(`Proposal link copied to clipboard:\n${url}\n\nSend it to your client.`);
-      } catch {
-        prompt("Copy this proposal link and send to your client:", url);
-      }
+      } catch { /* clipboard might be unavailable in some contexts */ }
+
+      alert(
+        emailedTo
+          ? `Proposal sent to ${emailedTo}.\n\nLink also copied to clipboard:\n${url}`
+          : `Proposal link copied to clipboard:\n${url}\n\nNo client email on the estimate — paste the link wherever you need.`
+      );
 
       await logActivity({
         action: "sent",
@@ -756,6 +775,8 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       vendor_name: vendorName || undefined,
       project_name: projectName,
       client_name: clientName,
+      client_email: clientEmail || undefined,
+      client_phone: clientPhone || undefined,
       status,
       line_items: lineItems,
       labor_items: laborItems,
@@ -1001,6 +1022,32 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+          {/* Client email + phone — used for proposal & invoice emails */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">
+                Client Email
+                <span className="text-[10px] text-muted/60 normal-case ml-1.5">(used for proposals & invoices)</span>
+              </label>
+              <input
+                type="email"
+                value={clientEmail}
+                onChange={(e) => { setClientEmail(e.target.value); markDirty(); }}
+                placeholder="client@example.com"
+                className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+              />
+            </div>
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Client Phone</label>
+              <input
+                type="tel"
+                value={clientPhone}
+                onChange={(e) => { setClientPhone(e.target.value); markDirty(); }}
+                placeholder="(402) 555-0100"
+                className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+              />
             </div>
           </div>
           <div className="flex items-center gap-4">

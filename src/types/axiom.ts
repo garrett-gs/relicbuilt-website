@@ -235,6 +235,8 @@ export interface Estimate {
   vendor_id?: string;
   vendor_name?: string;
   client_name?: string;
+  client_email?: string;
+  client_phone?: string;
   status: "draft" | "sent" | "accepted" | "rejected";
   line_items: EstimateLineItem[];
   labor_items: EstimateLaborItem[];
