@@ -293,7 +293,16 @@ export default function ProjectsPage() {
       {/* Kanban */}
       <div className="flex gap-4 overflow-x-auto pb-4">
         {STATUS_COLUMNS.map((col) => {
-          const colProjects = projects.filter((p) => p.status === col.key);
+          const colProjects = projects
+            .filter((p) => p.status === col.key)
+            .sort((a, b) => {
+              const aDue = a.due_date || "";
+              const bDue = b.due_date || "";
+              if (!aDue && !bDue) return 0;
+              if (!aDue) return 1;
+              if (!bDue) return -1;
+              return aDue.localeCompare(bDue);
+            });
           return (
             <div
               key={col.key}
