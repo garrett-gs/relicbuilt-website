@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { CustomWork } from "@/types/axiom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, isWeekday } from "@/lib/utils";
 
 const statusColors: Record<string, string> = {
   new: "#4d9fff", in_review: "#f59e0b", quoted: "#a78bfa", in_progress: "#3b82f6", complete: "#22c55e",
@@ -12,45 +12,12 @@ const statusColors: Record<string, string> = {
 
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-const HOURS_PER_DAY = 8;
-
 function parseDate(s: string): Date {
   const [y, m, d] = s.split("-").map(Number);
   return new Date(y, m - 1, d);
 }
 
-function fmtDate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function isWeekday(d: Date): boolean {
-  const dow = d.getDay();
-  return dow !== 0 && dow !== 6;
-}
-
-function laborHoursTotal(p: CustomWork): number {
-  return (p.labor_log || []).reduce((s, e) => s + (Number(e.hours) || 0), 0);
-}
-
-// Walk back N business days from end (inclusive). Returns the start ISO date.
-function businessDaysBack(end: string, days: number): string {
-  if (!end || days <= 0) return end;
-  const d = parseDate(end);
-  while (!isWeekday(d)) d.setDate(d.getDate() - 1);
-  let collected = 1;
-  while (collected < days) {
-    d.setDate(d.getDate() - 1);
-    if (isWeekday(d)) collected++;
-  }
-  return fmtDate(d);
-}
-
 function buildRange(p: CustomWork): { start: string; end: string } | null {
-  const hours = laborHoursTotal(p);
-  if (p.due_date && hours > 0) {
-    const days = Math.ceil(hours / HOURS_PER_DAY);
-    return { start: businessDaysBack(p.due_date, days), end: p.due_date };
-  }
   if (p.start_date && p.due_date) return { start: p.start_date, end: p.due_date };
   if (p.start_date) return { start: p.start_date, end: p.start_date };
   if (p.due_date) return { start: p.due_date, end: p.due_date };

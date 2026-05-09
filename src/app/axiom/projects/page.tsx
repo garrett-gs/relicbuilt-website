@@ -9,7 +9,7 @@ import ChecklistPanel from "@/components/axiom/ChecklistPanel";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import ImageUpload from "@/components/ui/ImageUpload";
-import { cn, formatPhone, formatDueDate } from "@/lib/utils";
+import { cn, formatPhone, formatDueDate, suggestStartDate } from "@/lib/utils";
 import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { useRouter } from "next/navigation";
@@ -671,6 +671,33 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [notes, setNotes] = useState(project.internal_notes || "");
   const [startDate, setStartDate] = useState(project.start_date || "");
   const [dueDate, setDueDate] = useState(project.due_date || "");
+  // Sum of `hours` across the linked estimate's labor_items. Used to suggest
+  // a start date when the user sets/changes the due date. We pick the original
+  // estimate (change_order_for_id is null) so change orders don't inflate it.
+  const [estimateLaborHours, setEstimateLaborHours] = useState(0);
+  useEffect(() => {
+    if (!project.id) return;
+    axiom.from("estimates")
+      .select("labor_items, change_order_for_id, created_at")
+      .eq("custom_work_id", project.id)
+      .is("change_order_for_id", null)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .then(({ data }) => {
+        const row = data?.[0] as { labor_items?: { hours?: number }[] } | undefined;
+        const hours = (row?.labor_items || []).reduce((s, it) => s + (Number(it?.hours) || 0), 0);
+        setEstimateLaborHours(hours);
+      });
+  }, [project.id]);
+
+  function handleDueDateChange(v: string) {
+    setDueDate(v);
+    if (v && estimateLaborHours > 0) {
+      const suggested = suggestStartDate(v, estimateLaborHours);
+      if (suggested) setStartDate(suggested);
+    }
+    markDirty();
+  }
   const [portalStage, setPortalStage] = useState(project.portal_stage || "consultation");
   const [folderUrl, setFolderUrl] = useState(project.folder_url || "");
   const [editingFolder, setEditingFolder] = useState(false);
@@ -1229,7 +1256,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       {/* Dates + status */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Field label="Start Date" type="date" value={startDate} onChange={(v) => { setStartDate(v); markDirty(); }} />
-        <Field label="Due Date" type="date" value={dueDate} onChange={(v) => { setDueDate(v); markDirty(); }} />
+        <Field label="Due Date" type="date" value={dueDate} onChange={handleDueDateChange} />
         <div>
           <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Status</label>
           <select value={project.status} onChange={(e) => onUpdate({ status: e.target.value as CustomWork["status"] })} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">
