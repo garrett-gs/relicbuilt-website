@@ -671,6 +671,10 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [notes, setNotes] = useState(project.internal_notes || "");
   const [startDate, setStartDate] = useState(project.start_date || "");
   const [dueDate, setDueDate] = useState(project.due_date || "");
+  // True while start_date is showing the auto-suggested value. Flips back
+  // to false the moment the user types into the field. Drives the orange
+  // tint so the user can tell at a glance whether the date is locked in.
+  const [startDateAuto, setStartDateAuto] = useState(false);
   // Sum of `hours` across the linked estimate's labor_items. Used to suggest
   // a start date when the user sets/changes the due date. We pick the original
   // estimate (change_order_for_id is null) so change orders don't inflate it.
@@ -694,8 +698,17 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     setDueDate(v);
     if (v && estimateLaborHours > 0) {
       const suggested = suggestStartDate(v, estimateLaborHours);
-      if (suggested) setStartDate(suggested);
+      if (suggested) {
+        setStartDate(suggested);
+        setStartDateAuto(true);
+      }
     }
+    markDirty();
+  }
+
+  function handleStartDateChange(v: string) {
+    setStartDate(v);
+    setStartDateAuto(false);
     markDirty();
   }
   const [portalStage, setPortalStage] = useState(project.portal_stage || "consultation");
@@ -1255,7 +1268,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 
       {/* Dates + status */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Field label="Start Date" type="date" value={startDate} onChange={(v) => { setStartDate(v); markDirty(); }} />
+        <Field label="Start Date" type="date" value={startDate} onChange={handleStartDateChange} highlight={startDateAuto} />
         <Field label="Due Date" type="date" value={dueDate} onChange={handleDueDateChange} />
         <div>
           <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Status</label>
@@ -2214,8 +2227,8 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 
 // ── Reusable field ───────────────────────────────────────────
 
-function Field({ label, value, onChange, type = "text", required, prefix }: {
-  label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean; prefix?: string;
+function Field({ label, value, onChange, type = "text", required, prefix, highlight }: {
+  label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean; prefix?: string; highlight?: boolean;
 }) {
   return (
     <div>
@@ -2224,7 +2237,16 @@ function Field({ label, value, onChange, type = "text", required, prefix }: {
       </label>
       <div className="relative">
         {prefix && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">{prefix}</span>}
-        <input type={type} value={value} onChange={(e) => onChange(e.target.value)} className={`w-full bg-card border border-border py-3 text-foreground text-sm focus:outline-none focus:border-accent ${prefix ? "pl-7 pr-4" : "px-4"}`} />
+        <input
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={cn(
+            "w-full bg-card border py-3 text-sm focus:outline-none focus:border-accent",
+            prefix ? "pl-7 pr-4" : "px-4",
+            highlight ? "border-orange-400 text-orange-400" : "border-border text-foreground"
+          )}
+        />
       </div>
     </div>
   );
