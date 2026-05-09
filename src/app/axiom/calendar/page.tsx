@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { CustomWork } from "@/types/axiom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { cn, isWeekday } from "@/lib/utils";
+import { cn, isWeekday, suggestStartDate } from "@/lib/utils";
 
 const statusColors: Record<string, string> = {
   new: "#4d9fff", in_review: "#f59e0b", quoted: "#a78bfa", in_progress: "#3b82f6", complete: "#22c55e",
@@ -17,25 +17,66 @@ function parseDate(s: string): Date {
   return new Date(y, m - 1, d);
 }
 
-function buildRange(p: CustomWork): { start: string; end: string } | null {
+// Build the date range to render on the calendar. Prefers a saved
+// start_date (user override), but falls back to the same suggestion the
+// project panel uses — so projects that haven't been re-saved since the
+// auto-suggest landed still show their full build span.
+function buildRange(
+  p: CustomWork,
+  estimateHoursById: Record<string, number>
+): { start: string; end: string } | null {
   if (p.start_date && p.due_date) return { start: p.start_date, end: p.due_date };
+  if (p.due_date) {
+    const hours = estimateHoursById[p.id] || 0;
+    const suggested = suggestStartDate(p.due_date, hours);
+    if (suggested) return { start: suggested, end: p.due_date };
+    return { start: p.due_date, end: p.due_date };
+  }
   if (p.start_date) return { start: p.start_date, end: p.start_date };
-  if (p.due_date) return { start: p.due_date, end: p.due_date };
   return null;
 }
 
 export default function BuildCalendarPage() {
   const [projects, setProjects] = useState<CustomWork[]>([]);
+  // Map from custom_work_id → summed labor_items hours on its original
+  // estimate (excluding change orders). Used to fall back to a computed
+  // start date when the project's start_date is not yet saved.
+  const [estimateHoursById, setEstimateHoursById] = useState<Record<string, number>>({});
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
 
   const load = useCallback(async () => {
-    const { data } = await axiom.from("custom_work").select("*").order("due_date");
-    if (data) setProjects(data.filter((p: CustomWork) => p.start_date || p.due_date));
+    const [projectsRes, estimatesRes] = await Promise.all([
+      axiom.from("custom_work").select("*").order("due_date"),
+      axiom.from("estimates")
+        .select("custom_work_id, labor_items, change_order_for_id")
+        .not("custom_work_id", "is", null)
+        .is("change_order_for_id", null),
+    ]);
+    if (projectsRes.data) {
+      setProjects(projectsRes.data.filter((p: CustomWork) => p.start_date || p.due_date));
+    }
+    if (estimatesRes.data) {
+      const map: Record<string, number> = {};
+      for (const e of estimatesRes.data as { custom_work_id: string; labor_items?: { hours?: number }[] }[]) {
+        const hours = (e.labor_items || []).reduce((s, it) => s + (Number(it?.hours) || 0), 0);
+        if (hours > 0) map[e.custom_work_id] = hours;
+      }
+      setEstimateHoursById(map);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const ranges = useMemo(() => {
+    const m = new Map<string, { start: string; end: string }>();
+    for (const p of projects) {
+      const r = buildRange(p, estimateHoursById);
+      if (r) m.set(p.id, r);
+    }
+    return m;
+  }, [projects, estimateHoursById]);
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
@@ -47,7 +88,7 @@ export default function BuildCalendarPage() {
     const d = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
     if (!isWeekday(parseDate(d))) return [];
     return projects.filter((p) => {
-      const range = buildRange(p);
+      const range = ranges.get(p.id);
       if (!range) return false;
       return d >= range.start && d <= range.end;
     });
