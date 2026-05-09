@@ -711,6 +711,19 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     setStartDateAuto(false);
     markDirty();
   }
+
+  // Auto-fill start_date for projects that pre-date this feature: when the
+  // panel opens and we find a due_date but no start_date, drop the suggestion
+  // in (orange) so the user can save it without having to re-pick the due date.
+  useEffect(() => {
+    if (startDate || !dueDate || estimateLaborHours <= 0) return;
+    const suggested = suggestStartDate(dueDate, estimateLaborHours);
+    if (!suggested) return;
+    setStartDate(suggested);
+    setStartDateAuto(true);
+    markDirty();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [estimateLaborHours, dueDate]);
   const [portalStage, setPortalStage] = useState(project.portal_stage || "consultation");
   const [folderUrl, setFolderUrl] = useState(project.folder_url || "");
   const [editingFolder, setEditingFolder] = useState(false);
