@@ -940,8 +940,8 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
 
   // Track whether the selected entity is a customer or company
   const [selectedType, setSelectedType] = useState<"customer" | "company" | "">(estimate.customer_id ? "customer" : "");
-  const [companyContacts, setCompanyContacts] = useState<{ name: string; email?: string; phone?: string }[]>([]);
-  const [contactSuggestions, setContactSuggestions] = useState<{ name: string; email?: string; phone?: string }[]>([]);
+  const [companyContacts, setCompanyContacts] = useState<{ id: string; name: string; email?: string; phone?: string }[]>([]);
+  const [contactSuggestions, setContactSuggestions] = useState<{ id: string; name: string; email?: string; phone?: string }[]>([]);
   const [showContactSuggestions, setShowContactSuggestions] = useState(false);
   const contactRef = useRef<HTMLDivElement>(null);
 
@@ -969,17 +969,31 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       setClientPhone("");
       setLinkedCompanyName("");
     } else if (c.type === "company") {
-      // Company: don't store as customer_id (FK mismatch), just track the name
-      setCustomerId("");
+      // Company: don't store as customer_id directly (FK mismatch), but if the
+      // company has exactly one contact on file, pre-pick that person — that's
+      // who the estimate will go to. With multiple contacts, we leave the
+      // suggestion dropdown for the user to pick from as they type.
       setCustomerName(c.name);
       setSelectedType("company");
       setLinkedCompanyName(c.name);
-      // Load contacts at this company for suggestions
-      axiom.from("customers").select("name,email,phone").eq("company_id", c.id).order("name").then(({ data }) => {
-        if (data) setCompanyContacts(data);
-      });
-      setClientEmail(c.email || "");
-      setClientPhone(c.phone || "");
+      setClientEmail("");
+      setClientPhone("");
+      setCustomerId("");
+      axiom.from("customers")
+        .select("id,name,email,phone")
+        .eq("company_id", c.id)
+        .order("name")
+        .then(({ data }) => {
+          const contacts = (data || []) as { id: string; name: string; email?: string; phone?: string }[];
+          setCompanyContacts(contacts);
+          if (contacts.length === 1) {
+            const sole = contacts[0];
+            setCustomerId(sole.id);
+            if (!clientName) setClientName(sole.name);
+            setClientEmail(sole.email || "");
+            setClientPhone(sole.phone || "");
+          }
+        });
     } else {
       // Individual customer — pre-fill the contact name AND pull their
       // email/phone onto the estimate so the proposal email can fire
@@ -1022,9 +1036,10 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       setShowContactSuggestions(matches.length > 0);
     } else if (v.trim().length >= 2 && !companyContacts.length) {
       // No company selected — search all customers
-      axiom.from("customers").select("name,email,phone").ilike("name", `%${v.trim()}%`).limit(5).then(({ data }) => {
-        if (data && data.length > 0) {
-          setContactSuggestions(data);
+      axiom.from("customers").select("id,name,email,phone").ilike("name", `%${v.trim()}%`).limit(5).then(({ data }) => {
+        const rows = (data || []) as { id: string; name: string; email?: string; phone?: string }[];
+        if (rows.length > 0) {
+          setContactSuggestions(rows);
           setShowContactSuggestions(true);
         } else {
           setShowContactSuggestions(false);
@@ -1035,7 +1050,11 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     }
   }
 
-  function pickContact(c: { name: string; email?: string; phone?: string }) {
+  function pickContact(c: { id: string; name: string; email?: string; phone?: string }) {
+    // Store customer_id alongside the contact info so the estimate is properly
+    // linked. Without this, the next reload would have no customer to look up
+    // against, and email/phone would silently disappear if cleared.
+    if (c.id) setCustomerId(c.id);
     setClientName(c.name);
     setClientEmail(c.email || "");
     setClientPhone(c.phone || "");
