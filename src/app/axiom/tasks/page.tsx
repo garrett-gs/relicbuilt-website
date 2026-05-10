@@ -134,7 +134,7 @@ export default function TasksPage() {
 
       <div className="flex gap-5">
         {/* ── Left: Tasks ── */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 max-w-[42rem]">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl font-heading font-bold">Tasks</h1>
@@ -305,7 +305,7 @@ export default function TasksPage() {
 
         {/* ── Right: Notes panel ── */}
         <div
-          className="w-[36rem] shrink-0 border-l border-border pl-5 flex flex-col"
+          className="flex-1 min-w-[36rem] border-l border-border pl-5 flex flex-col"
           style={{ position: "sticky", top: "1.5rem", height: "calc(100vh - 7rem)", overflow: "hidden" }}
         >
           <NotesPanel />
