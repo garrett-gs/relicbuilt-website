@@ -272,9 +272,10 @@ export function generateEstimateProposalHtml({
   const projectImages: string[] = (estimate.proposal_images || []).filter((u) => u !== coverImage);
   const logoUrl = "https://relicbuilt.com/logo-full.png";
 
-  const depositPct = estimate.deposit_percent ?? biz.deposit_percent ?? 50;
-  const depositAmount = Math.round((totals.total * depositPct)) / 100;
-  const balanceDue = Math.round((totals.total - depositAmount) * 100) / 100;
+  const payInFull = estimate.pay_in_full === true;
+  const depositPct = payInFull ? 100 : (estimate.deposit_percent ?? biz.deposit_percent ?? 50);
+  const depositAmount = payInFull ? totals.total : Math.round((totals.total * depositPct)) / 100;
+  const balanceDue = payInFull ? 0 : Math.round((totals.total - depositAmount) * 100) / 100;
 
   const sentDate = estimate.proposal_sent_at
     ? new Date(estimate.proposal_sent_at)
@@ -302,12 +303,19 @@ export function generateEstimateProposalHtml({
     ? ""
     : `<div class="proposal-page-gap" style="height:32px;background:transparent;"></div>`;
 
+  const acceptanceTermsHtml = payInFull
+    ? `Click below to review and sign electronically. Payment of ${money(totals.total)} is due in full to start the project.`
+    : `Click below to review and sign electronically. A ${depositPct}% deposit will start the project.`;
+  const acceptanceFooterTerms = payInFull
+    ? `By signing below, the client authorizes ${esc(biz.biz_name || "RELIC")} to begin work as outlined in this proposal. Payment of ${money(totals.total)} is due in full to commence work.`
+    : `By signing below, the client authorizes ${esc(biz.biz_name || "RELIC")} to begin work as outlined in this proposal. A ${depositPct}% deposit (${money(depositAmount)}) is due to commence work.`;
+
   const acceptanceSection = approveUrl
     ? `
   <div style="margin-top:36px;padding:24px;background:#fafafa;border:1px solid #e5e5e5;border-left:3px solid #c4a24d;page-break-inside:avoid;">
     <h2 style="margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:0.16em;color:#111;font-weight:bold;">Accept This Proposal</h2>
     <p style="margin:0 0 16px;font-size:13px;color:#555;line-height:1.6;">
-      Click below to review and sign electronically. A ${depositPct}% deposit will start the project.
+      ${acceptanceTermsHtml}
     </p>
     <a href="${approveUrl}" style="display:inline-block;background:#c4a24d;color:#0a0a0a;padding:14px 28px;text-decoration:none;font-weight:bold;letter-spacing:0.08em;font-size:13px;text-transform:uppercase;">
       Review &amp; Sign
@@ -317,8 +325,7 @@ export function generateEstimateProposalHtml({
   <div style="margin-top:36px;border-top:2px solid #111;padding-top:24px;page-break-inside:avoid;">
     <h2 style="margin:0 0 16px;font-size:13px;text-transform:uppercase;letter-spacing:0.16em;color:#111;font-weight:bold;">Acceptance</h2>
     <p style="margin:0 0 32px;font-size:12px;color:#444;line-height:1.6;">
-      By signing below, the client authorizes ${esc(biz.biz_name || "RELIC")} to begin work as outlined in this proposal.
-      A ${depositPct}% deposit (${money(depositAmount)}) is due to commence work.
+      ${acceptanceFooterTerms}
     </p>
     <div style="display:flex;gap:32px;">
       <div style="flex:1;">
@@ -418,8 +425,10 @@ export function generateEstimateProposalHtml({
         <td style="padding:14px 0;font-size:18px;font-weight:bold;color:#111;">Project Total</td>
         <td style="padding:14px 0;text-align:right;font-size:22px;font-family:monospace;font-weight:bold;color:#111;">${money(totals.total)}</td>
       </tr>
-      <tr><td style="padding:8px 0 4px;font-size:12px;color:#888;">Deposit (${depositPct}%) due to start</td><td style="padding:8px 0 4px;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(depositAmount)}</td></tr>
-      <tr><td style="padding:4px 0;font-size:12px;color:#888;">Balance prior to delivery</td><td style="padding:4px 0;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(balanceDue)}</td></tr>
+      ${payInFull
+        ? `<tr><td style="padding:8px 0 4px;font-size:12px;color:#888;">Paid in Full</td><td style="padding:8px 0 4px;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(totals.total)}</td></tr>`
+        : `<tr><td style="padding:8px 0 4px;font-size:12px;color:#888;">Deposit (${depositPct}%) due to start</td><td style="padding:8px 0 4px;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(depositAmount)}</td></tr>
+      <tr><td style="padding:4px 0;font-size:12px;color:#888;">Balance prior to delivery</td><td style="padding:4px 0;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(balanceDue)}</td></tr>`}
     </table>
     <p style="margin:14px 0 0;font-size:11px;color:#999;font-style:italic;line-height:1.5;">
       This proposal is valid through <strong style="color:#555;font-style:normal;">${expiresText}</strong>.

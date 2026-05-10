@@ -77,9 +77,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const depositPct = estimate.deposit_percent ?? settings?.deposit_percent ?? 50;
-    const depositAmount = Math.round(totalAmount * depositPct) / 100;
-    const balanceAmount = Math.round((totalAmount - depositAmount) * 100) / 100;
+    // Pay-in-full estimates skip the deposit/balance split and bill the
+    // total as one invoice. The "deposit" record we create in that case
+    // simply carries the full amount so the rest of the flow (which uses
+    // depositInvoice for the receipt email) still works without branching.
+    const payInFull = estimate.pay_in_full === true;
+    const depositPct = payInFull ? 100 : (estimate.deposit_percent ?? settings?.deposit_percent ?? 50);
+    const depositAmount = payInFull ? totalAmount : Math.round(totalAmount * depositPct) / 100;
+    const balanceAmount = payInFull ? 0 : Math.round((totalAmount - depositAmount) * 100) / 100;
 
     // ── Create deposit and final invoices ────────────────────────────
     // Note: NO project (custom_work) is created here. Project creation
@@ -103,13 +108,15 @@ export async function POST(req: NextRequest) {
         client_name: estimate.client_name || "",
         client_email: estimate.client_email || null,
         client_phone: estimate.client_phone || null,
-        description: `Deposit — ${estimate.project_name || estimate.estimate_number}`,
+        description: payInFull
+          ? `Paid in Full — ${estimate.project_name || estimate.estimate_number}`
+          : `Deposit — ${estimate.project_name || estimate.estimate_number}`,
         subtotal: depositAmount > 0 ? depositAmount : totalAmount,
         issued_date: today,
         due_date: depositDueDate,
         tax_rate: 0,
         status: "unpaid",
-        invoice_type: "deposit",
+        invoice_type: payInFull ? "full" : "deposit",
       })
       .select()
       .single();

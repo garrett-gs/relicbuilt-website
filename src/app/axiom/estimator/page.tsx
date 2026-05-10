@@ -655,6 +655,9 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [depositPercent, setDepositPercent] = useState<string>(
     estimate.deposit_percent != null ? String(estimate.deposit_percent) : ""
   );
+  // When on, the proposal shows "Paid in Full" terms — deposit input is
+  // disabled and the on-acceptance flow creates a single full invoice.
+  const [payInFull, setPayInFull] = useState<boolean>(estimate.pay_in_full === true);
   const [proposalToken, setProposalToken] = useState<string>(estimate.proposal_token || "");
   const [proposalStatus, setProposalStatus] = useState<"draft" | "sent" | "approved">(
     estimate.proposal_status || "draft"
@@ -890,6 +893,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       proposal_images: proposalImages,
       proposal_cover_image_url: coverImageUrl || undefined,
         deposit_percent: depositPercent !== "" ? Number(depositPercent) : undefined,
+        pay_in_full: payInFull || undefined,
       } as Estimate,
       biz: settings || {},
       totals: { materialTotal, laborTotal, markupAmount, total },
@@ -1256,6 +1260,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       proposal_cover_image_url: coverImageUrl || undefined,
       proposal_status: proposalStatus,
       deposit_percent: depositPercent !== "" ? Number(depositPercent) : undefined,
+      pay_in_full: payInFull,
     });
     setDirty(false);
     setSaved(true);
@@ -2012,24 +2017,44 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
           </label>
         </div>
 
-        {/* Deposit % — overrides the global default for this estimate */}
+        {/* Deposit % — overrides the global default for this estimate.
+            Pay in Full toggle disables the deposit and switches the proposal
+            language to a single "Paid in Full" line. */}
         <div className="mb-4">
           <p className="text-xs uppercase tracking-wider text-muted mb-1.5">Deposit %</p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <input
               type="number"
               min={0}
               max={100}
               step={1}
-              value={depositPercent}
+              value={payInFull ? "" : depositPercent}
               onChange={(e) => { setDepositPercent(e.target.value); markDirty(); }}
+              disabled={payInFull}
               placeholder="Use business default"
-              className="w-32 bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+              className={cn(
+                "w-32 bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent",
+                payInFull && "opacity-40 bg-black text-muted cursor-not-allowed"
+              )}
             />
+            <button
+              type="button"
+              onClick={() => { setPayInFull((v) => !v); markDirty(); }}
+              className={cn(
+                "text-xs px-3 py-2 border transition-colors",
+                payInFull
+                  ? "border-green-500/60 bg-green-500/15 text-green-400"
+                  : "border-border text-muted hover:border-accent hover:text-foreground"
+              )}
+            >
+              {payInFull ? "✓ Paid in Full" : "Pay in Full"}
+            </button>
             <span className="text-xs text-muted">
-              {depositPercent
-                ? `Deposit ${money((total * Number(depositPercent)) / 100)} · Balance ${money(total - (total * Number(depositPercent)) / 100)}`
-                : "Leave blank to use the deposit % from Settings"}
+              {payInFull
+                ? `${money(total)} due in full`
+                : depositPercent
+                  ? `Deposit ${money((total * Number(depositPercent)) / 100)} · Balance ${money(total - (total * Number(depositPercent)) / 100)}`
+                  : "Leave blank to use the deposit % from Settings"}
             </span>
           </div>
         </div>

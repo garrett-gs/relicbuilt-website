@@ -268,6 +268,10 @@ export interface Estimate {
   // Override the business default deposit % for this specific estimate.
   // Falls back to settings.deposit_percent when null.
   deposit_percent?: number;
+  // When true, the proposal shows "Paid in Full" terms — no deposit row,
+  // no balance row, and acceptance creates a single full-amount invoice.
+  // Overrides deposit_percent for display purposes when on.
+  pay_in_full?: boolean;
   // Set when the deposit invoice is marked paid. The custom_work
   // project is created at this moment, not at proposal acceptance.
   deposit_paid_at?: string;
