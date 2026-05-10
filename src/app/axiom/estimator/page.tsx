@@ -383,6 +383,22 @@ function CreateModal({ onSubmit, onClose }: {
   const [estimateType, setEstimateType] = useState<"new" | "change_order">("new");
   const [activeProjects, setActiveProjects] = useState<Array<{ id: string; project_name: string; client_name?: string }>>([]);
 
+  // When the Customer pick is a company, we load the contacts at that company
+  // here so the Contact field below can offer them as suggestions.
+  const [companyContacts, setCompanyContacts] = useState<{ id: string; name: string; email?: string; phone?: string }[]>([]);
+  const [contactSuggestions, setContactSuggestions] = useState<{ id: string; name: string; email?: string; phone?: string }[]>([]);
+  const [showContactSuggestions, setShowContactSuggestions] = useState(false);
+  const contactRef = useRef<HTMLDivElement>(null);
+
+  // Close suggestions when the user clicks outside the Contact field
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (contactRef.current && !contactRef.current.contains(e.target as Node)) setShowContactSuggestions(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
   // Load active projects for the change order picker
   useEffect(() => {
     if (estimateType !== "change_order") return;
@@ -412,12 +428,53 @@ function CreateModal({ onSubmit, onClose }: {
 
   function handleCustomerSelect(c: SearchResult) {
     if (!c.id) {
-      setForm((f) => ({ ...f, customer_id: "" }));
+      // Cleared: drop the customer link, the contact name, and any company
+      // contacts we'd loaded for the suggestion list.
+      setForm((f) => ({ ...f, customer_id: "", client_name: "" }));
+      setCompanyContacts([]);
+      setShowContactSuggestions(false);
     } else if (c.type === "company") {
-      setForm((f) => ({ ...f, customer_id: "" }));
+      // Company picked: load the contacts at that company. If there's only
+      // one, auto-pick them as the contact. With multiple, leave the Contact
+      // field empty and let the user pick from the suggestion list as they
+      // type.
+      setForm((f) => ({ ...f, customer_id: "", client_name: "" }));
+      axiom.from("customers")
+        .select("id,name,email,phone")
+        .eq("company_id", c.id)
+        .order("name")
+        .then(({ data }) => {
+          const contacts = (data || []) as { id: string; name: string; email?: string; phone?: string }[];
+          setCompanyContacts(contacts);
+          if (contacts.length === 1) {
+            const sole = contacts[0];
+            setForm((f) => ({ ...f, customer_id: sole.id, client_name: sole.name }));
+          }
+        });
     } else {
-      setForm((f) => ({ ...f, customer_id: c.id }));
+      // Individual customer picked: link them and auto-fill the Contact field
+      // with their name. They become the contact.
+      setForm((f) => ({ ...f, customer_id: c.id, client_name: c.name }));
+      setCompanyContacts([]);
+      setShowContactSuggestions(false);
     }
+  }
+
+  function handleContactInput(v: string) {
+    setForm((f) => ({ ...f, client_name: v }));
+    if (v.trim() && companyContacts.length > 0) {
+      const q = v.toLowerCase();
+      const matches = companyContacts.filter((c) => c.name.toLowerCase().includes(q));
+      setContactSuggestions(matches);
+      setShowContactSuggestions(matches.length > 0);
+    } else {
+      setShowContactSuggestions(false);
+    }
+  }
+
+  function pickContactSuggestion(c: { id: string; name: string; email?: string; phone?: string }) {
+    setForm((f) => ({ ...f, customer_id: c.id, client_name: c.name }));
+    setShowContactSuggestions(false);
   }
 
   function submit() {
@@ -493,7 +550,40 @@ function CreateModal({ onSubmit, onClose }: {
             required
           />
           <CustomerSearch onSelect={handleCustomerSelect} />
-          <Field label="Contact" value={form.client_name} onChange={(v) => setForm((f) => ({ ...f, client_name: v }))} />
+          <div ref={contactRef} className="relative">
+            <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Contact</label>
+            <input
+              value={form.client_name}
+              onChange={(e) => handleContactInput(e.target.value)}
+              onFocus={() => {
+                if (form.client_name.trim() && companyContacts.length > 0) {
+                  const q = form.client_name.toLowerCase();
+                  const matches = companyContacts.filter((c) => c.name.toLowerCase().includes(q));
+                  setContactSuggestions(matches);
+                  setShowContactSuggestions(matches.length > 0);
+                }
+              }}
+              placeholder={companyContacts.length > 0 ? "Search this company's contacts…" : "Contact name"}
+              className="w-full bg-card border border-border px-4 py-3 text-sm text-foreground focus:outline-none focus:border-accent"
+            />
+            {showContactSuggestions && contactSuggestions.length > 0 && (
+              <div className="absolute z-30 top-full left-0 right-0 bg-card border border-border shadow-lg mt-0.5 max-h-48 overflow-y-auto">
+                {contactSuggestions.map((c) => (
+                  <button
+                    key={c.id}
+                    onMouseDown={() => pickContactSuggestion(c)}
+                    className="w-full text-left px-4 py-2.5 text-sm hover:bg-background flex items-center justify-between gap-3"
+                  >
+                    <span className="text-foreground truncate">{c.name}</span>
+                    <span className="text-xs text-muted shrink-0 truncate max-w-[50%]">{c.email || c.phone || ""}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {companyContacts.length === 0 && form.customer_id === "" && form.client_name === "" && (
+              <p className="text-xs text-muted italic mt-1.5">Pick a customer above first, or type a name here.</p>
+            )}
+          </div>
           <div className="flex gap-3">
             <Button onClick={submit} disabled={submitDisabled}>Create</Button>
             <Button variant="outline" onClick={onClose}>Cancel</Button>
