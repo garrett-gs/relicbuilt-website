@@ -33,6 +33,10 @@ const COLUMNS = [
   { key: "done", label: "Done", color: "#22c55e" },
 ] as const;
 
+// Active board only renders the in-flight statuses. Done tasks live on the
+// Completed tab so the Kanban stays focused on what still needs work.
+const ACTIVE_COLUMNS = COLUMNS.filter((c) => c.key !== "done");
+
 const PRIORITIES = [
   { key: "high", label: "High", color: "#ef4444" },
   { key: "medium", label: "Medium", color: "#f59e0b" },
@@ -52,6 +56,7 @@ export default function TasksPage() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [teamFilter, setTeamFilter] = useState("all");
+  const [taskTab, setTaskTab] = useState<"active" | "completed">("active");
 
   const load = useCallback(async () => {
     const { data } = await axiom.from("tasks").select("*").order("created_at", { ascending: false });
@@ -130,11 +135,11 @@ export default function TasksPage() {
       <div className="flex gap-5">
         {/* ── Left: Tasks ── */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div>
               <h1 className="text-2xl font-heading font-bold">Tasks</h1>
               <div className="flex gap-4 mt-1">
-                <span className="text-muted text-sm">{tasks.length} total</span>
+                <span className="text-muted text-sm">{tasks.filter((t) => t.status !== "done").length} open</span>
                 <span className="text-blue-400 text-sm">{tasks.filter((t) => t.status === "in_progress").length} in progress</span>
                 {overdue.length > 0 && <span className="text-red-400 text-sm">{overdue.length} overdue</span>}
               </div>
@@ -148,54 +153,113 @@ export default function TasksPage() {
             </div>
           </div>
 
-          {/* Kanban */}
-          <div className="flex gap-4 overflow-x-auto pb-4">
-            {COLUMNS.map((col) => {
-              const colTasks = filtered.filter((t) => t.status === col.key);
-              return (
-                <div
-                  key={col.key}
-                  className={cn("flex-shrink-0 w-72 bg-card border border-border rounded p-3 min-h-[400px]", dragOver === col.key && "border-accent")}
-                  onDragOver={(e) => { e.preventDefault(); setDragOver(col.key); }}
-                  onDragLeave={() => setDragOver(null)}
-                  onDrop={() => { if (dragging) moveTask(dragging, col.key); setDragging(null); setDragOver(null); }}
-                >
-                  <div className="flex items-center gap-2 mb-3">
-                    <span className="w-2 h-2 rounded-full" style={{ background: col.color }} />
-                    <span className="text-xs uppercase tracking-wider text-muted font-medium">{col.label}</span>
-                    <span className="text-xs text-muted ml-auto">{colTasks.length}</span>
+          {/* Active / Completed tabs */}
+          <div className="flex border-b border-border mb-4 text-xs uppercase tracking-wider">
+            <button
+              onClick={() => setTaskTab("active")}
+              className={cn(
+                "px-4 py-2 transition-colors",
+                taskTab === "active" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
+              )}
+            >
+              Active <span className="text-muted ml-1">({filtered.filter((t) => t.status !== "done").length})</span>
+            </button>
+            <button
+              onClick={() => setTaskTab("completed")}
+              className={cn(
+                "px-4 py-2 transition-colors",
+                taskTab === "completed" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
+              )}
+            >
+              Completed <span className="text-muted ml-1">({filtered.filter((t) => t.status === "done").length})</span>
+            </button>
+          </div>
+
+          {/* Active Kanban — only To Do + In Progress columns */}
+          {taskTab === "active" && (
+            <div className="flex gap-4 overflow-x-auto pb-4">
+              {ACTIVE_COLUMNS.map((col) => {
+                const colTasks = filtered.filter((t) => t.status === col.key);
+                return (
+                  <div
+                    key={col.key}
+                    className={cn("flex-shrink-0 w-72 bg-card border border-border rounded p-3 min-h-[400px]", dragOver === col.key && "border-accent")}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(col.key); }}
+                    onDragLeave={() => setDragOver(null)}
+                    onDrop={() => { if (dragging) moveTask(dragging, col.key); setDragging(null); setDragOver(null); }}
+                  >
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="w-2 h-2 rounded-full" style={{ background: col.color }} />
+                      <span className="text-xs uppercase tracking-wider text-muted font-medium">{col.label}</span>
+                      <span className="text-xs text-muted ml-auto">{colTasks.length}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {colTasks.map((t) => {
+                        const isOverdue = t.due_date && t.status !== "done" && new Date(t.due_date) < new Date();
+                        const pri = PRIORITIES.find((p) => p.key === t.priority);
+                        return (
+                          <div
+                            key={t.id}
+                            draggable
+                            onDragStart={() => setDragging(t.id)}
+                            onClick={() => setSelected(t)}
+                            className="bg-background border border-border p-3 cursor-pointer hover:border-accent/50 transition-colors"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-medium">{t.title}</p>
+                              {pri && <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: pri.color + "20", color: pri.color }}>{pri.label}</span>}
+                            </div>
+                            {t.assignee && <p className="text-xs text-muted mt-1">{t.assignee}</p>}
+                            {t.due_date && (
+                              <p className={cn("text-xs mt-1 flex items-center gap-1", isOverdue ? "text-red-400" : "text-muted")}>
+                                {isOverdue && <AlertTriangle size={10} />}
+                                {new Date(t.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    {colTasks.map((t) => {
-                      const isOverdue = t.due_date && t.status !== "done" && new Date(t.due_date) < new Date();
+                );
+              })}
+            </div>
+          )}
+
+          {/* Completed list — flat, sorted by most recently updated */}
+          {taskTab === "completed" && (
+            <div className="bg-card border border-border rounded">
+              {filtered.filter((t) => t.status === "done").length === 0 ? (
+                <p className="text-muted text-sm p-6">No completed tasks yet.</p>
+              ) : (
+                <div className="divide-y divide-border">
+                  {filtered
+                    .filter((t) => t.status === "done")
+                    .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))
+                    .map((t) => {
                       const pri = PRIORITIES.find((p) => p.key === t.priority);
                       return (
-                        <div
+                        <button
                           key={t.id}
-                          draggable
-                          onDragStart={() => setDragging(t.id)}
                           onClick={() => setSelected(t)}
-                          className="bg-background border border-border p-3 cursor-pointer hover:border-accent/50 transition-colors"
+                          className="w-full text-left px-4 py-3 hover:bg-background/40 transition-colors flex items-center gap-3"
                         >
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-sm font-medium">{t.title}</p>
-                            {pri && <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: pri.color + "20", color: pri.color }}>{pri.label}</span>}
-                          </div>
-                          {t.assignee && <p className="text-xs text-muted mt-1">{t.assignee}</p>}
-                          {t.due_date && (
-                            <p className={cn("text-xs mt-1 flex items-center gap-1", isOverdue ? "text-red-400" : "text-muted")}>
-                              {isOverdue && <AlertTriangle size={10} />}
-                              {new Date(t.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{t.title}</p>
+                            <p className="text-xs text-muted mt-0.5">
+                              {t.assignee || "Unassigned"}
+                              {t.due_date && <> &middot; due {new Date(t.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</>}
                             </p>
-                          )}
-                        </div>
+                          </div>
+                          {pri && <span className="text-[10px] px-1.5 py-0.5 rounded shrink-0" style={{ background: pri.color + "20", color: pri.color }}>{pri.label}</span>}
+                        </button>
                       );
                     })}
-                  </div>
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </div>
+          )}
 
           {/* Create modal */}
           {showCreate && (
