@@ -478,10 +478,22 @@ function CreateModal({ onSubmit, onClose }: {
   }
 
   function submit() {
+    // If the user typed a contact name without picking from the suggestion
+    // dropdown, try to match it against the loaded company contacts (or the
+    // company contact with that exact name). This way a typed-but-correct
+    // name still gets the customer_id link, which the detail view's
+    // auto-fill keys off.
+    let resolvedId = form.customer_id;
+    if (!resolvedId && form.client_name && companyContacts.length > 0) {
+      const q = form.client_name.trim().toLowerCase();
+      const exact = companyContacts.find((c) => c.name.toLowerCase() === q);
+      const partial = exact || companyContacts.find((c) => c.name.toLowerCase().includes(q));
+      if (partial) resolvedId = partial.id;
+    }
     onSubmit({
       project_name: form.project_name,
       client_name: form.client_name,
-      customer_id: form.customer_id,
+      customer_id: resolvedId,
       change_order_for_id: estimateType === "change_order" ? form.change_order_for_id : undefined,
     });
   }
@@ -1014,6 +1026,36 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
         setClientPhone((prev) => prev || data.phone || "");
       });
   }, [estimate.customer_id]);
+
+  // Fallback resolver: if the estimate was saved with a client_name but no
+  // customer_id (e.g. legacy estimates, or a Create-modal flow where the
+  // contact was typed without picking from suggestions), try to resolve the
+  // customer record by name. We require a unique match before linking, so
+  // ambiguous names don't get auto-bound to the wrong person.
+  useEffect(() => {
+    if (estimate.customer_id) return;
+    if (!estimate.client_name?.trim()) return;
+    axiom
+      .from("customers")
+      .select("id,name,email,phone,company_id,company_name")
+      .ilike("name", estimate.client_name.trim())
+      .limit(2)
+      .then(({ data }) => {
+        if (!data || data.length !== 1) return;
+        const c = data[0] as { id: string; name: string; email?: string; phone?: string; company_id?: string; company_name?: string };
+        setCustomerId(c.id);
+        setCustomerName(c.name);
+        setClientEmail((prev) => prev || c.email || "");
+        setClientPhone((prev) => prev || c.phone || "");
+        if (c.company_name) {
+          setLinkedCompanyName(c.company_name);
+        } else if (c.company_id) {
+          axiom.from("companies").select("name").eq("id", c.company_id).single()
+            .then(({ data: co }) => { if (co?.name) setLinkedCompanyName(co.name); });
+        }
+        markDirty();
+      });
+  }, [estimate.customer_id, estimate.client_name]);
 
   function addFromCatalog(item: CatalogItem) {
     const existing = lineItems.findIndex((li) => li.item_number === item.item_number && li.description === item.description);
