@@ -43,6 +43,10 @@ type SearchResult = {
   name: string;
   email?: string;
   phone?: string;
+  // For customer rows, the company they work at (if any) — shown next to the
+  // name in the dropdown so the user can disambiguate "John at Acme" from
+  // "John at Other Co" without leaving the picker.
+  company_name?: string;
   type: "customer" | "company";
 };
 
@@ -89,13 +93,36 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: SearchResult)
   async function search(q: string) {
     setQuery(q);
     if (!q.trim()) { setResults([]); setOpen(false); return; }
+    // Most clients are individual contacts who happen to work at a company,
+    // so we lead with customers — matched by their own name OR their cached
+    // company_name (so typing "Acme" still surfaces every contact at Acme).
+    // Companies appear at the bottom as a fallback for the rarer case where
+    // the user wants to pick the company directly.
+    const trimmed = q.trim().replace(/[%,]/g, "");
     const [{ data: customers }, { data: companies }] = await Promise.all([
-      axiom.from("customers").select("*").ilike("name", `%${q}%`).limit(6),
-      axiom.from("companies").select("*").ilike("name", `%${q}%`).limit(4),
+      axiom
+        .from("customers")
+        .select("id,name,email,phone,company_name")
+        .or(`name.ilike.%${trimmed}%,company_name.ilike.%${trimmed}%`)
+        .limit(8),
+      axiom.from("companies").select("id,name,phone").ilike("name", `%${trimmed}%`).limit(4),
     ]);
     const merged: SearchResult[] = [
-      ...((companies || []).map((co) => ({ id: co.id, name: co.name, email: "", phone: co.phone || "", type: "company" as const }))),
-      ...((customers || []).map((c) => ({ ...c, type: "customer" as const }))),
+      ...((customers || []).map((c) => ({
+        id: c.id,
+        name: c.name,
+        email: c.email || "",
+        phone: c.phone || "",
+        company_name: c.company_name || "",
+        type: "customer" as const,
+      }))),
+      ...((companies || []).map((co) => ({
+        id: co.id,
+        name: co.name,
+        email: "",
+        phone: co.phone || "",
+        type: "company" as const,
+      }))),
     ];
     setResults(merged);
     setOpen(true);
@@ -110,7 +137,7 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: SearchResult)
 
   return (
     <div ref={ref} className="relative">
-      <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Customer / Company</label>
+      <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Customer</label>
       <div className="flex items-center gap-2">
         {selectedName ? (
           <span className="flex items-center gap-1 bg-accent/10 text-accent text-sm px-3 py-2 border border-accent/30 flex-1 truncate">
@@ -128,18 +155,30 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: SearchResult)
             <input
               value={query}
               onChange={(e) => search(e.target.value)}
-              placeholder="Search customers or companies..."
+              placeholder="Search by contact name or company…"
               className="w-full bg-card border border-border pl-9 pr-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
             />
           </div>
         )}
       </div>
       {open && results.length > 0 && (
-        <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border shadow-lg mt-0.5 max-h-48 overflow-y-auto">
+        <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border shadow-lg mt-0.5 max-h-64 overflow-y-auto">
           {results.map((c) => (
-            <button key={c.id} onMouseDown={() => pick(c)} className="w-full text-left px-4 py-2.5 text-sm hover:bg-background flex items-center justify-between">
-              <span>{c.name}{c.type === "company" ? <span className="text-blue-400 text-[10px] ml-2 uppercase tracking-wider">Company</span> : ""}</span>
-              <span className="text-xs text-muted">{c.email || c.phone || ""}</span>
+            <button
+              key={`${c.type}-${c.id}`}
+              onMouseDown={() => pick(c)}
+              className="w-full text-left px-4 py-2.5 text-sm hover:bg-background flex items-center justify-between gap-3"
+            >
+              <span className="min-w-0 flex-1 truncate">
+                <span className="text-foreground">{c.name}</span>
+                {c.type === "customer" && c.company_name && (
+                  <span className="text-muted ml-1.5">— {c.company_name}</span>
+                )}
+                {c.type === "company" && (
+                  <span className="text-blue-400 text-[10px] ml-2 uppercase tracking-wider">Company</span>
+                )}
+              </span>
+              <span className="text-xs text-muted shrink-0 truncate max-w-[40%]">{c.email || c.phone || ""}</span>
             </button>
           ))}
         </div>
