@@ -94,7 +94,7 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: SearchResult)
       axiom.from("companies").select("*").ilike("name", `%${q}%`).limit(4),
     ]);
     const merged: SearchResult[] = [
-      ...((companies || []).map((co) => ({ id: co.id, name: co.name, email: co.phone || "", phone: co.phone, type: "company" as const }))),
+      ...((companies || []).map((co) => ({ id: co.id, name: co.name, email: "", phone: co.phone || "", type: "company" as const }))),
       ...((customers || []).map((c) => ({ ...c, type: "customer" as const }))),
     ];
     setResults(merged);
@@ -955,11 +955,19 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   }, []);
 
   function handleCustomerSelect(c: SearchResult) {
+    // Picking (or clearing) a customer is an explicit user action, so we
+    // always sync clientEmail / clientPhone to the picked entity — including
+    // clearing them when the user removes the link or picks someone with no
+    // contact info on file. The previous "only fill if empty" guard meant
+    // switching customers left the prior person's email/phone behind.
     if (!c.id) {
       setCustomerId("");
       setCustomerName("");
       setSelectedType("");
       setCompanyContacts([]);
+      setClientEmail("");
+      setClientPhone("");
+      setLinkedCompanyName("");
     } else if (c.type === "company") {
       // Company: don't store as customer_id (FK mismatch), just track the name
       setCustomerId("");
@@ -970,9 +978,8 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       axiom.from("customers").select("name,email,phone").eq("company_id", c.id).order("name").then(({ data }) => {
         if (data) setCompanyContacts(data);
       });
-      // Copy company-level email/phone if available
-      if (c.email && !clientEmail) setClientEmail(c.email);
-      if (c.phone && !clientPhone) setClientPhone(c.phone);
+      setClientEmail(c.email || "");
+      setClientPhone(c.phone || "");
     } else {
       // Individual customer — pre-fill the contact name AND pull their
       // email/phone onto the estimate so the proposal email can fire
@@ -983,8 +990,8 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       setSelectedType("customer");
       setCompanyContacts([]);
       if (!clientName) setClientName(c.name);
-      if (c.email && !clientEmail) setClientEmail(c.email);
-      if (c.phone && !clientPhone) setClientPhone(c.phone);
+      setClientEmail(c.email || "");
+      setClientPhone(c.phone || "");
       // Look up the customer's linked company (if any)
       axiom.from("customers")
         .select("company_id,company_name")
