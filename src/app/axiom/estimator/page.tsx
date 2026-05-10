@@ -160,6 +160,9 @@ export default function EstimatorPage() {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [selected, setSelected] = useState<Estimate | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  // Working = anything still in the funnel (draft / sent / rejected / etc).
+  // Accepted = the client signed off, so we get it out of the day-to-day list.
+  const [tab, setTab] = useState<"working" | "accepted">("working");
 
   const load = useCallback(async () => {
     const { data } = await axiom.from("estimates").select("*").order("created_at", { ascending: false });
@@ -167,6 +170,10 @@ export default function EstimatorPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const workingEstimates = estimates.filter((e) => e.status !== "accepted");
+  const acceptedEstimates = estimates.filter((e) => e.status === "accepted");
+  const visibleEstimates = tab === "working" ? workingEstimates : acceptedEstimates;
 
   async function createEstimate(form: { project_name: string; client_name: string; customer_id: string; change_order_for_id?: string }) {
     const year = new Date().getFullYear();
@@ -240,17 +247,39 @@ export default function EstimatorPage() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-heading font-bold">Estimator</h1>
-            <p className="text-muted text-sm mt-0.5">{estimates.length} estimates</p>
+            <p className="text-muted text-sm mt-0.5">{visibleEstimates.length} estimates</p>
           </div>
           <Button size="sm" onClick={() => setShowCreate(true)}>
             <Plus size={14} className="mr-1" /> New
           </Button>
         </div>
+        <div className="flex border-b border-border mb-3 text-xs uppercase tracking-wider">
+          <button
+            onClick={() => { setTab("working"); if (selected?.status === "accepted") setSelected(null); }}
+            className={cn(
+              "flex-1 py-2 transition-colors",
+              tab === "working" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
+            )}
+          >
+            Working <span className="text-muted ml-1">({workingEstimates.length})</span>
+          </button>
+          <button
+            onClick={() => { setTab("accepted"); if (selected && selected.status !== "accepted") setSelected(null); }}
+            className={cn(
+              "flex-1 py-2 transition-colors",
+              tab === "accepted" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
+            )}
+          >
+            Accepted <span className="text-muted ml-1">({acceptedEstimates.length})</span>
+          </button>
+        </div>
         <div className="flex-1 overflow-y-auto space-y-2">
-          {estimates.length === 0 && (
-            <p className="text-muted text-sm">No estimates yet.</p>
+          {visibleEstimates.length === 0 && (
+            <p className="text-muted text-sm">
+              {tab === "working" ? "No estimates yet." : "No accepted estimates yet."}
+            </p>
           )}
-          {estimates.map((est) => {
+          {visibleEstimates.map((est) => {
             const { total } = calcTotals(est);
             const active = selected?.id === est.id;
             return (
