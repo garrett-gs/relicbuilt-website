@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { generateEstimateProposalHtml } from "@/lib/proposal-html";
 import { renderHtmlToPdf } from "@/lib/render-pdf";
 import { logProposalEvent, ipFromHeaders, sha256 } from "@/lib/audit";
+import { notifyWallflowerStatus } from "@/lib/wallflower-status";
 import type { Estimate, ProposalHighlight, ProposalScope } from "@/types/axiom";
 
 export const runtime = "nodejs";
@@ -155,6 +156,9 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", estimate.id);
+
+    // Tell Wallflower the client signed — no-op for non-Wallflower estimates.
+    await notifyWallflowerStatus(supabase, { estimateId: estimate.id }, "accepted");
 
     // ── Audit trail: capture signed document snapshot + hash ─────────
     // Render the proposal as it appeared to the client at signing time,

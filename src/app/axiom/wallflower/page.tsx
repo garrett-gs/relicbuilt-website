@@ -99,6 +99,16 @@ export default function WallflowerPage() {
     await axiom.from("wallflower_work_orders").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
     load();
     if (selected?.id === id) setSelected((prev) => prev ? { ...prev, ...updates } : prev);
+    // Mirror status changes back to Wallflower. The /api/wallflower-status
+    // route looks up the wallflower_order_id, dedupes against the last sent
+    // value, and swallows errors so we never block the local update.
+    if (updates.status) {
+      fetch("/api/wallflower-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: { workOrderId: id }, status: updates.status }),
+      }).catch((err) => console.error("[wallflower-status] notify failed:", err));
+    }
   }
 
   async function deleteOrder(id: string) {
@@ -145,6 +155,13 @@ export default function WallflowerPage() {
         status: "estimated",
         updated_at: new Date().toISOString(),
       }).eq("id", wo.id);
+
+      // Tell Wallflower we've quoted it. Non-blocking.
+      fetch("/api/wallflower-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: { workOrderId: wo.id }, status: "estimated" }),
+      }).catch((err) => console.error("[wallflower-status] notify failed:", err));
 
       await logActivity({
         action: "created",

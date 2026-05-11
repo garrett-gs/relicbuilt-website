@@ -221,6 +221,19 @@ export default function ProjectsPage() {
   async function moveProject(id: string, newStatus: string) {
     await updateProject(id, { status: newStatus as CustomWork["status"] });
     await logActivity({ action: "updated", entity: "project", entity_id: id, label: `Moved project to ${newStatus}`, user_name: userEmail });
+    // Mirror the project's new status back to Wallflower. The route chains
+    // custom_work → estimate → wallflower_work_order and no-ops for projects
+    // that didn't originate from a Wallflower request, so this is safe to
+    // fire on every Kanban move.
+    fetch("/api/wallflower-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: { customWorkId: id },
+        status: newStatus,
+        completed: newStatus === "complete",
+      }),
+    }).catch((err) => console.error("[wallflower-status] notify failed:", err));
   }
 
   async function togglePortal(project: CustomWork) {

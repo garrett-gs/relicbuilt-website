@@ -248,6 +248,17 @@ export default function EstimatorPage() {
   async function updateEstimate(id: string, updates: Partial<Estimate>) {
     await axiom.from("estimates").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
 
+    // Mirror estimate status changes back to Wallflower. The route no-ops
+    // for estimates that aren't linked to a Wallflower work order, so this
+    // is safe to fire on every status update without checking origin here.
+    if (updates.status) {
+      fetch("/api/wallflower-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: { estimateId: id }, status: updates.status }),
+      }).catch((err) => console.error("[wallflower-status] notify failed:", err));
+    }
+
     // If the estimate was just marked "sent", advance any linked lead to "quoted"
     if (updates.status === "sent") {
       const { data: linkedLead } = await axiom.from("leads")
@@ -799,6 +810,14 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
       setProposalStatus("sent");
       setProposalSentAt(sentAt);
       if (status === "draft") setStatus("sent");
+
+      // Mirror "sent" back to Wallflower if this estimate came from one.
+      // No-op for non-Wallflower estimates.
+      fetch("/api/wallflower-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: { estimateId: estimate.id }, status: "sent" }),
+      }).catch((err) => console.error("[wallflower-status] notify failed:", err));
 
       // Email the proposal directly to the client with the PDF attached.
       // No more clipboard juggling — if there's no client email, we tell
@@ -2197,6 +2216,12 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
             await axiom.from("estimates").update({ custom_work_id: projectId, status: "accepted", updated_at: new Date().toISOString() }).eq("id", estimate.id);
             setStatus("accepted");
             setShowLoadQuote(false);
+            // Mirror "accepted" back to Wallflower if relevant.
+            fetch("/api/wallflower-status", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ source: { estimateId: estimate.id }, status: "accepted" }),
+            }).catch((err) => console.error("[wallflower-status] notify failed:", err));
           }}
         />
       )}

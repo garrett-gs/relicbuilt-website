@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
+import { notifyWallflowerStatus } from "@/lib/wallflower-status";
 
 interface EstimateLineItem { quantity?: number; unit_price?: number }
 interface EstimateLaborItem { cost?: number }
@@ -159,6 +160,11 @@ export async function POST(req: NextRequest) {
         marked_by: "axiom_user",
       },
     });
+
+    // Tell Wallflower the project is now in_progress. The helper no-ops
+    // for estimates that didn't originate from a Wallflower work order,
+    // so this is safe regardless of source.
+    await notifyWallflowerStatus(supabase, { estimateId: estimate_id }, "in_progress");
 
     return NextResponse.json({
       success: true,
