@@ -102,6 +102,41 @@ export async function POST(req: NextRequest) {
       ? new Date(estimate.proposal_expires_at).toISOString().split("T")[0]
       : today;
 
+    const projectLabel = estimate.project_name || estimate.estimate_number;
+
+    // For pay-in-full invoices, the client is paying the full price, so we
+    // mirror the proposal_cost_section items (the curated breakdown they
+    // signed) as line items. For deposit and balance invoices, a single
+    // descriptive line is clearer than pro-rating the breakdown.
+    const proposalCostItems = ((estimate.proposal_cost_section as { items?: { description?: string; cost?: number }[] } | undefined)?.items ?? [])
+      .filter((it) => it && (it.description || it.cost));
+
+    type InvoiceLineItem = { category: string; description: string; quantity: number; unit_price: number };
+
+    let depositLineItems: InvoiceLineItem[];
+    if (payInFull && proposalCostItems.length > 0) {
+      depositLineItems = proposalCostItems.map((it) => ({
+        category: "",
+        description: it.description || projectLabel,
+        quantity: 1,
+        unit_price: Number(it.cost) || 0,
+      }));
+    } else if (payInFull) {
+      depositLineItems = [{
+        category: "",
+        description: `Paid in Full — ${projectLabel}`,
+        quantity: 1,
+        unit_price: totalAmount,
+      }];
+    } else {
+      depositLineItems = [{
+        category: "",
+        description: `Deposit (${depositPct}%) — ${projectLabel}`,
+        quantity: 1,
+        unit_price: depositAmount,
+      }];
+    }
+
     const { data: depositInvoice, error: depErr } = await supabase
       .from("invoices")
       .insert({
@@ -111,8 +146,9 @@ export async function POST(req: NextRequest) {
         client_email: estimate.client_email || null,
         client_phone: estimate.client_phone || null,
         description: payInFull
-          ? `Paid in Full — ${estimate.project_name || estimate.estimate_number}`
-          : `Deposit — ${estimate.project_name || estimate.estimate_number}`,
+          ? `Paid in Full — ${projectLabel}`
+          : `Deposit — ${projectLabel}`,
+        line_items: depositLineItems,
         subtotal: depositAmount > 0 ? depositAmount : totalAmount,
         issued_date: today,
         due_date: depositDueDate,
@@ -128,13 +164,20 @@ export async function POST(req: NextRequest) {
     }
 
     if (balanceAmount > 0) {
+      const balanceLineItems: InvoiceLineItem[] = [{
+        category: "",
+        description: `Balance prior to delivery — ${projectLabel}`,
+        quantity: 1,
+        unit_price: balanceAmount,
+      }];
       await supabase.from("invoices").insert({
         invoice_number: finalInvoiceNum,
         estimate_id: estimate.id,
         client_name: estimate.client_name || "",
         client_email: estimate.client_email || null,
         client_phone: estimate.client_phone || null,
-        description: `Balance — ${estimate.project_name || estimate.estimate_number}`,
+        description: `Balance — ${projectLabel}`,
+        line_items: balanceLineItems,
         subtotal: balanceAmount,
         issued_date: today,
         tax_rate: 0,
