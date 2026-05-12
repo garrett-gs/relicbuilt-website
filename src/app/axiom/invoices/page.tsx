@@ -405,6 +405,16 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
         <div><label className={lbl}>Due Date</label><input type="date" value={inv.due_date || ""} onChange={(e) => mark({ due_date: e.target.value })} className={inp} /></div>
       </div>
       <div><label className={lbl}>Description / Project Name</label><input value={inv.description || ""} onChange={(e) => mark({ description: e.target.value })} className={inp} /></div>
+      <div>
+        <label className={lbl}>Payment Terms / Notes</label>
+        <textarea
+          value={inv.notes || ""}
+          onChange={(e) => mark({ notes: e.target.value })}
+          rows={2}
+          placeholder='e.g. "Deposit (50%) — Balance of $X due prior to delivery." or "Paid in Full."'
+          className={`${inp} resize-y min-h-[60px]`}
+        />
+      </div>
 
       {/* Line items */}
       <div>
@@ -749,6 +759,16 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
             </div>
           </div>
         </div>
+
+        {/* Payment Terms — invoice-specific notes (deposit/balance/paid-in-full).
+            Distinct from the global Terms below, which carries boilerplate
+            payment-and-policy language from Settings. */}
+        {invoice.notes && (
+          <div className="px-10 pb-2 pt-0 border-t border-gray-100 print:px-8">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2 mt-6">Payment Terms</p>
+            <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{invoice.notes}</p>
+          </div>
+        )}
 
         {/* Terms */}
         {biz.terms_text && (

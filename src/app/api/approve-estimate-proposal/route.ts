@@ -104,10 +104,11 @@ export async function POST(req: NextRequest) {
 
     const projectLabel = estimate.project_name || estimate.estimate_number;
 
-    // For pay-in-full invoices, the client is paying the full price, so we
-    // mirror the proposal_cost_section items (the curated breakdown they
-    // signed) as line items. For deposit and balance invoices, a single
-    // descriptive line is clearer than pro-rating the breakdown.
+    // Line items show the work being done (the project, or the
+    // proposal_cost_section breakdown). Payment terminology — "Paid in
+    // Full", "Deposit (50%)", "Balance prior to delivery" — lives in the
+    // notes field below, which the invoice renders as a "Payment Terms"
+    // block. Keeps the line items clean.
     const proposalCostItems = ((estimate.proposal_cost_section as { items?: { description?: string; cost?: number }[] } | undefined)?.items ?? [])
       .filter((it) => it && (it.description || it.cost));
 
@@ -115,27 +116,29 @@ export async function POST(req: NextRequest) {
 
     let depositLineItems: InvoiceLineItem[];
     if (payInFull && proposalCostItems.length > 0) {
+      // Pay-in-full: client is paying the full price, so mirror the
+      // curated cost-section breakdown they signed off on.
       depositLineItems = proposalCostItems.map((it) => ({
         category: "",
         description: it.description || projectLabel,
         quantity: 1,
         unit_price: Number(it.cost) || 0,
       }));
-    } else if (payInFull) {
-      depositLineItems = [{
-        category: "",
-        description: `Paid in Full — ${projectLabel}`,
-        quantity: 1,
-        unit_price: totalAmount,
-      }];
     } else {
+      // Deposit, balance, or pay-in-full without a breakdown:
+      // a single line naming the project. The amount equals what's owed
+      // on this particular invoice (deposit / balance / total).
       depositLineItems = [{
         category: "",
-        description: `Deposit (${depositPct}%) — ${projectLabel}`,
+        description: projectLabel,
         quantity: 1,
-        unit_price: depositAmount,
+        unit_price: payInFull ? totalAmount : depositAmount,
       }];
     }
+
+    const depositPaymentTerms = payInFull
+      ? "Paid in Full."
+      : `Deposit (${depositPct}%) — ${money(depositAmount)} of ${money(totalAmount)} total. Balance of ${money(balanceAmount)} due prior to delivery.`;
 
     const { data: depositInvoice, error: depErr } = await supabase
       .from("invoices")
@@ -145,15 +148,14 @@ export async function POST(req: NextRequest) {
         client_name: estimate.client_name || "",
         client_email: estimate.client_email || null,
         client_phone: estimate.client_phone || null,
-        description: payInFull
-          ? `Paid in Full — ${projectLabel}`
-          : `Deposit — ${projectLabel}`,
+        description: projectLabel,
         line_items: depositLineItems,
         subtotal: depositAmount > 0 ? depositAmount : totalAmount,
         issued_date: today,
         due_date: depositDueDate,
         tax_rate: 0,
         status: "unpaid",
+        notes: depositPaymentTerms,
         invoice_type: payInFull ? "full" : "deposit",
       })
       .select()
@@ -166,7 +168,7 @@ export async function POST(req: NextRequest) {
     if (balanceAmount > 0) {
       const balanceLineItems: InvoiceLineItem[] = [{
         category: "",
-        description: `Balance prior to delivery — ${projectLabel}`,
+        description: projectLabel,
         quantity: 1,
         unit_price: balanceAmount,
       }];
@@ -176,12 +178,13 @@ export async function POST(req: NextRequest) {
         client_name: estimate.client_name || "",
         client_email: estimate.client_email || null,
         client_phone: estimate.client_phone || null,
-        description: `Balance — ${projectLabel}`,
+        description: projectLabel,
         line_items: balanceLineItems,
         subtotal: balanceAmount,
         issued_date: today,
         tax_rate: 0,
         status: "unpaid",
+        notes: `Final balance, due prior to delivery. ${money(depositAmount)} deposit (${depositPct}%) was billed separately on a prior invoice.`,
         invoice_type: "final",
       });
     }

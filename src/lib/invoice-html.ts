@@ -137,9 +137,16 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
     </table>
   </div>
 
+  <!-- Payment Terms — per-invoice notes (deposit / balance / paid in full) -->
+  ${inv.notes ? `
+  <div style="margin-top:28px;padding-top:16px;border-top:1px solid #eee;">
+    <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Payment Terms</p>
+    <p style="margin:0;font-size:12px;color:#444;white-space:pre-wrap;line-height:1.7;">${esc(inv.notes)}</p>
+  </div>` : ""}
+
   <!-- Terms -->
   ${terms ? `
-  <div style="margin-top:28px;padding-top:16px;border-top:1px solid #eee;">
+  <div style="margin-top:${inv.notes ? "16" : "28"}px;padding-top:16px;border-top:1px solid #eee;">
     <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Terms</p>
     <p style="margin:0;font-size:12px;color:#888;white-space:pre-wrap;line-height:1.7;">${esc(terms)}</p>
   </div>` : ""}
