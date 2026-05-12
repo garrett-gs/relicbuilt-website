@@ -10,6 +10,7 @@ import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import ImageUpload from "@/components/ui/ImageUpload";
 import { cn, formatPhone, formatDueDate, suggestStartDate } from "@/lib/utils";
+import { resolveClientEmail } from "@/lib/resolve-email";
 import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { useRouter } from "next/navigation";
@@ -2304,6 +2305,21 @@ function ProposalPreview({ project, onClose, userEmail }: {
       .then(({ data }) => setBiz(data || {}));
   }, []);
 
+  // Fall back to the linked customer's email when the project itself
+  // doesn't carry one cached. Saves Garrett from typing it in.
+  useEffect(() => {
+    if (sendTo) return;
+    let cancelled = false;
+    resolveClientEmail(axiom, {
+      client_email: project.client_email,
+      customer_id: project.customer_id,
+    }).then((email) => {
+      if (!cancelled && email) setSendTo(email);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
+
   const quotedAmount = project.quoted_amount || 0;
   const proposalScope = project.proposal_scope?.included !== false ? (project.proposal_scope?.body || "") : "";
   const costSection = project.proposal_cost_section?.included !== false ? project.proposal_cost_section : null;
@@ -2402,7 +2418,14 @@ function ProposalPreview({ project, onClose, userEmail }: {
         )}
         {!showEmailForm && (
           <button
-            onClick={() => { setShowEmailForm(true); setSendResult(null); setSendTo(project.client_email || ""); }}
+            onClick={() => {
+              setShowEmailForm(true);
+              setSendResult(null);
+              // Only reset to project.client_email if we don't already have
+              // a resolved value (from the linked customer). Otherwise we'd
+              // clobber the auto-populated email on every form re-open.
+              if (!sendTo) setSendTo(project.client_email || "");
+            }}
             className="flex items-center gap-1.5 border border-gray-300 px-3 py-1.5 text-sm rounded hover:bg-gray-50"
           >
             <Send size={14} /> Email

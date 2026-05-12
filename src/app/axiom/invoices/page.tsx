@@ -8,6 +8,7 @@ import { Invoice, InvoiceLineItem, Payment, Settings } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn, formatPhone } from "@/lib/utils";
+import { resolveClientEmail } from "@/lib/resolve-email";
 import { Plus, X, Trash2, Printer, DollarSign, Send, CheckCircle, Eye, Search, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useRef } from "react";
@@ -582,6 +583,23 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
     axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text").limit(1).single()
       .then(({ data }) => setBizSettings(data || {}));
   }, []);
+
+  // If the invoice doesn't carry its own client_email, walk the linked
+  // estimate/project/customer chain so the Send-to field is pre-populated
+  // without the user having to type it.
+  useEffect(() => {
+    if (sendTo) return;
+    let cancelled = false;
+    resolveClientEmail(axiom, {
+      client_email: invoice.client_email,
+      estimate_id: (invoice as Invoice & { estimate_id?: string }).estimate_id,
+      custom_work_id: invoice.custom_work_id,
+    }).then((email) => {
+      if (!cancelled && email) setSendTo(email);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invoice.id]);
 
   const lineItems = invoice.line_items || [];
   const subtotal = lineItems.length > 0
