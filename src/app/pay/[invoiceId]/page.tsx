@@ -21,8 +21,13 @@ function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
 }
 
-function calcFee(total: number) {
+// Mirror the merchant's actual Stripe fees so the customer-paid fee
+// matches the method they pick. Kept in sync with /api/pay-invoice.
+function calcCardFee(total: number) {
   return Math.round(total * 0.029 * 100 + 30) / 100;
+}
+function calcAchFee(total: number) {
+  return Math.min(Math.round(total * 0.008 * 100), 500) / 100; // 0.8%, cap $5
 }
 
 export default function PayInvoicePage() {
@@ -33,6 +38,7 @@ export default function PayInvoicePage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [alreadyPaid, setAlreadyPaid] = useState(false);
+  const [method, setMethod] = useState<"card" | "ach">("card");
   const [feeAgreed, setFeeAgreed] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,8 +68,17 @@ export default function PayInvoicePage() {
   const invoiceTotal = invoice
     ? invoice.subtotal + invoice.delivery_fee - invoice.discount + (invoice.subtotal * invoice.tax_rate) / 100
     : 0;
-  const fee = calcFee(invoiceTotal);
+  const cardFee = calcCardFee(invoiceTotal);
+  const achFee = calcAchFee(invoiceTotal);
+  const fee = method === "ach" ? achFee : cardFee;
   const totalCharged = invoiceTotal + fee;
+
+  // Switching methods invalidates the previous "I agree to pay $X" tick —
+  // they're agreeing to a different amount now.
+  function pickMethod(next: "card" | "ach") {
+    setMethod(next);
+    setFeeAgreed(false);
+  }
 
   async function handlePay() {
     if (!feeAgreed || redirecting) return;
@@ -73,7 +88,7 @@ export default function PayInvoicePage() {
       const res = await fetch("/api/pay-invoice", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ invoiceId }),
+        body: JSON.stringify({ invoiceId, method }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) {
@@ -228,14 +243,54 @@ export default function PayInvoicePage() {
 
           {/* Payment Section */}
           <div style={{ marginBottom: 20 }}>
-            <p style={{ fontSize: 14, fontWeight: 700, color: "#111", margin: "0 0 6px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              Pay by Card or ACH
+            <p style={{ fontSize: 14, fontWeight: 700, color: "#111", margin: "0 0 12px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Choose Payment Method
             </p>
-            <p style={{ fontSize: 12, color: "#888", margin: "0 0 14px", lineHeight: 1.5 }}>
-              You&apos;ll choose your payment method (credit/debit card or US bank ACH)
-              on the next screen. ACH transfers take 3–5 business days to clear; card
-              payments are immediate.
-            </p>
+
+            {/* Method Picker — two side-by-side cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
+              <button
+                type="button"
+                onClick={() => pickMethod("card")}
+                style={{
+                  textAlign: "left",
+                  background: method === "card" ? "#fdf6e3" : "#fff",
+                  border: method === "card" ? "2px solid #c4a24d" : "1px solid #e5e0d8",
+                  padding: "14px 16px",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 700, color: "#111" }}>Card</p>
+                <p style={{ margin: "0 0 6px", fontSize: 11, color: "#888", lineHeight: 1.5 }}>
+                  Credit or debit. Pays immediately.
+                </p>
+                <p style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: "#c4a24d", fontWeight: 700 }}>
+                  +{money(cardFee)} fee
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => pickMethod("ach")}
+                style={{
+                  textAlign: "left",
+                  background: method === "ach" ? "#fdf6e3" : "#fff",
+                  border: method === "ach" ? "2px solid #c4a24d" : "1px solid #e5e0d8",
+                  padding: "14px 16px",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 700, color: "#111" }}>ACH (Bank)</p>
+                <p style={{ margin: "0 0 6px", fontSize: 11, color: "#888", lineHeight: 1.5 }}>
+                  US bank transfer. 3–5 business days.
+                </p>
+                <p style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: "#c4a24d", fontWeight: 700 }}>
+                  +{money(achFee)} fee
+                  {achFee >= 5 && <span style={{ color: "#888", fontWeight: 400, marginLeft: 4 }}>(capped)</span>}
+                </p>
+              </button>
+            </div>
 
             {/* Fee Breakdown */}
             <div style={{
@@ -249,7 +304,11 @@ export default function PayInvoicePage() {
                 <span style={{ fontFamily: "monospace" }}>{money(invoiceTotal)}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, color: "#888", fontSize: 13 }}>
-                <span>Processing fee (2.9% + $0.30 if card)</span>
+                <span>
+                  {method === "ach"
+                    ? "Processing fee (0.8%, max $5 — ACH)"
+                    : "Processing fee (2.9% + $0.30 — Card)"}
+                </span>
                 <span style={{ fontFamily: "monospace" }}>{money(fee)}</span>
               </div>
               <div style={{
@@ -275,7 +334,7 @@ export default function PayInvoicePage() {
                 style={{ marginTop: 2, width: 16, height: 16, accentColor: "#c4a24d", flexShrink: 0, cursor: "pointer" }}
               />
               <span style={{ fontSize: 13, color: "#555", lineHeight: "1.5" }}>
-                I agree to pay the card processing fee of{" "}
+                I agree to pay the {method === "ach" ? "ACH" : "card"} processing fee of{" "}
                 <strong style={{ color: "#111" }}>{money(fee)}</strong>
               </span>
             </label>
