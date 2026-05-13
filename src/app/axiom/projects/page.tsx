@@ -27,6 +27,10 @@ const STATUS_COLUMNS = [
   { key: "complete", label: "Complete", color: "#22c55e" },
 ] as const;
 
+// Active Kanban only shows in-flight projects. Completed ones live on
+// the Archive tab so the board stays focused on what still needs work.
+const ACTIVE_STATUS_COLUMNS = STATUS_COLUMNS.filter((c) => c.key !== "complete");
+
 const BUDGET_RANGES = [
   "Under $500", "$500 - $1,000", "$1,000 - $2,500", "$2,500 - $5,000",
   "$5,000 - $10,000", "$10,000 - $25,000", "$25,000+",
@@ -171,6 +175,7 @@ export default function ProjectsPage() {
   const [showProposal, setShowProposal] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [projectsTab, setProjectsTab] = useState<"active" | "archive">("active");
 
   const load = useCallback(async () => {
     const { data } = await axiom.from("custom_work").select("*").order("created_at", { ascending: false });
@@ -293,81 +298,149 @@ export default function ProjectsPage() {
     if (w) { w.document.write(html); w.document.close(); }
   }
 
+  const activeProjects = projects.filter((p) => p.status !== "complete");
+  const archivedProjects = projects.filter((p) => p.status === "complete");
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-heading font-bold">Projects</h1>
-          <p className="text-muted text-sm mt-1">{projects.length} projects</p>
+          <p className="text-muted text-sm mt-1">{activeProjects.length} active</p>
         </div>
         <Button onClick={() => setShowCreate(true)} size="sm">
           <Plus size={14} className="mr-1" /> New Project
         </Button>
       </div>
 
-      {/* Kanban */}
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {STATUS_COLUMNS.map((col) => {
-          const colProjects = projects
-            .filter((p) => p.status === col.key)
-            .sort((a, b) => {
-              const aDue = a.due_date || "";
-              const bDue = b.due_date || "";
-              if (!aDue && !bDue) return 0;
-              if (!aDue) return 1;
-              if (!bDue) return -1;
-              return aDue.localeCompare(bDue);
-            });
-          return (
-            <div
-              key={col.key}
-              className={cn(
-                "flex-shrink-0 w-64 bg-card border border-border rounded p-3 min-h-[300px]",
-                dragOver === col.key && "border-accent"
-              )}
-              onDragOver={(e) => { e.preventDefault(); setDragOver(col.key); }}
-              onDragLeave={() => setDragOver(null)}
-              onDrop={() => {
-                if (dragging) moveProject(dragging, col.key);
-                setDragging(null);
-                setDragOver(null);
-              }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <span className="w-2 h-2 rounded-full" style={{ background: col.color }} />
-                <span className="text-xs uppercase tracking-wider text-muted font-medium">{col.label}</span>
-                <span className="text-xs text-muted ml-auto">{colProjects.length}</span>
-              </div>
-              <div className="space-y-2">
-                {colProjects.map((p) => (
-                  <div
-                    key={p.id}
-                    draggable
-                    onDragStart={() => setDragging(p.id)}
-                    onClick={() => setSelected(p)}
-                    className="bg-background border border-border p-3 cursor-pointer hover:border-accent/50 transition-colors text-sm"
-                  >
-                    <p className="font-medium mb-1 truncate">{p.project_name}</p>
-                    <p className="text-muted text-xs truncate">{p.client_name}</p>
-                    {p.company_name && <p className="text-muted text-xs truncate italic">{p.company_name}</p>}
-                    {p.due_date && (() => {
-                      const due = formatDueDate(p.due_date);
-                      return (
-                        <p className={`text-xs mt-0.5 ${due.soon ? "text-orange-400 font-medium" : "text-muted"}`}>
-                          Due: {due.text}
-                        </p>
-                      );
-                    })()}
-                    {p.quoted_amount > 0 && (
-                      <p className="text-accent text-xs mt-1 font-mono">{money(p.quoted_amount)}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+      {/* Active / Archive tabs */}
+      <div className="flex border-b border-border mb-4 text-xs uppercase tracking-wider">
+        <button
+          onClick={() => setProjectsTab("active")}
+          className={cn(
+            "px-4 py-2 transition-colors",
+            projectsTab === "active" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
+          )}
+        >
+          Active <span className="text-muted ml-1">({activeProjects.length})</span>
+        </button>
+        <button
+          onClick={() => setProjectsTab("archive")}
+          className={cn(
+            "px-4 py-2 transition-colors",
+            projectsTab === "archive" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
+          )}
+        >
+          Archive <span className="text-muted ml-1">({archivedProjects.length})</span>
+        </button>
       </div>
+
+      {/* Active Kanban — drops the Complete column. Dragging onto the
+          Archive tab isn't supported (no drop target there); marking a
+          project complete still happens from the detail panel's status
+          dropdown, or by moving the column in code if we add one later. */}
+      {projectsTab === "active" && (
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {ACTIVE_STATUS_COLUMNS.map((col) => {
+            const colProjects = activeProjects
+              .filter((p) => p.status === col.key)
+              .sort((a, b) => {
+                const aDue = a.due_date || "";
+                const bDue = b.due_date || "";
+                if (!aDue && !bDue) return 0;
+                if (!aDue) return 1;
+                if (!bDue) return -1;
+                return aDue.localeCompare(bDue);
+              });
+            return (
+              <div
+                key={col.key}
+                className={cn(
+                  "flex-shrink-0 w-64 bg-card border border-border rounded p-3 min-h-[300px]",
+                  dragOver === col.key && "border-accent"
+                )}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(col.key); }}
+                onDragLeave={() => setDragOver(null)}
+                onDrop={() => {
+                  if (dragging) moveProject(dragging, col.key);
+                  setDragging(null);
+                  setDragOver(null);
+                }}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="w-2 h-2 rounded-full" style={{ background: col.color }} />
+                  <span className="text-xs uppercase tracking-wider text-muted font-medium">{col.label}</span>
+                  <span className="text-xs text-muted ml-auto">{colProjects.length}</span>
+                </div>
+                <div className="space-y-2">
+                  {colProjects.map((p) => (
+                    <div
+                      key={p.id}
+                      draggable
+                      onDragStart={() => setDragging(p.id)}
+                      onClick={() => setSelected(p)}
+                      className="bg-background border border-border p-3 cursor-pointer hover:border-accent/50 transition-colors text-sm"
+                    >
+                      <p className="font-medium mb-1 truncate">{p.project_name}</p>
+                      <p className="text-muted text-xs truncate">{p.client_name}</p>
+                      {p.company_name && <p className="text-muted text-xs truncate italic">{p.company_name}</p>}
+                      {p.due_date && (() => {
+                        const due = formatDueDate(p.due_date);
+                        return (
+                          <p className={`text-xs mt-0.5 ${due.soon ? "text-orange-400 font-medium" : "text-muted"}`}>
+                            Due: {due.text}
+                          </p>
+                        );
+                      })()}
+                      {p.quoted_amount > 0 && (
+                        <p className="text-accent text-xs mt-1 font-mono">{money(p.quoted_amount)}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Archive list — completed projects, most recent first. Click any
+          row to reopen the detail panel; moving them back to an active
+          status (via the status dropdown in the panel) returns them to
+          the Kanban. */}
+      {projectsTab === "archive" && (
+        <div className="bg-card border border-border rounded">
+          {archivedProjects.length === 0 ? (
+            <p className="text-muted text-sm p-6">No archived projects yet.</p>
+          ) : (
+            <div className="divide-y divide-border">
+              {archivedProjects
+                .slice()
+                .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))
+                .map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setSelected(p)}
+                    className="w-full text-left px-4 py-3 hover:bg-background/40 transition-colors flex items-center gap-3"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{p.project_name}</p>
+                      <p className="text-xs text-muted mt-0.5 truncate">
+                        {p.client_name || "—"}
+                        {p.company_name && <span className="italic"> · {p.company_name}</span>}
+                        {p.due_date && <> · due {formatDueDate(p.due_date).text}</>}
+                      </p>
+                    </div>
+                    {p.quoted_amount > 0 && (
+                      <span className="text-accent text-xs font-mono shrink-0">{money(p.quoted_amount)}</span>
+                    )}
+                  </button>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Create modal */}
       {showCreate && (
