@@ -112,6 +112,16 @@ export default function ProposalPage() {
       }
       setResult(data as ApprovalResult);
       setSubmitting(false);
+      // Pull the client straight into the payment flow while the moment
+      // is hot. We pause briefly so they see the "Signed!" confirmation
+      // first; the manual "Pay Deposit Now" button on the same screen is
+      // the fallback if the auto-redirect is blocked or the user wants
+      // to read the deposit summary before paying.
+      if (data?.deposit_invoice_id) {
+        setTimeout(() => {
+          window.location.href = `/pay/${data.deposit_invoice_id}`;
+        }, 1800);
+      }
     } catch {
       setError("Network error. Please try again.");
       setSubmitting(false);
@@ -204,9 +214,11 @@ export default function ProposalPage() {
               >
                 Pay Deposit Now → Card or ACH
               </a>
-              <p style={{ margin: "0 0 24px", color: "#888", fontSize: 11, textAlign: "center", lineHeight: 1.5 }}>
-                Choose card (instant, 2.9% + $0.30 fee) or ACH bank transfer (3–5 days, lower fee)
-                on the next screen. We&apos;ve also emailed you the payment link.
+              <p style={{ margin: "0 0 8px", color: "#666", fontSize: 12, textAlign: "center", lineHeight: 1.5 }}>
+                Taking you to payment in a moment…
+              </p>
+              <p style={{ margin: "0 0 24px", color: "#aaa", fontSize: 11, textAlign: "center", lineHeight: 1.5 }}>
+                Pay by card (instant, 2.9% + $0.30) or ACH bank transfer (3–5 days, max $5 fee).
               </p>
             </>
           )}
