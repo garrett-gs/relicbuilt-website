@@ -2,7 +2,6 @@
 
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { axiom } from "@/lib/axiom-supabase";
 
 interface Invoice {
   id: string;
@@ -45,23 +44,33 @@ export default function PayInvoicePage() {
 
   useEffect(() => {
     if (!invoiceId) return;
-    axiom
-      .from("invoices")
-      .select("id,invoice_number,client_name,client_email,description,subtotal,delivery_fee,discount,tax_rate,status")
-      .eq("id", invoiceId)
-      .single()
-      .then(({ data, error: err }) => {
+    // Route through the server-side public-invoice endpoint. The
+    // invoices table is RLS-locked to authenticated users only, so the
+    // browser's anon SDK can't read it directly — this is what was
+    // causing the "Invoice not found" message for clients trying to pay.
+    fetch(`/api/public-invoice/${invoiceId}`)
+      .then(async (res) => {
         setLoading(false);
-        if (err || !data) {
+        if (!res.ok) {
+          setNotFound(true);
+          return;
+        }
+        const body = await res.json();
+        const data = body?.invoice as Invoice | undefined;
+        if (!data) {
           setNotFound(true);
           return;
         }
         if (data.status === "paid") {
           setAlreadyPaid(true);
-          setInvoice(data as Invoice);
+          setInvoice(data);
           return;
         }
-        setInvoice(data as Invoice);
+        setInvoice(data);
+      })
+      .catch(() => {
+        setLoading(false);
+        setNotFound(true);
       });
   }, [invoiceId]);
 
