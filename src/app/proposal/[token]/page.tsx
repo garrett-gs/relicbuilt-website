@@ -45,6 +45,10 @@ export default function ProposalPage() {
   const [alreadyApproved, setAlreadyApproved] = useState(false);
   const [expired, setExpired] = useState(false);
   const [clientCompany, setClientCompany] = useState<string>("");
+  // Populated by /api/proposal-context when the estimate is already
+  // approved, so we can offer the returning customer a way to pay (or
+  // tell them the deposit is paid).
+  const [depositInvoice, setDepositInvoice] = useState<{ id: string; invoice_number: string; status: string; invoice_type: string | null } | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -78,6 +82,7 @@ export default function ProposalPage() {
         }
         if (data.settings) setSettings(data.settings as Settings);
         if (data.clientCompany) setClientCompany(data.clientCompany);
+        if (data.depositInvoice) setDepositInvoice(data.depositInvoice);
         setLoading(false);
       })
       .catch(() => {
@@ -259,14 +264,82 @@ export default function ProposalPage() {
   }
 
   // ── Already approved ─────────────────────────────────────────────────
+  // Keep the proposal content visible so the customer always has access
+  // to what they signed. A signed-on banner replaces the acceptance form;
+  // if there's still an unpaid deposit, surface a Pay Deposit Now button.
   if (alreadyApproved) {
+    const totals = calcTotals(estimate);
+    const approvedAt = estimate.proposal_approved_at
+      ? new Date(estimate.proposal_approved_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+      : "";
+    const depositPaid = depositInvoice?.status === "paid";
+
     return (
-      <div style={{ minHeight: "100vh", background: "#f5f5f5", padding: "48px 16px", fontFamily: "Arial,Helvetica,sans-serif" }}>
-        <div style={{ maxWidth: 600, margin: "0 auto", background: "#fff", padding: 48, textAlign: "center" }}>
-          <h1 style={{ margin: "0 0 12px", fontSize: 24, color: "#111" }}>Proposal Already Approved</h1>
-          <p style={{ margin: 0, color: "#666", fontSize: 14, lineHeight: 1.6 }}>
-            This proposal for <strong>{estimate.project_name}</strong> has already been approved.
-            If you have questions, please contact us.
+      <div style={{ minHeight: "100vh", background: "#f5f5f5", padding: "32px 16px", fontFamily: "Arial,Helvetica,sans-serif" }}>
+        {/* Proposal body — same as the unsigned view, kept available for reference */}
+        <div
+          style={{ maxWidth: 760, margin: "0 auto", background: "#fff" }}
+          dangerouslySetInnerHTML={{
+            __html: generateEstimateProposalHtml({
+              estimate,
+              biz: settings || {},
+              totals,
+              clientCompany: clientCompany || undefined,
+            }),
+          }}
+        />
+
+        {/* Signed banner — sits where the acceptance form used to */}
+        <div style={{ maxWidth: 760, margin: "0 auto", background: "#fff", padding: 48, borderTop: "3px solid #22c55e" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: "50%",
+              background: "#dcfce7", color: "#15803d",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 20, fontWeight: 700, flexShrink: 0,
+            }}>✓</div>
+            <h2 style={{ margin: 0, fontSize: 18, color: "#15803d" }}>
+              This proposal is signed{approvedAt ? ` (${approvedAt})` : ""}.
+            </h2>
+          </div>
+          <p style={{ margin: "0 0 24px", color: "#555", fontSize: 14, lineHeight: 1.6 }}>
+            Keep this page bookmarked for your records. The full proposal stays accessible
+            here so you can refer back to it any time.
+          </p>
+
+          {depositInvoice && !depositPaid && (
+            <>
+              <a
+                href={`/pay/${depositInvoice.id}`}
+                style={{
+                  display: "block",
+                  background: "#c4a24d",
+                  color: "#0a0a0a",
+                  padding: "16px 24px",
+                  textDecoration: "none",
+                  fontSize: 15,
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  textAlign: "center",
+                  marginBottom: 10,
+                }}
+              >
+                {depositInvoice.invoice_type === "full" ? "Pay Now → Card or ACH" : "Pay Deposit Now → Card or ACH"}
+              </a>
+              <p style={{ margin: "0 0 16px", color: "#888", fontSize: 12, textAlign: "center" }}>
+                Invoice #{depositInvoice.invoice_number}
+              </p>
+            </>
+          )}
+          {depositInvoice && depositPaid && (
+            <p style={{ margin: "0 0 16px", padding: "12px 16px", background: "#dcfce7", border: "1px solid #86efac", color: "#15803d", fontSize: 13, fontWeight: 600, textAlign: "center" }}>
+              ✓ {depositInvoice.invoice_type === "full" ? "Paid in full" : "Deposit received"} — Invoice #{depositInvoice.invoice_number}
+            </p>
+          )}
+
+          <p style={{ margin: "20px 0 0", textAlign: "center", color: "#999", fontSize: 11 }}>
+            {settings?.biz_name || "RELIC"} · {settings?.biz_phone || ""}
           </p>
         </div>
       </div>

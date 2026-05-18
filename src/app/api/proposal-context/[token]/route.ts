@@ -64,7 +64,31 @@ export async function GET(
       .limit(1)
       .single();
 
-    return NextResponse.json({ estimate, settings: settings || null, clientCompany });
+    // If the proposal has already been signed, also fetch the deposit/full
+    // invoice tied to this estimate so the public page can offer a "Pay
+    // Deposit Now" button on the post-sign view. Customers who come back
+    // later need a way to find their invoice without digging through email.
+    let depositInvoice: { id: string; invoice_number: string; status: string; invoice_type: string | null } | null = null;
+    if (estimate.proposal_status === "approved") {
+      const { data: inv } = await supabase
+        .from("invoices")
+        .select("id, invoice_number, status, invoice_type, created_at")
+        .eq("estimate_id", estimate.id)
+        .in("invoice_type", ["deposit", "full"])
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (inv) {
+        depositInvoice = {
+          id: inv.id,
+          invoice_number: inv.invoice_number,
+          status: inv.status,
+          invoice_type: inv.invoice_type,
+        };
+      }
+    }
+
+    return NextResponse.json({ estimate, settings: settings || null, clientCompany, depositInvoice });
   } catch (err) {
     console.error("[proposal-context] error:", err);
     return NextResponse.json({ estimate: null, settings: null, clientCompany: null });
