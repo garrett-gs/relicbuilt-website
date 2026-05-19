@@ -5,6 +5,7 @@ import { axiom } from "@/lib/axiom-supabase";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { logActivity } from "@/lib/activity";
 import { InventoryCategory, InventoryItem, InventoryTransaction } from "@/types/axiom";
+import { cn } from "@/lib/utils";
 import {
   Search,
   Plus,
@@ -156,6 +157,10 @@ function InventoryTab({
 }) {
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState<string>("all");
+  // "Drift" = items where on-hand has gone negative because allocations
+  // outpaced received quantity. Surfaces the loose items (paint, etc.)
+  // that need a physical count to reconcile.
+  const [driftOnly, setDriftOnly] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [showScan, setShowScan] = useState(false);
   const [txnModal, setTxnModal] = useState<{ item: InventoryItem; type: "in" | "out" } | null>(null);
@@ -165,7 +170,8 @@ function InventoryTab({
     const q = search.toLowerCase();
     const matchSearch = !q || it.description.toLowerCase().includes(q) || (it.item_number ?? "").toLowerCase().includes(q);
     const matchCat = catFilter === "all" || it.category_id === catFilter;
-    return matchSearch && matchCat;
+    const matchDrift = !driftOnly || it.quantity_on_hand < 0;
+    return matchSearch && matchCat && matchDrift;
   });
 
   // Group by category
@@ -180,6 +186,7 @@ function InventoryTab({
   const uncategorized = filtered.filter((it) => !it.category_id);
 
   const lowStock = items.filter((it) => it.min_stock_level > 0 && it.quantity_on_hand <= it.min_stock_level);
+  const driftItems = items.filter((it) => it.quantity_on_hand < 0);
   const totalValue = items.reduce((s, it) => s + it.quantity_on_hand * it.unit_cost, 0);
 
   function printTakeSheet() {
@@ -335,6 +342,19 @@ function InventoryTab({
           <p className="text-xs text-muted uppercase tracking-wider">Low Stock</p>
           <p className={`text-2xl font-bold mt-1 ${lowStock.length > 0 ? "text-red-400" : "text-foreground"}`}>{lowStock.length}</p>
         </div>
+        {/* Click to filter the table down to just drift items — the loose
+            ones (paint, etc.) that need a physical count to reconcile. */}
+        <button
+          onClick={() => setDriftOnly((v) => !v)}
+          className={cn(
+            "bg-card border p-4 text-left transition-colors",
+            driftOnly ? "border-amber-400" : "border-border hover:border-amber-400/50"
+          )}
+          title="Items where on-hand has gone negative — click to filter the list to these"
+        >
+          <p className="text-xs text-muted uppercase tracking-wider">Drift</p>
+          <p className={`text-2xl font-bold mt-1 ${driftItems.length > 0 ? "text-amber-400" : "text-foreground"}`}>{driftItems.length}</p>
+        </button>
         <div className="bg-card border border-border p-4">
           <p className="text-xs text-muted uppercase tracking-wider">Total Value</p>
           <p className="text-2xl font-bold text-foreground mt-1">{money(totalValue)}</p>
