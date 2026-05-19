@@ -975,13 +975,16 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   }, [userEmail]);
 
   // ── Inventory search ──
+  // We deliberately do NOT filter by quantity_on_hand. Inventory is a cost-
+  // tracking tool (weighted average from POs feeds into unit_cost), not a
+  // stock-control system — anything in the catalog can be allocated to a
+  // project regardless of on-hand quantity.
   async function searchInventory(q: string) {
     setInvSearch(q);
     if (q.trim().length < 2) { setInvResults([]); return; }
     const { data } = await axiom.from("inventory_items")
       .select("*")
       .eq("active", true)
-      .gt("quantity_on_hand", 0)
       .ilike("description", `%${q.trim()}%`)
       .order("description")
       .limit(20);
@@ -989,10 +992,14 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   }
 
   // ── Allocate from inventory ──
+  // No stock-availability cap. We still decrement quantity_on_hand and log
+  // a transaction so on-hand stays a useful (signed) number for reporting,
+  // and so the weighted-average-cost math on the next PO receipt remains
+  // correct — but going negative is allowed.
   async function allocateFromInventory() {
     if (!allocItem || !allocQty) return;
     const q = Number(allocQty);
-    if (q <= 0 || q > allocItem.quantity_on_hand) return;
+    if (q <= 0) return;
     setAllocSaving(true);
 
     const allocationCost = Math.round(q * allocItem.unit_cost * 100) / 100;
@@ -1598,15 +1605,16 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                             <span className="text-xs text-muted">{money(item.unit_cost)}/{item.unit}</span>
                           </div>
                           <div className="text-xs text-muted mt-0.5">
-                            In stock: <strong className="text-foreground">{item.quantity_on_hand} {item.unit}</strong>
-                            {item.location && <span className="ml-2">@ {item.location}</span>}
+                            Avg cost: <strong className="text-foreground">{money(item.unit_cost)}/{item.unit}</strong>
+                            <span className="ml-2 opacity-70">On hand: {item.quantity_on_hand} {item.unit}</span>
+                            {item.location && <span className="ml-2 opacity-70">@ {item.location}</span>}
                           </div>
                         </button>
                       ))}
                     </div>
                   )}
                   {invSearch.length >= 2 && invResults.length === 0 && (
-                    <p className="text-muted text-sm text-center py-4">No items found with stock available</p>
+                    <p className="text-muted text-sm text-center py-4">No items match.</p>
                   )}
                 </>
               ) : (
@@ -1615,7 +1623,10 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                     <Package size={18} className="text-accent shrink-0" />
                     <div>
                       <p className="text-sm font-medium text-foreground">{allocItem.description}</p>
-                      <p className="text-xs text-muted">Available: <strong>{allocItem.quantity_on_hand} {allocItem.unit}</strong> · {money(allocItem.unit_cost)}/{allocItem.unit}</p>
+                      <p className="text-xs text-muted">
+                        Avg cost: <strong>{money(allocItem.unit_cost)}/{allocItem.unit}</strong>
+                        <span className="ml-2 opacity-70">On hand: {allocItem.quantity_on_hand} {allocItem.unit}</span>
+                      </p>
                     </div>
                   </div>
                   <div>
@@ -1624,14 +1635,19 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                       type="number"
                       value={allocQty}
                       onChange={(e) => setAllocQty(e.target.value)}
-                      min={1}
-                      max={allocItem.quantity_on_hand}
+                      min={0}
+                      step="any"
                       className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
                       autoFocus
                     />
                     {Number(allocQty) > 0 && (
                       <p className="text-xs text-muted mt-1">
                         Cost: <strong className="text-foreground">{money(Number(allocQty) * allocItem.unit_cost)}</strong>
+                        {Number(allocQty) > allocItem.quantity_on_hand && (
+                          <span className="ml-2 text-amber-400">
+                            (exceeds on-hand by {Number(allocQty) - allocItem.quantity_on_hand} {allocItem.unit} — on-hand will go negative)
+                          </span>
+                        )}
                       </p>
                     )}
                   </div>
@@ -1639,7 +1655,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                     <button onClick={() => { setAllocItem(null); setAllocQty(""); }} className="flex-1 px-4 py-2 border border-border text-sm text-muted hover:text-foreground">Back</button>
                     <button
                       onClick={allocateFromInventory}
-                      disabled={allocSaving || Number(allocQty) <= 0 || Number(allocQty) > allocItem.quantity_on_hand}
+                      disabled={allocSaving || Number(allocQty) <= 0}
                       className="flex-1 px-4 py-2 bg-accent text-background text-sm font-medium disabled:opacity-50"
                     >
                       {allocSaving ? "Allocating…" : "Allocate"}
