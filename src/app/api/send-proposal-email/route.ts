@@ -88,6 +88,7 @@ export async function POST(req: NextRequest) {
 
     // ── Render the proposal as a PDF for the email attachment ────────
     let pdfBase64 = "";
+    let pdfError: string | null = null;
     let pdfFilename = `Proposal-${(estimate.estimate_number || "RELIC").replace(/[^A-Za-z0-9-]/g, "")}.pdf`;
     try {
       // Look up linked company so the proposal shows "[Client] of [Company]"
@@ -119,8 +120,10 @@ export async function POST(req: NextRequest) {
       pdfBase64 = pdfBuffer.toString("base64");
       pdfFilename = `${(estimate.project_name || estimate.estimate_number || "Proposal").replace(/[^A-Za-z0-9 -]/g, "").trim() || "Proposal"}.pdf`;
     } catch (pdfErr) {
-      console.error("[send-proposal-email] PDF render failed:", pdfErr);
-      // Non-fatal — fall back to email-without-attachment
+      pdfError = pdfErr instanceof Error ? `${pdfErr.name}: ${pdfErr.message}` : String(pdfErr);
+      console.error("[send-proposal-email] PDF render failed:", pdfError, pdfErr);
+      // Non-fatal — fall back to email-without-attachment, but the
+      // response below surfaces this so the UI can warn the merchant.
     }
 
     const html = `
@@ -216,7 +219,12 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ success: true, sent_to: toEmail });
+    return NextResponse.json({
+      success: true,
+      sent_to: toEmail,
+      pdf_attached: !!pdfBase64,
+      ...(pdfError ? { pdf_error: pdfError } : {}),
+    });
   } catch (err) {
     console.error("[send-proposal-email] error:", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Unknown error" }, { status: 500 });

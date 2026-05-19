@@ -33,7 +33,31 @@ export async function renderHtmlToPdf(html: string): Promise<Buffer> {
 
   try {
     const page = await browser.newPage();
-    await page.setContent(fullHtml, { waitUntil: "networkidle0", timeout: 30000 });
+    // `networkidle0` waits for every image/font to finish. A single
+    // slow external image (e.g. an inspiration photo hosted somewhere
+    // sluggish) hangs the render until the timeout fires and we end up
+    // sending the proposal email without an attachment. `load` fires
+    // as soon as the document + linked resources are at the load event
+    // (best-effort) — then we give images a short grace period before
+    // printing. This handles the realistic case where most images
+    // arrive quickly but one straggler shouldn't kill the whole PDF.
+    await page.setContent(fullHtml, { waitUntil: "load", timeout: 20000 });
+    // Give in-flight images another beat to settle, capped so a totally
+    // dead image URL can't take us past 25s total.
+    await page.evaluate(() => new Promise<void>((resolve) => {
+      const imgs = Array.from(document.images);
+      if (imgs.length === 0) return resolve();
+      let pending = imgs.filter((img) => !img.complete).length;
+      if (pending === 0) return resolve();
+      const done = () => { if (--pending <= 0) resolve(); };
+      imgs.forEach((img) => {
+        if (img.complete) return;
+        img.addEventListener("load", done, { once: true });
+        img.addEventListener("error", done, { once: true });
+      });
+      // Hard cap so a stuck image can't deadlock us.
+      setTimeout(() => resolve(), 4000);
+    }));
     const pdf = await page.pdf({
       format: "Letter",
       printBackground: true,

@@ -837,7 +837,18 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
         alert(`Could not send proposal: ${emailData.error || "unknown error"}`);
         return;
       }
-      alert(`Proposal sent to ${emailData.sent_to || clientEmail} with PDF attached.`);
+      if (emailData.pdf_attached === false) {
+        // The send succeeded but the PDF render failed — the client got
+        // an email without the attached quote. Warn so we can re-send.
+        alert(
+          `Proposal sent to ${emailData.sent_to || clientEmail}, but the PDF attachment failed to generate.\n\n` +
+          `The client got the email + the Review & Sign link, but no PDF copy.\n` +
+          (emailData.pdf_error ? `Reason: ${emailData.pdf_error}\n\n` : "") +
+          `Try resending — if it fails again, screenshot this and send to engineering.`
+        );
+      } else {
+        alert(`Proposal sent to ${emailData.sent_to || clientEmail} with PDF attached.`);
+      }
 
       await logActivity({
         action: "sent",
