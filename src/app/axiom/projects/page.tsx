@@ -11,6 +11,7 @@ import SaveButton from "@/components/ui/SaveButton";
 import ImageUpload from "@/components/ui/ImageUpload";
 import { cn, formatPhone, formatDueDate, suggestStartDate } from "@/lib/utils";
 import { resolveClientEmail } from "@/lib/resolve-email";
+import DateField from "@/components/ui/DateField";
 import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { useRouter } from "next/navigation";
@@ -1681,12 +1682,11 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             {labor.map((l, i) => (
               <div key={i} className="space-y-1">
                 <div className="flex gap-2 items-center">
-                  <div className="flex flex-col shrink-0">
-                    <input type="date" value={l.date} onChange={(e) => updateLabor(i, "date", e.target.value)} className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
-                    {l.date && (
-                      <span className="text-[10px] text-muted mt-0.5 px-1 tracking-wide">{formatDueDate(l.date).text}</span>
-                    )}
-                  </div>
+                  <DateField
+                    value={l.date}
+                    onChange={(v) => updateLabor(i, "date", v)}
+                    className="w-36 shrink-0"
+                  />
                   <input type="text" value={l.description || ""} onChange={(e) => updateLabor(i, "description", e.target.value)} placeholder="Description…" className="flex-1 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent min-w-0" />
                   <input type="number" value={l.hours || ""} onChange={(e) => updateLabor(i, "hours", Number(e.target.value))} placeholder="Hrs" className="w-16 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right shrink-0" />
                   <input type="number" value={l.rate || ""} onChange={(e) => updateLabor(i, "rate", Number(e.target.value))} placeholder="Rate" className="w-20 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right shrink-0" />
