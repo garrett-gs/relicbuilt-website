@@ -6,6 +6,7 @@ import { TeamMember, CustomWork, TimeEntry } from "@/types/axiom";
 import { Clock, X, CheckCircle2, LogIn, LogOut, ArrowLeft, Plus } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import DateField from "@/components/ui/DateField";
 
 type Step = "select_member" | "enter_pin" | "select_project" | "confirm_clock_in" | "clocked_in" | "clocked_out" | "manual_entry" | "manual_saved";
 
@@ -609,11 +610,10 @@ export default function TimeClockPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Date</label>
-                <input
-                  type="date"
+                <DateField
                   value={manualDate}
-                  onChange={(e) => setManualDate(e.target.value)}
-                  className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+                  onChange={setManualDate}
+                  inputClassName="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent hover:border-accent transition-colors text-left"
                 />
               </div>
               <div>

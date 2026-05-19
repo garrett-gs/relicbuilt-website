@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { WallflowerWorkOrder, TeamMember } from "@/types/axiom";
 import Button from "@/components/ui/Button";
+import DateField from "@/components/ui/DateField";
 import { cn, formatDueDate } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2, Calculator, ClipboardList,
@@ -361,7 +362,11 @@ function CreateModal({ teamMembers, onSubmit, onClose }: {
             </div>
             <div>
               <label className={lbl}>Deadline</label>
-              <input type="date" className={inp} value={form.deadline} onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))} />
+              <DateField
+                value={form.deadline}
+                onChange={(v) => setForm((f) => ({ ...f, deadline: v }))}
+                inputClassName={`${inp} hover:border-accent transition-colors text-left`}
+              />
             </div>
           </div>
 
@@ -527,7 +532,11 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate 
         </div>
         <div>
           <label className={lbl}>Deadline</label>
-          <input type="date" className={inp} value={deadline} onChange={(e) => { setDeadline(e.target.value); markDirty(); }} />
+          <DateField
+            value={deadline}
+            onChange={(v) => { setDeadline(v); markDirty(); }}
+            inputClassName={`${inp} hover:border-accent transition-colors text-left`}
+          />
         </div>
         <div>
           <label className={lbl}>Quantity</label>

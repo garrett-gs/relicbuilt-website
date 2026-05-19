@@ -5,6 +5,7 @@ import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { Task, TaskComment } from "@/types/axiom";
+import DateField from "@/components/ui/DateField";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import {
@@ -363,7 +364,11 @@ function TaskForm({ onSubmit, onCancel, team }: { onSubmit: (f: Record<string, s
         </div>
         <div>
           <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Due Date</label>
-          <input type="date" value={form.due_date} onChange={(e) => set("due_date", e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-sm text-foreground focus:outline-none focus:border-accent" />
+          <DateField
+            value={form.due_date}
+            onChange={(v) => set("due_date", v)}
+            inputClassName="w-full bg-card border border-border px-4 py-3 text-sm text-foreground focus:outline-none focus:border-accent hover:border-accent transition-colors text-left"
+          />
         </div>
       </div>
       <div className="flex gap-3">

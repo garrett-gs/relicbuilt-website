@@ -20,7 +20,17 @@ interface DateFieldProps {
   value: string; // ISO yyyy-mm-dd
   onChange: (v: string) => void;
   placeholder?: string;
+  /** Wrapper className — controls width / layout. */
   className?: string;
+  /** Button className — controls colors / padding. Pass the same Tailwind
+   * classes you'd give the original <input type="date"> so the date field
+   * lines up with the rest of the form. Defaults to the compact axiom
+   * style used in the Labor Log. */
+  inputClassName?: string;
+  /** When true, renders in the orange "this value was auto-suggested,
+   * not yet user-confirmed" treatment — matches the Field component's
+   * highlight prop on the project Start Date. */
+  highlight?: boolean;
   disabled?: boolean;
 }
 
@@ -29,6 +39,8 @@ export default function DateField({
   onChange,
   placeholder = "Pick a date",
   className,
+  inputClassName,
+  highlight,
   disabled,
 }: DateFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -65,9 +77,13 @@ export default function DateField({
         onClick={openPicker}
         disabled={disabled}
         className={cn(
-          "bg-card border border-border px-3 py-2 text-sm text-foreground hover:border-accent focus:outline-none focus:border-accent transition-colors w-full text-left",
+          // Default styling — compact, used in the Labor Log. Callers
+          // can override by passing inputClassName with the full set
+          // of bg/border/padding classes.
+          inputClassName ?? "bg-card border border-border px-3 py-2 text-sm text-foreground hover:border-accent focus:outline-none focus:border-accent transition-colors w-full text-left",
+          highlight && "border-orange-400 text-orange-400",
           disabled && "opacity-50 cursor-not-allowed",
-          !value && "text-muted",
+          !value && !highlight && "text-muted",
         )}
       >
         {value ? formatDueDate(value).text : placeholder}

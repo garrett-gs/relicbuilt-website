@@ -7,6 +7,7 @@ import { Camera, Check, Plus, X, Loader2, Trash2, Delete, ShoppingCart, ChevronL
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
+import DateField from "@/components/ui/DateField";
 
 // ── PIN Gate ─────────────────────────────────────────────────
 
@@ -334,8 +335,11 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
             </div>
             <div>
               <label className="text-xs text-muted block mb-1">Date</label>
-              <input type="date" value={receiptDate} onChange={(e) => setReceiptDate(e.target.value)}
-                className="w-full bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
+              <DateField
+                value={receiptDate}
+                onChange={setReceiptDate}
+                inputClassName="w-full bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent hover:border-accent transition-colors text-left"
+              />
             </div>
           </div>
           <div>

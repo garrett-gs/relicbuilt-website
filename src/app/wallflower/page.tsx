@@ -4,6 +4,7 @@ import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import Image from "next/image";
 import { CheckCircle2, ClipboardList, Send } from "lucide-react";
+import DateField from "@/components/ui/DateField";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
@@ -159,7 +160,11 @@ export default function WallflowerSubmit() {
             </div>
             <div>
               <label className="text-xs uppercase tracking-wider text-[#888] block mb-1.5">Deadline</label>
-              <input type="date" className={inp} value={form.deadline} onChange={(e) => setForm((f) => ({ ...f, deadline: e.target.value }))} />
+              <DateField
+                value={form.deadline}
+                onChange={(v) => setForm((f) => ({ ...f, deadline: v }))}
+                inputClassName={`${inp} hover:border-accent transition-colors text-left`}
+              />
             </div>
           </div>
 

@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn, formatPhone } from "@/lib/utils";
 import { resolveClientEmail } from "@/lib/resolve-email";
+import DateField from "@/components/ui/DateField";
 import { Plus, X, Trash2, Printer, DollarSign, Send, CheckCircle, Eye, Search, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useRef } from "react";
@@ -328,8 +329,8 @@ function CreateInvoiceForm({ onSubmit, onCancel }: {
       </div>
       <div><label className={lbl}>Project / Description</label><input value={form.description} onChange={(e) => set("description", e.target.value)} className={inp} /></div>
       <div className="grid grid-cols-3 gap-4">
-        <div><label className={lbl}>Issued Date</label><input type="date" value={form.issued_date} onChange={(e) => set("issued_date", e.target.value)} className={inp} /></div>
-        <div><label className={lbl}>Due Date</label><input type="date" value={form.due_date} onChange={(e) => set("due_date", e.target.value)} className={inp} /></div>
+        <div><label className={lbl}>Issued Date</label><DateField value={form.issued_date} onChange={(v) => set("issued_date", v)} inputClassName={`${inp} hover:border-accent transition-colors text-left`} /></div>
+        <div><label className={lbl}>Due Date</label><DateField value={form.due_date} onChange={(v) => set("due_date", v)} inputClassName={`${inp} hover:border-accent transition-colors text-left`} /></div>
         <div><label className={lbl}>Tax Rate %</label><input type="number" value={form.tax_rate} onChange={(e) => set("tax_rate", e.target.value)} className={inp} /></div>
       </div>
       <p className="text-xs text-muted">Line items are added after creating the invoice.</p>
@@ -402,8 +403,8 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
         <div><label className={lbl}>Email</label><input type="email" value={inv.client_email || ""} onChange={(e) => mark({ client_email: e.target.value })} className={inp} /></div>
         <div><label className={lbl}>Phone</label><input type="tel" value={inv.client_phone || ""} onChange={(e) => mark({ client_phone: formatPhone(e.target.value) })} placeholder="(###) ###-####" className={inp} /></div>
         <div><label className={lbl}>P.O. / Reference #</label><input value={inv.reference_number || ""} onChange={(e) => mark({ reference_number: e.target.value })} className={inp} /></div>
-        <div><label className={lbl}>Issued Date</label><input type="date" value={inv.issued_date || ""} onChange={(e) => mark({ issued_date: e.target.value })} className={inp} /></div>
-        <div><label className={lbl}>Due Date</label><input type="date" value={inv.due_date || ""} onChange={(e) => mark({ due_date: e.target.value })} className={inp} /></div>
+        <div><label className={lbl}>Issued Date</label><DateField value={inv.issued_date || ""} onChange={(v) => mark({ issued_date: v })} inputClassName={`${inp} hover:border-accent transition-colors text-left`} /></div>
+        <div><label className={lbl}>Due Date</label><DateField value={inv.due_date || ""} onChange={(v) => mark({ due_date: v })} inputClassName={`${inp} hover:border-accent transition-colors text-left`} /></div>
       </div>
       <div><label className={lbl}>Description / Project Name</label><input value={inv.description || ""} onChange={(e) => mark({ description: e.target.value })} className={inp} /></div>
       <div>
@@ -558,7 +559,7 @@ function PaymentForm({ invoice, total, onSubmit, onCancel }: { invoice: Invoice;
         </div>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <div><label className={lbl}>Date</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inp} /></div>
+        <div><label className={lbl}>Date</label><DateField value={date} onChange={setDate} inputClassName={`${inp} hover:border-accent transition-colors text-left`} /></div>
         <div><label className={lbl}>Reference #</label><input value={ref} onChange={(e) => setRef(e.target.value)} className={inp} /></div>
       </div>
       <div><label className={lbl}>Note</label><input value={note} onChange={(e) => setNote(e.target.value)} className={inp} /></div>

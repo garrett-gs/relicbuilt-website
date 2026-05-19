@@ -5,6 +5,7 @@ import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { PurchaseOrder, POLineItem, Vendor, CatalogItem } from "@/types/axiom";
+import DateField from "@/components/ui/DateField";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
@@ -908,7 +909,11 @@ function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
                   </div>
                   <div>
                     <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Delivery Date</label>
-                    <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="w-full bg-background border border-border px-3 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent" />
+                    <DateField
+                      value={deliveryDate}
+                      onChange={setDeliveryDate}
+                      inputClassName="w-full bg-background border border-border px-3 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent hover:border-accent transition-colors text-left"
+                    />
                   </div>
                 </div>
                 {deliveryMethod === "ship" && (
@@ -922,7 +927,11 @@ function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Need By</label>
-                  <input type="date" value={needByDate} onChange={(e) => setNeedByDate(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
+                  <DateField
+                    value={needByDate}
+                    onChange={setNeedByDate}
+                    inputClassName="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent hover:border-accent transition-colors text-left"
+                  />
                 </div>
               </div>
 
@@ -1145,7 +1154,11 @@ function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
                   </div>
                   <div>
                     <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Delivery Date</label>
-                    <input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} className="w-full bg-background border border-border px-3 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent" />
+                    <DateField
+                      value={deliveryDate}
+                      onChange={setDeliveryDate}
+                      inputClassName="w-full bg-background border border-border px-3 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent hover:border-accent transition-colors text-left"
+                    />
                   </div>
                 </div>
                 {deliveryMethod === "ship" && (
@@ -1159,7 +1172,11 @@ function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Need By</label>
-                  <input type="date" value={needByDate} onChange={(e) => setNeedByDate(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
+                  <DateField
+                    value={needByDate}
+                    onChange={setNeedByDate}
+                    inputClassName="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent hover:border-accent transition-colors text-left"
+                  />
                 </div>
               </div>
 

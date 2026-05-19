@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { Expense } from "@/types/axiom";
 import Button from "@/components/ui/Button";
+import DateField from "@/components/ui/DateField";
 import { Plus, X, Trash2 } from "lucide-react";
 
 function money(n: number) {
@@ -138,7 +139,14 @@ function ExpenseForm({ onSubmit, onCancel }: { onSubmit: (f: Record<string, stri
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
-        <div><label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Date</label><input type="date" value={form.date} onChange={(e) => set("date", e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" /></div>
+        <div>
+          <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Date</label>
+          <DateField
+            value={form.date}
+            onChange={(v) => set("date", v)}
+            inputClassName="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent hover:border-accent transition-colors text-left"
+          />
+        </div>
         <div><label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Amount *</label><input type="number" value={form.amount} onChange={(e) => set("amount", e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" /></div>
       </div>
       <div><label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Description</label><input value={form.description} onChange={(e) => set("description", e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" /></div>

@@ -2354,6 +2354,27 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 function Field({ label, value, onChange, type = "text", required, prefix, highlight }: {
   label: string; value: string; onChange: (v: string) => void; type?: string; required?: boolean; prefix?: string; highlight?: boolean;
 }) {
+  // For date fields we delegate to DateField so the rendering is locale-
+  // independent (always "May 4, 2026" form) rather than at the mercy of
+  // the browser's locale-driven native date input.
+  if (type === "date") {
+    return (
+      <div>
+        <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">
+          {label}{required && <span className="text-accent ml-1">*</span>}
+        </label>
+        <DateField
+          value={value}
+          onChange={onChange}
+          highlight={highlight}
+          inputClassName={cn(
+            "w-full bg-card border px-4 py-3 text-sm focus:outline-none focus:border-accent text-left transition-colors hover:border-accent",
+            highlight ? "border-orange-400 text-orange-400" : "border-border text-foreground"
+          )}
+        />
+      </div>
+    );
+  }
   return (
     <div>
       <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">
@@ -2481,11 +2502,10 @@ function ProposalPreview({ project, onClose, userEmail }: {
         <div className="flex items-center gap-4 text-sm text-gray-600 border-l border-gray-200 pl-3">
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-400 uppercase tracking-wider">Valid Until</span>
-            <input
-              type="date"
+            <DateField
               value={validUntil}
-              onChange={(e) => setValidUntil(e.target.value)}
-              className="border border-gray-300 px-2 py-1 text-sm focus:outline-none focus:border-[#c4a24d]"
+              onChange={setValidUntil}
+              inputClassName="border border-gray-300 bg-white text-gray-800 px-2 py-1 text-sm focus:outline-none focus:border-[#c4a24d] hover:border-[#c4a24d] transition-colors text-left"
             />
           </div>
         </div>
