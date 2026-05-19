@@ -201,7 +201,7 @@ export default function EstimatorPage() {
   const [showCreate, setShowCreate] = useState(false);
   // Working = anything still in the funnel (draft / sent / rejected / etc).
   // Accepted = the client signed off, so we get it out of the day-to-day list.
-  const [tab, setTab] = useState<"working" | "accepted">("working");
+  const [tab, setTab] = useState<"working" | "accepted" | "archive">("working");
 
   const load = useCallback(async () => {
     const { data } = await axiom.from("estimates").select("*").order("created_at", { ascending: false });
@@ -210,9 +210,17 @@ export default function EstimatorPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const workingEstimates = estimates.filter((e) => e.status !== "accepted");
+  // Working = anything still in the funnel that hasn't reached a terminal
+  // state. Accepted + rejected are both terminal — accepted gets its own
+  // tab so it stays easy to find for post-signature work, and rejected
+  // goes to the Archive tab so it stops cluttering the day-to-day list.
+  const workingEstimates = estimates.filter((e) => e.status !== "accepted" && e.status !== "rejected");
   const acceptedEstimates = estimates.filter((e) => e.status === "accepted");
-  const visibleEstimates = tab === "working" ? workingEstimates : acceptedEstimates;
+  const archivedEstimates = estimates.filter((e) => e.status === "rejected");
+  const visibleEstimates =
+    tab === "working" ? workingEstimates
+    : tab === "accepted" ? acceptedEstimates
+    : archivedEstimates;
 
   async function createEstimate(form: { project_name: string; client_name: string; customer_id: string; change_order_for_id?: string }) {
     const year = new Date().getFullYear();
@@ -303,9 +311,14 @@ export default function EstimatorPage() {
             <Plus size={14} className="mr-1" /> New
           </Button>
         </div>
-        <div className="flex border-b border-border mb-3 text-xs uppercase tracking-wider">
+        <div className="flex border-b border-border mb-3 text-[11px] uppercase tracking-wider">
           <button
-            onClick={() => { setTab("working"); if (selected?.status === "accepted") setSelected(null); }}
+            onClick={() => {
+              setTab("working");
+              // Clear the selection if it belongs to a different tab so the
+              // detail pane doesn't show something missing from the list.
+              if (selected && (selected.status === "accepted" || selected.status === "rejected")) setSelected(null);
+            }}
             className={cn(
               "flex-1 py-2 transition-colors",
               tab === "working" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
@@ -314,7 +327,10 @@ export default function EstimatorPage() {
             Working <span className="text-muted ml-1">({workingEstimates.length})</span>
           </button>
           <button
-            onClick={() => { setTab("accepted"); if (selected && selected.status !== "accepted") setSelected(null); }}
+            onClick={() => {
+              setTab("accepted");
+              if (selected && selected.status !== "accepted") setSelected(null);
+            }}
             className={cn(
               "flex-1 py-2 transition-colors",
               tab === "accepted" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
@@ -322,11 +338,25 @@ export default function EstimatorPage() {
           >
             Accepted <span className="text-muted ml-1">({acceptedEstimates.length})</span>
           </button>
+          <button
+            onClick={() => {
+              setTab("archive");
+              if (selected && selected.status !== "rejected") setSelected(null);
+            }}
+            className={cn(
+              "flex-1 py-2 transition-colors",
+              tab === "archive" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
+            )}
+          >
+            Archive <span className="text-muted ml-1">({archivedEstimates.length})</span>
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto space-y-2">
           {visibleEstimates.length === 0 && (
             <p className="text-muted text-sm">
-              {tab === "working" ? "No estimates yet." : "No accepted estimates yet."}
+              {tab === "working" ? "No estimates yet."
+                : tab === "accepted" ? "No accepted estimates yet."
+                : "No archived estimates yet. Rejected estimates land here."}
             </p>
           )}
           {visibleEstimates.map((est) => {
