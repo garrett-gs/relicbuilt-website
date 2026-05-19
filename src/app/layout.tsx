@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Raleway, Geist } from "next/font/google";
 import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { CartProvider } from "@/components/shop/CartProvider";
 import CartDrawer from "@/components/shop/CartDrawer";
+import PwaRegistrar from "@/components/layout/PwaRegistrar";
 
 const raleway = Raleway({
   variable: "--font-raleway",
@@ -36,6 +37,13 @@ export const metadata: Metadata = {
     capable: true,
     title: "RELIC",
     statusBarStyle: "black-translucent",
+    // Pinned to the larger 180x180 apple-touch-icon so iPad/iPhone home
+    // screen icons render crisp rather than scaling the Next-generated
+    // 32px icon up to 180px and looking pixelated.
+    startupImage: ["/apple-touch-icon.png"],
+  },
+  icons: {
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
   openGraph: {
     title: "RELIC | Custom Woodworking & Metalworks",
@@ -45,6 +53,15 @@ export const metadata: Metadata = {
     siteName: "RELIC",
     type: "website",
   },
+};
+
+// Pinned theme color matches the manifest accent so installed PWAs render
+// the status bar / title bar in RELIC gold instead of the default white.
+export const viewport: Viewport = {
+  themeColor: "#c4a24d",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -63,6 +80,7 @@ export default function RootLayout({
           <main className="flex-1 pt-16">{children}</main>
           <Footer />
           <CartDrawer />
+          <PwaRegistrar />
         </CartProvider>
       </body>
     </html>
