@@ -12,6 +12,7 @@ import ImageUpload from "@/components/ui/ImageUpload";
 import { cn, formatPhone, formatDueDate, suggestStartDate } from "@/lib/utils";
 import { resolveClientEmail } from "@/lib/resolve-email";
 import DateField from "@/components/ui/DateField";
+import FileUpload from "@/components/ui/FileUpload";
 import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { useRouter } from "next/navigation";
@@ -817,21 +818,57 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [folderUrl, setFolderUrl] = useState(project.folder_url || "");
   const [editingFolder, setEditingFolder] = useState(false);
 
-  // Field Notes (build_files) — site photos and Apple Pencil markups
-  // saved from the iPad Field Notes app, attached via custom_work_id
-  const [fieldNotes, setFieldNotes] = useState<{ id: string; file_url: string; file_name?: string; label?: string; uploaded_by?: string; created_at: string }[]>([]);
-  useEffect(() => {
-    axiom.from("build_files")
-      .select("id, file_url, file_name, label, uploaded_by, created_at")
+  // build_files holds every file attached to the project — iPad Field
+  // Notes (image/jpeg PNGs), and any documents (PDFs, Word, etc.) uploaded
+  // from the Documents section below. Same table, different file_type;
+  // we split locally so each section shows what it should.
+  type BuildFileRow = { id: string; file_url: string; file_name?: string; file_type?: string; label?: string; uploaded_by?: string; created_at: string };
+  const [buildFiles, setBuildFiles] = useState<BuildFileRow[]>([]);
+  const loadBuildFiles = useCallback(async () => {
+    const { data } = await axiom.from("build_files")
+      .select("id, file_url, file_name, file_type, label, uploaded_by, created_at")
       .eq("custom_work_id", project.id)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => { if (data) setFieldNotes(data); });
+      .order("created_at", { ascending: false });
+    if (data) setBuildFiles(data);
   }, [project.id]);
+  useEffect(() => { loadBuildFiles(); }, [loadBuildFiles]);
+
+  const fieldNotes = buildFiles.filter((f) => (f.file_type || "").startsWith("image/"));
+  const projectDocs = buildFiles.filter((f) => !(f.file_type || "").startsWith("image/"));
 
   async function deleteFieldNote(id: string) {
     if (!confirm("Delete this field note?")) return;
     await axiom.from("build_files").delete().eq("id", id);
-    setFieldNotes((prev) => prev.filter((f) => f.id !== id));
+    setBuildFiles((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  async function attachDocument(file: { url: string; name: string; type: string; size: number }) {
+    const { data, error } = await axiom.from("build_files").insert({
+      custom_work_id: project.id,
+      file_url: file.url,
+      file_name: file.name,
+      file_type: file.type,
+      label: "Project Document",
+      uploaded_by: userEmail,
+    }).select().single();
+    if (error) {
+      alert(`Could not attach document: ${error.message}`);
+      return;
+    }
+    if (data) setBuildFiles((prev) => [data as BuildFileRow, ...prev]);
+    await logActivity({
+      action: "updated",
+      entity: "project",
+      entity_id: project.id,
+      label: `Attached document "${file.name}" to ${project.project_name}`,
+      user_name: userEmail,
+    });
+  }
+
+  async function deleteDocument(id: string, name: string) {
+    if (!confirm(`Delete "${name}"?`)) return;
+    await axiom.from("build_files").delete().eq("id", id);
+    setBuildFiles((prev) => prev.filter((f) => f.id !== id));
   }
   const [proposalHighlights, setProposalHighlights] = useState<ProposalHighlight[]>(project.proposal_highlights || []);
   const [proposalScope, setProposalScope] = useState<ProposalScope>(project.proposal_scope || { body: "", included: true });
@@ -1770,6 +1807,55 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       <div>
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Internal Notes</label>
         <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
+      </div>
+
+      {/* Documents — PDFs, Word docs, drawings, anything that isn't an
+          image. Lives separate from the Dropbox / File Folder link below
+          so smaller one-off files (signed proposals, spec sheets,
+          delivery confirmations, etc.) can be attached directly to the
+          project without round-tripping through Dropbox. */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">
+            Documents <span className="text-muted text-xs font-normal">({projectDocs.length})</span>
+          </h3>
+          <FileUpload onUploaded={attachDocument} label="Add Document" />
+        </div>
+        {projectDocs.length === 0 ? (
+          <p className="text-muted text-xs italic">No documents attached. Upload PDFs, Word, Excel, or drawings (DWG/DXF) up to 25 MB each.</p>
+        ) : (
+          <div className="space-y-2">
+            {projectDocs.map((doc) => {
+              const ext = (doc.file_name || "").split(".").pop()?.toUpperCase() || "FILE";
+              return (
+                <div key={doc.id} className="flex items-center gap-3 bg-card border border-border px-3 py-2 group">
+                  <span className="text-[10px] font-bold text-accent border border-accent/40 px-1.5 py-0.5 shrink-0 tracking-wider">{ext.slice(0, 4)}</span>
+                  <div className="min-w-0 flex-1">
+                    <a
+                      href={doc.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-medium text-foreground hover:text-accent truncate block"
+                    >
+                      {doc.file_name || "Document"}
+                    </a>
+                    <p className="text-[10px] text-muted">
+                      {new Date(doc.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      {doc.uploaded_by && ` · ${doc.uploaded_by.split("@")[0]}`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => deleteDocument(doc.id, doc.file_name || "this document")}
+                    className="text-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                    title="Delete document"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Field Notes — markup photos and sketches saved from the iPad app */}
