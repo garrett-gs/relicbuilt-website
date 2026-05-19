@@ -1681,7 +1681,12 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             {labor.map((l, i) => (
               <div key={i} className="space-y-1">
                 <div className="flex gap-2 items-center">
-                  <input type="date" value={l.date} onChange={(e) => updateLabor(i, "date", e.target.value)} className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent shrink-0" />
+                  <div className="flex flex-col shrink-0">
+                    <input type="date" value={l.date} onChange={(e) => updateLabor(i, "date", e.target.value)} className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
+                    {l.date && (
+                      <span className="text-[10px] text-muted mt-0.5 px-1 tracking-wide">{formatDueDate(l.date).text}</span>
+                    )}
+                  </div>
                   <input type="text" value={l.description || ""} onChange={(e) => updateLabor(i, "description", e.target.value)} placeholder="Description…" className="flex-1 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent min-w-0" />
                   <input type="number" value={l.hours || ""} onChange={(e) => updateLabor(i, "hours", Number(e.target.value))} placeholder="Hrs" className="w-16 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right shrink-0" />
                   <input type="number" value={l.rate || ""} onChange={(e) => updateLabor(i, "rate", Number(e.target.value))} placeholder="Rate" className="w-20 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right shrink-0" />
