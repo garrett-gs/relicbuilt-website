@@ -98,24 +98,33 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: SearchResult)
     // company_name (so typing "Acme" still surfaces every contact at Acme).
     // Companies appear at the bottom as a fallback for the rarer case where
     // the user wants to pick the company directly.
+    //
+    // Two parallel ilike queries instead of one .or() — PostgREST's .or()
+    // can swallow rows where one side of the filter references a column
+    // that's NULL (e.g. individual customers with no linked company_name),
+    // which previously hid every newly-added individual customer from the
+    // search. Running them separately and de-duping by id sidesteps that.
     const trimmed = q.trim().replace(/[%,]/g, "");
-    const [{ data: customers }, { data: companies }] = await Promise.all([
-      axiom
-        .from("customers")
-        .select("id,name,email,phone,company_name")
-        .or(`name.ilike.%${trimmed}%,company_name.ilike.%${trimmed}%`)
-        .limit(8),
+    const [byName, byCompany, { data: companies }] = await Promise.all([
+      axiom.from("customers").select("id,name,email,phone,company_name").ilike("name", `%${trimmed}%`).limit(8),
+      axiom.from("customers").select("id,name,email,phone,company_name").ilike("company_name", `%${trimmed}%`).limit(8),
       axiom.from("companies").select("id,name,phone").ilike("name", `%${trimmed}%`).limit(4),
     ]);
+    const seenCustomerIds = new Set<string>();
+    const customerRows = [...(byName.data || []), ...(byCompany.data || [])].filter((c) => {
+      if (!c?.id || seenCustomerIds.has(c.id)) return false;
+      seenCustomerIds.add(c.id);
+      return true;
+    });
     const merged: SearchResult[] = [
-      ...((customers || []).map((c) => ({
+      ...customerRows.map((c) => ({
         id: c.id,
         name: c.name,
         email: c.email || "",
         phone: c.phone || "",
         company_name: c.company_name || "",
         type: "customer" as const,
-      }))),
+      })),
       ...((companies || []).map((co) => ({
         id: co.id,
         name: co.name,
