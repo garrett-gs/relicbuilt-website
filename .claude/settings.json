@@ -1,0 +1,6 @@
+{
+  "statusLine": {
+    "type": "command",
+    "command": "branch=$(git branch --show-current 2>/dev/null); printf '\\033[38;2;196;162;77m◆ Relic Axiom\\033[0m  \\033[2mon\\033[0m \\033[38;2;196;162;77m%s\\033[0m' \"${branch:-detached}\""
+  }
+}
