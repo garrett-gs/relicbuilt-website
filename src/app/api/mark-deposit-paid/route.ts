@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 import { notifyWallflowerStatus } from "@/lib/wallflower-status";
+import { notifyPaymentTeam } from "@/lib/notify-payment-team";
 
 interface EstimateLineItem { quantity?: number; unit_price?: number }
 interface EstimateLaborItem { cost?: number }
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest) {
     // ── Mark the deposit invoice paid + link it to the project ───────
     const { data: depositInvoice } = await supabase
       .from("invoices")
-      .select("id, payments, subtotal, status")
+      .select("id, invoice_number, client_name, client_email, description, invoice_type, payments, subtotal, status")
       .eq("client_name", estimate.client_name || "")
       .eq("invoice_type", "deposit")
       .like("description", `%${estimate.project_name || estimate.estimate_number}%`)
@@ -122,6 +123,20 @@ export async function POST(req: NextRequest) {
           },
         ],
       }).eq("id", depositInvoice.id);
+
+      // Team notification — same email Garrett gets when a client pays
+      // online, so a manually-marked deposit doesn't slip past silently.
+      await notifyPaymentTeam({
+        supabase,
+        invoiceNumber: depositInvoice.invoice_number,
+        clientName: depositInvoice.client_name || estimate.client_name || null,
+        clientEmail: depositInvoice.client_email || estimate.client_email || null,
+        description: depositInvoice.description || null,
+        invoiceType: depositInvoice.invoice_type || "deposit",
+        amount: depositInvoice.subtotal,
+        method: "manual",
+        origin: req.headers.get("origin") || `https://${req.headers.get("host") || "relicbuilt.com"}`,
+      });
     }
 
     // Also link the balance invoice to the new project
