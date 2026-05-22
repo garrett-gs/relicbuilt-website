@@ -7,14 +7,21 @@ function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
 }
 
+function methodLabel(method: string): string {
+  if (method === "ach") return "ACH Bank Transfer";
+  if (method === "us_bank_account") return "ACH Bank Transfer";
+  return "Card";
+}
+
 function receiptEmailHtml(opts: {
   clientName: string;
   invoiceNumber: string;
   description: string;
   amountPaid: number;
+  method: string;
   date: string;
 }) {
-  const { clientName, invoiceNumber, description, amountPaid, date } = opts;
+  const { clientName, invoiceNumber, description, amountPaid, method, date } = opts;
   return `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
   <div style="padding:20px 32px;border-bottom:3px solid #c4a24d;margin-bottom:0;">
@@ -41,7 +48,7 @@ function receiptEmailHtml(opts: {
         </tr>
         <tr style="border-top:1px solid #e5e0d8;">
           <td style="padding:8px 0 6px;color:#666;">Payment Method:</td>
-          <td style="padding:8px 0 6px;text-align:right;color:#111;">Card</td>
+          <td style="padding:8px 0 6px;text-align:right;color:#111;">${methodLabel(method)}</td>
         </tr>
         <tr style="border-top:1px solid #e5e0d8;">
           <td style="padding:8px 0 6px;color:#666;">Date:</td>
@@ -113,6 +120,12 @@ export async function POST(req: NextRequest) {
     const totalPaid = (session.amount_total ?? 0) / 100;
     const today = new Date().toISOString().split("T")[0];
     const existingPayments = Array.isArray(invoice.payments) ? invoice.payments : [];
+    // The pay-invoice route stamps method onto session metadata when the
+    // checkout session is created ("card" or "ach"). Fall back to inspecting
+    // session.payment_method_types if metadata is missing (e.g. older
+    // sessions from before the metadata was added).
+    const sessionMethod = (session.metadata?.method as string | undefined)
+      || (session.payment_method_types?.[0] === "us_bank_account" ? "ach" : "card");
 
     const { error: updateError } = await supabase
       .from("invoices")
@@ -122,9 +135,9 @@ export async function POST(req: NextRequest) {
           ...existingPayments,
           {
             amount: totalPaid,
-            method: "card",
+            method: sessionMethod === "ach" ? "ACH" : "Card",
             date: today,
-            note: "Paid online via Stripe",
+            note: sessionMethod === "ach" ? "Paid online via Stripe (ACH)" : "Paid online via Stripe",
             ref: sessionId,
             created_at: new Date().toISOString(),
           },
@@ -210,7 +223,7 @@ export async function POST(req: NextRequest) {
               userAgent: req.headers.get("user-agent") || null,
               metadata: {
                 amount: totalPaid,
-                method: "card",
+                method: sessionMethod,
                 stripe_session_id: sessionId,
                 invoice_id: invoiceId,
                 invoice_number: invoice.invoice_number,
@@ -226,22 +239,93 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Send receipt email if client email exists
-    if (invoice.client_email) {
-      const resendKey = process.env.RESEND_API_KEY;
-      if (resendKey) {
-        const dateFormatted = new Date().toLocaleDateString("en-US", {
-          month: "long",
-          day: "numeric",
-          year: "numeric",
-        });
-        const html = receiptEmailHtml({
-          clientName: invoice.client_name || "there",
-          invoiceNumber: invoice.invoice_number,
-          description: invoice.description || "Invoice Payment",
-          amountPaid: totalPaid,
-          date: dateFormatted,
-        });
+    const resendKey = process.env.RESEND_API_KEY;
+    const dateFormatted = new Date().toLocaleDateString("en-US", {
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+    });
+
+    // Client receipt — emailed to the payer if their email is on the
+    // invoice. Identical content as before, now reflecting the actual
+    // method (Card vs ACH Bank Transfer).
+    if (invoice.client_email && resendKey) {
+      const html = receiptEmailHtml({
+        clientName: invoice.client_name || "there",
+        invoiceNumber: invoice.invoice_number,
+        description: invoice.description || "Invoice Payment",
+        amountPaid: totalPaid,
+        method: sessionMethod,
+        date: dateFormatted,
+      });
+      await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${resendKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from: "RELIC Custom Fabrications <notifications@relicbuilt.com>",
+          to: [invoice.client_email],
+          subject: `Payment Receipt — ${invoice.invoice_number}`,
+          html,
+        }),
+      });
+    }
+
+    // Team notification — tells Garrett (and any team member with
+    // portal_updates enabled) that a payment landed. Non-blocking; failures
+    // log and we still return success since the payment is already recorded.
+    if (resendKey) {
+      try {
+        const { data: settings } = await supabase
+          .from("settings")
+          .select("biz_name,biz_email,team_members")
+          .limit(1)
+          .single();
+
+        const teamMembers = (settings?.team_members || []) as Array<{
+          email?: string;
+          notifications?: { portal_updates?: boolean };
+        }>;
+        const recipients = new Set<string>();
+        if (settings?.biz_email) recipients.add(settings.biz_email.trim());
+        for (const m of teamMembers) {
+          if (m.notifications?.portal_updates && m.email) recipients.add(m.email.trim());
+        }
+        // Last-resort fallback so the alert never silently no-ops.
+        if (recipients.size === 0) recipients.add("garrett@relicbuilt.com");
+
+        const bizName = settings?.biz_name || "RELIC";
+        const origin = req.headers.get("origin") || `https://${req.headers.get("host") || "relicbuilt.com"}`;
+        const invoiceUrl = `${origin}/axiom/invoices`;
+
+        const teamHtml = `
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;background:#fff;">
+  <div style="padding:18px 28px;border-bottom:3px solid #c4a24d;">
+    <img src="https://relicbuilt.com/logo-full.png" alt="${bizName}" style="height:42px;display:block;" />
+  </div>
+  <div style="padding:28px;">
+    <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:#888;">Payment Received</p>
+    <h2 style="margin:0 0 18px;font-size:22px;color:#111;font-family:monospace;">${money(totalPaid)}</h2>
+    <table style="width:100%;font-size:14px;border-collapse:collapse;margin-bottom:20px;">
+      <tr><td style="padding:6px 0;color:#666;">Invoice:</td><td style="padding:6px 0;text-align:right;font-family:monospace;">${invoice.invoice_number}</td></tr>
+      <tr><td style="padding:6px 0;color:#666;">Client:</td><td style="padding:6px 0;text-align:right;font-weight:600;">${invoice.client_name || "—"}</td></tr>
+      ${invoice.description ? `<tr><td style=\"padding:6px 0;color:#666;\">Project:</td><td style=\"padding:6px 0;text-align:right;\">${invoice.description}</td></tr>` : ""}
+      <tr><td style="padding:6px 0;color:#666;">Method:</td><td style="padding:6px 0;text-align:right;">${methodLabel(sessionMethod)}</td></tr>
+      <tr><td style="padding:6px 0;color:#666;">Type:</td><td style="padding:6px 0;text-align:right;text-transform:capitalize;">${invoice.invoice_type || "standard"}</td></tr>
+      <tr><td style="padding:6px 0;color:#666;">Date:</td><td style="padding:6px 0;text-align:right;">${dateFormatted}</td></tr>
+    </table>
+    ${sessionMethod === "ach" ? `
+    <p style="margin:0 0 16px;padding:10px 14px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:12px;line-height:1.5;">
+      ACH transfers take 3–5 business days to fully clear. The invoice is marked paid in Axiom, but the funds may not appear in your bank until settlement.
+    </p>` : ""}
+    <a href="${invoiceUrl}" style="display:inline-block;background:#c4a24d;color:#0a0a0a;padding:12px 24px;text-decoration:none;font-weight:bold;letter-spacing:0.06em;font-size:13px;text-transform:uppercase;">
+      Open in Axiom →
+    </a>
+  </div>
+</div>`.trim();
+
         await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: {
@@ -249,12 +333,15 @@ export async function POST(req: NextRequest) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: "RELIC Custom Fabrications <notifications@relicbuilt.com>",
-            to: [invoice.client_email],
-            subject: `Payment Receipt — ${invoice.invoice_number}`,
-            html,
+            from: `${bizName} <notifications@relicbuilt.com>`,
+            to: Array.from(recipients),
+            subject: `Payment Received — ${money(totalPaid)} from ${invoice.client_name || "client"} (${invoice.invoice_number})`,
+            html: teamHtml,
+            reply_to: invoice.client_email || undefined,
           }),
         });
+      } catch (notifyErr) {
+        console.error("[confirm-payment] team notification failed:", notifyErr);
       }
     }
 
