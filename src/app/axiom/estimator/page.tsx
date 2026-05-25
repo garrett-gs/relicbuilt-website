@@ -296,6 +296,28 @@ export default function EstimatorPage() {
       }
     }
 
+    // If the estimate was just marked "rejected", mark any linked lead "lost"
+    // so we don't keep the lead sitting in Quoted forever once the client
+    // passes on the bid.
+    if (updates.status === "rejected") {
+      const { data: linkedLead } = await axiom.from("leads")
+        .select("id, status")
+        .eq("estimate_id", id)
+        .maybeSingle();
+      if (linkedLead && linkedLead.status !== "lost") {
+        await axiom.from("leads")
+          .update({ status: "lost", updated_at: new Date().toISOString() })
+          .eq("id", linkedLead.id);
+        await logActivity({
+          action: "updated",
+          entity: "lead",
+          entity_id: linkedLead.id,
+          label: "Lead auto-marked Lost (estimate rejected)",
+          user_name: userEmail,
+        });
+      }
+    }
+
     load();
     if (selected?.id === id) setSelected((prev) => prev ? { ...prev, ...updates } : prev);
   }
