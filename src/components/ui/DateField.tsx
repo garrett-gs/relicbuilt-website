@@ -88,8 +88,12 @@ export default function DateField({
       >
         {value ? formatDueDate(value).text : placeholder}
       </button>
-      {/* The real picker — invisible but takes the same footprint so
-          showPicker() / native UA picker positioning still aligns. */}
+      {/* The real picker — invisible but sits ON TOP of the styled button
+          and receives taps directly. iPad Safari silently no-ops
+          showPicker() on an input that's hidden behind pointer-events:none,
+          so the button-click fallback isn't enough on its own; letting the
+          native input own the tap is what reliably opens the calendar
+          popover on iPadOS / mobile Safari. */}
       <input
         ref={inputRef}
         type="date"
@@ -98,7 +102,7 @@ export default function DateField({
         disabled={disabled}
         aria-hidden="true"
         tabIndex={-1}
-        className="absolute inset-0 w-full h-full opacity-0 pointer-events-none"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
       />
     </div>
   );
