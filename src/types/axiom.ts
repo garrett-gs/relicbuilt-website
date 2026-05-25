@@ -159,6 +159,11 @@ export interface Task {
   due_date?: string;
   comments: TaskComment[];
   custom_work_id?: string;
+  // Set when a task was mirrored from a lead follow-up; lets the lead-page
+  // handlers find and update the corresponding task row when the follow-up
+  // is toggled complete or removed.
+  lead_id?: string;
+  lead_followup_id?: string;
   created_at: string;
   updated_at: string;
 }

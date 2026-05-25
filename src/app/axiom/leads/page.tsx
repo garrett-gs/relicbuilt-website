@@ -426,26 +426,61 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
       created_at: new Date().toISOString(),
     };
     await persistLead({ follow_ups: [...followUps, entry] });
+
+    // Mirror to the global tasks list so this shows up alongside other
+    // to-dos. Best-effort: a tasks insert failure shouldn't undo the
+    // follow-up that already saved to the lead.
+    const projectLabel = lead.project_name?.trim() || lead.name;
+    const { error: taskErr } = await axiom.from("tasks").insert({
+      title: text,
+      description: `Follow-up for lead: ${projectLabel}`,
+      status: "todo",
+      priority: "medium",
+      due_date: newFollowUpDate,
+      lead_id: lead.id,
+      lead_followup_id: entry.id,
+      comments: [],
+    });
+    if (taskErr) console.warn("[leads] follow-up → task mirror failed:", taskErr);
+
     setNewFollowUpText("");
     setNewFollowUpDate("");
     setAddingFollowUp(false);
   }
 
   async function toggleFollowUp(id: string) {
+    const target = followUps.find((f) => f.id === id);
+    if (!target) return;
+    const nowCompleted = !target.completed;
     const updated = followUps.map((f) =>
       f.id === id
         ? {
             ...f,
-            completed: !f.completed,
-            completed_at: !f.completed ? new Date().toISOString() : undefined,
+            completed: nowCompleted,
+            completed_at: nowCompleted ? new Date().toISOString() : undefined,
           }
         : f,
     );
     await persistLead({ follow_ups: updated });
+
+    // Keep the mirrored task in sync. UPDATE matches on lead_followup_id,
+    // which is set when the follow-up was first added.
+    const { error: taskErr } = await axiom.from("tasks")
+      .update({
+        status: nowCompleted ? "done" : "todo",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("lead_followup_id", id);
+    if (taskErr) console.warn("[leads] follow-up toggle → task mirror failed:", taskErr);
   }
 
   async function deleteFollowUp(id: string) {
     await persistLead({ follow_ups: followUps.filter((f) => f.id !== id) });
+
+    // Remove the mirrored task too — if none exists (older follow-ups
+    // from before this mirror was wired) the delete is a no-op.
+    const { error: taskErr } = await axiom.from("tasks").delete().eq("lead_followup_id", id);
+    if (taskErr) console.warn("[leads] follow-up delete → task mirror failed:", taskErr);
   }
 
   async function handleDelete() {
