@@ -589,9 +589,27 @@ export interface InventoryTransaction {
 
 // ── Leads ────────────────────────────────────────────────────
 
+export interface LeadNote {
+  id: string;
+  text: string;
+  author: string;
+  created_at: string;
+}
+
+export interface LeadFollowUp {
+  id: string;
+  due_date: string; // ISO yyyy-mm-dd
+  text: string;
+  completed: boolean;
+  completed_at?: string;
+  created_by: string;
+  created_at: string;
+}
+
 export interface Lead {
   id: string;
-  name: string;
+  name: string; // customer / contact name
+  project_name?: string; // headline for the lead — also carried to the estimate
   email?: string;
   phone?: string;
   description?: string;
@@ -601,6 +619,8 @@ export interface Lead {
   estimate_id?: string;
   source?: string;
   notes?: string;
+  notes_log?: LeadNote[];
+  follow_ups?: LeadFollowUp[];
   created_at: string;
   updated_at: string;
 }

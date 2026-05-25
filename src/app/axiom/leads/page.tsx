@@ -4,8 +4,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
-import { Lead, Customer } from "@/types/axiom";
-import { formatPhone } from "@/lib/utils";
+import { Lead, LeadNote, LeadFollowUp, Customer } from "@/types/axiom";
+import { formatPhone, cn } from "@/lib/utils";
+import DateField from "@/components/ui/DateField";
 import {
   Search,
   User,
@@ -13,6 +14,7 @@ import {
   Mail,
   DollarSign,
   Clock,
+  Calendar,
   X,
   ChevronRight,
   Plus,
@@ -54,6 +56,28 @@ function statusBadge(status: Lead["status"]) {
 
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function fmtTimestamp(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameYear = d.getFullYear() === now.getFullYear();
+  return d.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    ...(sameYear ? {} : { year: "numeric" }),
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function fmtDueDate(iso: string) {
+  return new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function authorDisplay(emailOrName: string) {
+  if (!emailOrName) return "Someone";
+  return emailOrName.includes("@") ? emailOrName.split("@")[0] : emailOrName;
 }
 
 // ── Customer Search ──────────────────────────────────────────────────────────
@@ -161,6 +185,7 @@ function CustomerSearch({
 // ── Create Lead Modal ────────────────────────────────────────────────────────
 
 function CreateLeadModal({ onClose, onCreated }: { onClose: () => void; onCreated: (l: Lead) => void }) {
+  const [projectName, setProjectName] = useState("");
   const [name, setName] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [email, setEmail] = useState("");
@@ -186,9 +211,11 @@ function CreateLeadModal({ onClose, onCreated }: { onClose: () => void; onCreate
   }
 
   async function save() {
-    if (!name.trim()) { setErr("Name is required."); return; }
+    if (!projectName.trim()) { setErr("Project name is required."); return; }
+    if (!name.trim()) { setErr("Customer name is required."); return; }
     setSaving(true);
     const { data, error } = await axiom.from("leads").insert({
+      project_name: projectName.trim(),
       name: name.trim(),
       email: email.trim() || null,
       phone: phone.trim() || null,
@@ -211,6 +238,16 @@ function CreateLeadModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <button onClick={onClose} className="text-muted hover:text-foreground"><X size={18} /></button>
         </div>
         <div className="space-y-4">
+          <div>
+            <label className={lbl}>Project Name</label>
+            <input
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              placeholder="Walnut kitchen island, etc."
+              className={inp}
+              autoFocus
+            />
+          </div>
           <CustomerSearch onSelect={handleCustomerSelect} initialName={name} />
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -264,27 +301,53 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
   onDelete: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [editProjectName, setEditProjectName] = useState("");
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPhone, setEditPhone] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editBudget, setEditBudget] = useState("");
   const [saving, setSaving] = useState(false);
-  const [notes, setNotes] = useState(lead.notes ?? "");
-  const [savingNotes, setSavingNotes] = useState(false);
-  const [notesDirty, setNotesDirty] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [converting, setConverting] = useState(false);
+
+  // Notes feed + follow-ups
+  const [newNote, setNewNote] = useState("");
+  const [addingNote, setAddingNote] = useState(false);
+  const [newFollowUpDate, setNewFollowUpDate] = useState("");
+  const [newFollowUpText, setNewFollowUpText] = useState("");
+  const [addingFollowUp, setAddingFollowUp] = useState(false);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
+
   const router = useRouter();
 
   useEffect(() => {
     setEditing(false);
-    setNotes(lead.notes ?? "");
-    setNotesDirty(false);
     setConfirmDelete(false);
+    setNewNote("");
+    setNewFollowUpDate("");
+    setNewFollowUpText("");
   }, [lead.id]);
 
+  useEffect(() => {
+    axiom.auth.getUser().then(({ data }) => {
+      setCurrentUserEmail(data.user?.email ?? "");
+    });
+  }, []);
+
+  const notesLog: LeadNote[] = lead.notes_log ?? [];
+  const followUps: LeadFollowUp[] = lead.follow_ups ?? [];
+
+  // Incomplete first (by due date asc), then completed (most recently
+  // completed first).
+  const sortedFollowUps = [...followUps].sort((a, b) => {
+    if (a.completed !== b.completed) return a.completed ? 1 : -1;
+    if (!a.completed) return a.due_date.localeCompare(b.due_date);
+    return (b.completed_at || "").localeCompare(a.completed_at || "");
+  });
+
   function startEdit() {
+    setEditProjectName(lead.project_name ?? "");
     setEditName(lead.name);
     setEditEmail(lead.email ?? "");
     setEditPhone(lead.phone ?? "");
@@ -297,6 +360,7 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
     setSaving(true);
     const { data, error } = await axiom.from("leads")
       .update({
+        project_name: editProjectName.trim() || null,
         name: editName.trim(),
         email: editEmail.trim() || null,
         phone: editPhone.trim() || null,
@@ -321,16 +385,67 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
     if (!error && data) onUpdate(data as Lead);
   }
 
-  async function saveNotes() {
-    setSavingNotes(true);
+  async function persistLead(patch: Partial<Lead>) {
     const { data, error } = await axiom.from("leads")
-      .update({ notes, updated_at: new Date().toISOString() })
+      .update({ ...patch, updated_at: new Date().toISOString() })
       .eq("id", lead.id)
       .select()
       .single();
     if (!error && data) onUpdate(data as Lead);
-    setSavingNotes(false);
-    setNotesDirty(false);
+  }
+
+  async function addNote() {
+    const text = newNote.trim();
+    if (!text) return;
+    setAddingNote(true);
+    const entry: LeadNote = {
+      id: crypto.randomUUID(),
+      text,
+      author: currentUserEmail || "Axiom",
+      created_at: new Date().toISOString(),
+    };
+    await persistLead({ notes_log: [entry, ...notesLog] });
+    setNewNote("");
+    setAddingNote(false);
+  }
+
+  async function deleteNote(id: string) {
+    await persistLead({ notes_log: notesLog.filter((n) => n.id !== id) });
+  }
+
+  async function addFollowUp() {
+    const text = newFollowUpText.trim();
+    if (!text || !newFollowUpDate) return;
+    setAddingFollowUp(true);
+    const entry: LeadFollowUp = {
+      id: crypto.randomUUID(),
+      due_date: newFollowUpDate,
+      text,
+      completed: false,
+      created_by: currentUserEmail || "Axiom",
+      created_at: new Date().toISOString(),
+    };
+    await persistLead({ follow_ups: [...followUps, entry] });
+    setNewFollowUpText("");
+    setNewFollowUpDate("");
+    setAddingFollowUp(false);
+  }
+
+  async function toggleFollowUp(id: string) {
+    const updated = followUps.map((f) =>
+      f.id === id
+        ? {
+            ...f,
+            completed: !f.completed,
+            completed_at: !f.completed ? new Date().toISOString() : undefined,
+          }
+        : f,
+    );
+    await persistLead({ follow_ups: updated });
+  }
+
+  async function deleteFollowUp(id: string) {
+    await persistLead({ follow_ups: followUps.filter((f) => f.id !== id) });
   }
 
   async function handleDelete() {
@@ -388,7 +503,9 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
 
     const { data: newEst } = await axiom.from("estimates").insert({
       estimate_number,
-      project_name: lead.description ? lead.description.slice(0, 80) : `${lead.name} project`,
+      project_name:
+        lead.project_name?.trim() ||
+        (lead.description ? lead.description.slice(0, 80) : `${lead.name} project`),
       client_name: lead.name,
       customer_id: customerId,
       status: "draft",
@@ -410,11 +527,12 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
 
     if (updatedLead) onUpdate(updatedLead as Lead);
 
+    const leadLabel = lead.project_name?.trim() || lead.name;
     await logActivity({
       action: "converted",
       entity: "lead",
       entity_id: lead.id,
-      label: `Converted lead "${lead.name}" → estimate ${estimate_number}`,
+      label: `Converted lead "${leadLabel}" → estimate ${estimate_number}`,
     });
 
     setConverting(false);
@@ -429,8 +547,14 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
       {/* Header */}
       <div className="px-6 py-5 border-b border-border flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <h2 className="text-xl font-semibold text-foreground truncate">{lead.name}</h2>
-          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+          <h2 className="text-xl font-semibold text-foreground truncate">
+            {lead.project_name?.trim() || "Untitled project"}
+          </h2>
+          <p className="text-sm text-muted truncate mt-0.5 flex items-center gap-1.5">
+            <User size={12} />
+            {lead.name}
+          </p>
+          <div className="flex items-center gap-3 mt-2 flex-wrap">
             {statusBadge(lead.status)}
             <span className="text-xs text-muted">
               <Clock size={11} className="inline mr-1" />
@@ -484,7 +608,11 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
         {editing ? (
           <div className="space-y-3 border border-border p-4">
             <div>
-              <label className={lbl}>Name</label>
+              <label className={lbl}>Project Name</label>
+              <input value={editProjectName} onChange={(e) => setEditProjectName(e.target.value)} className={inp} placeholder="Walnut kitchen island, etc." />
+            </div>
+            <div>
+              <label className={lbl}>Customer Name</label>
               <input value={editName} onChange={(e) => setEditName(e.target.value)} className={inp} />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -579,27 +707,144 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
           </div>
         )}
 
-        {/* Internal Notes */}
+        {/* Notes Feed */}
         <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <p className={lbl + " mb-0"}>Internal Notes</p>
-            {notesDirty && (
-              <button
-                onClick={saveNotes}
-                disabled={savingNotes}
-                className="text-xs bg-accent text-background px-3 py-1 hover:bg-accent/90 disabled:opacity-50 flex items-center gap-1"
-              >
-                <Check size={11} />
-                {savingNotes ? "Saving…" : "Save"}
-              </button>
+          <p className={lbl}>Notes</p>
+          <div className="border border-border bg-card">
+            <div className="p-3 border-b border-border">
+              <textarea
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                placeholder="Add a note…"
+                className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent resize-y min-h-[60px]"
+              />
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={addNote}
+                  disabled={!newNote.trim() || addingNote}
+                  className="text-xs bg-accent text-background px-3 py-1.5 hover:bg-accent/90 disabled:opacity-50 flex items-center gap-1 font-semibold"
+                >
+                  <Plus size={11} />
+                  {addingNote ? "Saving…" : "Add Note"}
+                </button>
+              </div>
+            </div>
+            {notesLog.length === 0 && !lead.notes && (
+              <p className="text-xs text-muted italic p-3">No notes yet.</p>
+            )}
+            {notesLog.map((n) => (
+              <div key={n.id} className="p-3 border-b border-border last:border-b-0 group">
+                <div className="flex items-start justify-between gap-2 mb-1">
+                  <div className="text-xs text-muted">
+                    <span className="font-medium text-foreground">{authorDisplay(n.author)}</span>
+                    <span className="mx-1.5">·</span>
+                    {fmtTimestamp(n.created_at)}
+                  </div>
+                  <button
+                    onClick={() => deleteNote(n.id)}
+                    className="text-muted opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity"
+                    title="Delete note"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+                <p className="text-sm text-foreground whitespace-pre-wrap">{n.text}</p>
+              </div>
+            ))}
+            {notesLog.length === 0 && lead.notes && (
+              <div className="p-3 border-b border-border last:border-b-0">
+                <div className="text-xs text-muted italic mb-1">Original notes</div>
+                <p className="text-sm text-foreground whitespace-pre-wrap">{lead.notes}</p>
+              </div>
             )}
           </div>
-          <textarea
-            value={notes}
-            onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
-            placeholder="Add internal notes about this lead…"
-            className={inp + " min-h-[100px] resize-y"}
-          />
+        </div>
+
+        {/* Follow-ups */}
+        <div>
+          <p className={lbl}>Follow-ups</p>
+          <div className="border border-border bg-card">
+            <div className="p-3 border-b border-border space-y-2">
+              <div className="grid grid-cols-[160px_1fr] gap-2">
+                <DateField
+                  value={newFollowUpDate}
+                  onChange={setNewFollowUpDate}
+                  placeholder="Due date"
+                  inputClassName="w-full bg-background border border-border px-3 py-2 text-sm text-foreground hover:border-accent focus:outline-none focus:border-accent text-left transition-colors"
+                />
+                <input
+                  value={newFollowUpText}
+                  onChange={(e) => setNewFollowUpText(e.target.value)}
+                  placeholder="What to follow up on…"
+                  className="bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+                />
+              </div>
+              <div className="flex justify-end">
+                <button
+                  onClick={addFollowUp}
+                  disabled={!newFollowUpText.trim() || !newFollowUpDate || addingFollowUp}
+                  className="text-xs bg-accent text-background px-3 py-1.5 hover:bg-accent/90 disabled:opacity-50 flex items-center gap-1 font-semibold"
+                >
+                  <Plus size={11} />
+                  {addingFollowUp ? "Saving…" : "Add Follow-up"}
+                </button>
+              </div>
+            </div>
+            {followUps.length === 0 ? (
+              <p className="text-xs text-muted italic p-3">No follow-ups scheduled.</p>
+            ) : (
+              sortedFollowUps.map((f) => {
+                const due = new Date(f.due_date + "T00:00:00");
+                const today = new Date(); today.setHours(0, 0, 0, 0);
+                const isOverdue = !f.completed && due < today;
+                const isToday = !f.completed && due.getTime() === today.getTime();
+                return (
+                  <div key={f.id} className="p-3 border-b border-border last:border-b-0 group flex items-start gap-3">
+                    <button
+                      onClick={() => toggleFollowUp(f.id)}
+                      className={cn(
+                        "shrink-0 mt-0.5 w-4 h-4 border flex items-center justify-center transition-colors",
+                        f.completed
+                          ? "bg-accent border-accent"
+                          : "border-border hover:border-accent",
+                      )}
+                      title={f.completed ? "Mark incomplete" : "Mark complete"}
+                    >
+                      {f.completed && <Check size={11} className="text-background" />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 text-xs mb-0.5">
+                        <Calendar size={11} className="text-muted" />
+                        <span className={cn(
+                          "text-muted",
+                          isOverdue && "text-red-500 font-semibold",
+                          isToday && "text-accent font-semibold",
+                          f.completed && "line-through",
+                        )}>
+                          {fmtDueDate(f.due_date)}
+                          {isOverdue && " · overdue"}
+                          {isToday && " · today"}
+                        </span>
+                      </div>
+                      <p className={cn(
+                        "text-sm whitespace-pre-wrap",
+                        f.completed ? "line-through text-muted" : "text-foreground",
+                      )}>
+                        {f.text}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => deleteFollowUp(f.id)}
+                      className="text-muted opacity-0 group-hover:opacity-100 hover:text-red-500 transition-opacity"
+                      title="Delete follow-up"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
 
         {/* Convert to Estimate */}
@@ -649,6 +894,7 @@ export default function LeadsPage() {
     const q = search.toLowerCase();
     const matchSearch =
       !q ||
+      (l.project_name ?? "").toLowerCase().includes(q) ||
       l.name.toLowerCase().includes(q) ||
       (l.email ?? "").toLowerCase().includes(q) ||
       (l.phone ?? "").toLowerCase().includes(q) ||
@@ -758,8 +1004,10 @@ export default function LeadsPage() {
                     <User size={13} style={{ color: STATUSES.find((s) => s.key === lead.status)?.color ?? "#9ca3af" }} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className={`text-sm font-medium truncate ${active ? "text-accent" : "text-foreground"}`}>{lead.name}</p>
-                    <p className="text-xs text-muted truncate mt-0.5">{lead.email || lead.phone || "No contact info"}</p>
+                    <p className={`text-sm font-medium truncate ${active ? "text-accent" : "text-foreground"}`}>
+                      {lead.project_name?.trim() || "Untitled project"}
+                    </p>
+                    <p className="text-xs text-muted truncate mt-0.5">{lead.name}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span
                         className="text-[10px] font-semibold"
