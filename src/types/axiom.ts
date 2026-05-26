@@ -518,6 +518,7 @@ export interface SavedAddress {
 export interface TeamMember {
   name: string;
   email: string;
+  phone?: string;
   role: "admin" | "manager" | "staff";
   hourly_rate: number;
   pin?: string;

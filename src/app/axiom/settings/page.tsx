@@ -6,7 +6,7 @@ import { Settings, TeamMember } from "@/types/axiom";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, MessageSquare } from "lucide-react";
 import { cn, formatPhone } from "@/lib/utils";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 
@@ -176,6 +176,53 @@ export default function SettingsPage() {
                       )} />
                     </button>
                   </label>
+                </div>
+                <div className="grid grid-cols-[1fr_auto] gap-3 items-end">
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider text-muted block mb-1">Phone</label>
+                    <input
+                      type="tel"
+                      value={m.phone || ""}
+                      onChange={(e) => {
+                        const members = [...(settings.team_members || [])];
+                        members[i] = { ...members[i], phone: formatPhone(e.target.value) };
+                        updateField("team_members", members);
+                      }}
+                      placeholder="(402) 000-0000"
+                      className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+                    />
+                  </div>
+                  {(() => {
+                    const digits = (m.phone || "").replace(/\D/g, "");
+                    const ready = digits.length >= 10 && !!m.pin;
+                    const tel = digits.length === 10 ? `+1${digits}` : `+${digits}`;
+                    const bizName = settings.biz_name || "RELIC";
+                    // \n inside encodeURIComponent renders as a line break in
+                    // Messages on iOS and as a space on Android — both fine.
+                    const body = `Time clock for ${bizName}: https://relicbuilt.com/axiom/timeclock\n\nYour PIN is ${m.pin || "XXXX"}.\n\nTap your name, enter the PIN, pick the project, then Clock In. Same way to clock out at the end of the day.\n\nTip: in Safari, tap share → "Add to Home Screen" so it sits like an app icon.`;
+                    return (
+                      <a
+                        href={ready ? `sms:${tel}?body=${encodeURIComponent(body)}` : undefined}
+                        onClick={(e) => { if (!ready) e.preventDefault(); }}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold transition-colors whitespace-nowrap",
+                          ready
+                            ? "bg-accent text-background hover:bg-accent/90"
+                            : "bg-card border border-border text-muted cursor-not-allowed",
+                        )}
+                        title={
+                          digits.length < 10
+                            ? "Add a phone number first"
+                            : !m.pin
+                              ? "Set a PIN first"
+                              : "Open Messages with the time clock link pre-filled"
+                        }
+                      >
+                        <MessageSquare size={12} />
+                        Send Time Clock Link
+                      </a>
+                    );
+                  })()}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
