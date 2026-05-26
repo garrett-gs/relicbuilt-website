@@ -10,6 +10,18 @@ import DateField from "@/components/ui/DateField";
 
 type Step = "select_member" | "enter_pin" | "select_project" | "confirm_clock_in" | "clocked_in" | "clocked_out" | "manual_entry" | "manual_saved";
 
+// Always-available bucket for shop hours that aren't tied to a project —
+// cleanup, organization, training, etc. Time entries saved against this
+// bucket store custom_work_id: null and project_name: "Shop", which keeps
+// them out of every real project's labor_log automatically.
+const SHOP_BUCKET_ID = "__shop__";
+const SHOP_BUCKET = {
+  id: SHOP_BUCKET_ID,
+  project_name: "Shop",
+  client_name: "",
+  status: "in_progress",
+} as CustomWork;
+
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
@@ -137,10 +149,11 @@ export default function TimeClockPage() {
       }
     }
 
+    const isShop = project.id === SHOP_BUCKET_ID;
     const { data } = await axiom.from("time_entries").insert({
       member_name: selectedMember!.name,
-      custom_work_id: project.id,
-      project_name: project.project_name,
+      custom_work_id: isShop ? null : project.id,
+      project_name: isShop ? "Shop" : project.project_name,
       clock_in: new Date().toISOString(),
       hourly_rate: selectedMember!.hourly_rate || 60,
     }).select().single();
@@ -211,7 +224,8 @@ export default function TimeClockPage() {
     const deductHours = Math.max(0, parseFloat(manualBreakHours) || 0);
     const hours = Math.max(0, Math.round((rawHours - deductHours) * 100) / 100);
 
-    const project = projects.find((p) => p.id === manualProject);
+    const isShop = manualProject === SHOP_BUCKET_ID;
+    const project = isShop ? null : projects.find((p) => p.id === manualProject);
     const member = members.find((m) => m.name === manualMember);
     const rate = member?.hourly_rate || 60;
     const cost = Math.round(hours * rate * 100) / 100;
@@ -232,8 +246,8 @@ export default function TimeClockPage() {
     // Insert time entry
     await axiom.from("time_entries").insert({
       member_name: manualMember,
-      custom_work_id: manualProject,
-      project_name: project?.project_name || "",
+      custom_work_id: isShop ? null : manualProject,
+      project_name: isShop ? "Shop" : (project?.project_name || ""),
       clock_in: clockIn,
       clock_out: clockOut,
       hours,
@@ -263,7 +277,7 @@ export default function TimeClockPage() {
       }
     }
 
-    setManualSavedEntry({ member: manualMember, project: project?.project_name || "", hours, cost });
+    setManualSavedEntry({ member: manualMember, project: isShop ? "Shop" : (project?.project_name || ""), hours, cost });
     setManualSaving(false);
     setStep("manual_saved");
   }
@@ -395,38 +409,44 @@ export default function TimeClockPage() {
             {selectedMember?.name}
           </h2>
           <p className="text-center text-sm text-muted mb-4">Select a project</p>
-          {projects.length === 0 ? (
-            <p className="text-center text-muted text-sm">No active projects.</p>
-          ) : (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {projects.map((p) => {
-                const isClockedIn = activeEntry?.custom_work_id === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => { if (isClockedIn) { setStep("clocked_in"); } else { setSelectedProject(p); setStep("confirm_clock_in"); } }}
-                    className={cn(
-                      "w-full border p-4 text-left transition-colors flex items-center justify-between",
-                      isClockedIn
-                        ? "bg-green-500/10 border-green-500/50 hover:border-green-500"
-                        : "bg-card border-border hover:border-accent"
-                    )}
-                  >
-                    <div>
-                      <p className="font-medium text-sm">{p.project_name}</p>
-                      {p.client_name && <p className="text-xs text-muted">{p.client_name}</p>}
-                    </div>
-                    <span className={cn(
-                      "text-xs px-2 py-1 border flex items-center gap-1",
-                      isClockedIn ? "border-green-500 text-green-500" : "border-border text-muted capitalize"
-                    )}>
-                      {isClockedIn ? <><Clock size={10} /> Clocked In</> : p.status.replace("_", " ")}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {[SHOP_BUCKET, ...projects].map((p) => {
+              const isShop = p.id === SHOP_BUCKET_ID;
+              const isClockedIn = isShop
+                ? !activeEntry?.custom_work_id && activeEntry?.project_name === "Shop"
+                : activeEntry?.custom_work_id === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => { if (isClockedIn) { setStep("clocked_in"); } else { setSelectedProject(p); setStep("confirm_clock_in"); } }}
+                  className={cn(
+                    "w-full border p-4 text-left transition-colors flex items-center justify-between",
+                    isClockedIn
+                      ? "bg-green-500/10 border-green-500/50 hover:border-green-500"
+                      : isShop
+                        ? "bg-card border-accent/40 hover:border-accent"
+                        : "bg-card border-border hover:border-accent",
+                  )}
+                >
+                  <div>
+                    <p className="font-medium text-sm">{p.project_name}</p>
+                    {!isShop && p.client_name && <p className="text-xs text-muted">{p.client_name}</p>}
+                    {isShop && <p className="text-xs text-muted">Non-project hours (cleanup, organizing, etc.)</p>}
+                  </div>
+                  <span className={cn(
+                    "text-xs px-2 py-1 border flex items-center gap-1",
+                    isClockedIn
+                      ? "border-green-500 text-green-500"
+                      : isShop
+                        ? "border-accent/40 text-accent"
+                        : "border-border text-muted capitalize",
+                  )}>
+                    {isClockedIn ? <><Clock size={10} /> Clocked In</> : isShop ? "Shop time" : p.status.replace("_", " ")}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
           <button onClick={reset} className="mt-4 text-xs text-muted hover:text-foreground flex items-center gap-1 mx-auto">
             <X size={12} /> Cancel
           </button>
@@ -601,6 +621,7 @@ export default function TimeClockPage() {
                 className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
               >
                 <option value="">Select project...</option>
+                <option value={SHOP_BUCKET_ID}>Shop — non-project hours</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>{p.project_name}{p.client_name ? ` — ${p.client_name}` : ""}</option>
                 ))}
