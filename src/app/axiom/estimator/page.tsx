@@ -90,9 +90,11 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: SearchResult)
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
 
+  const [searchError, setSearchError] = useState(false);
+
   async function search(q: string) {
     setQuery(q);
-    if (!q.trim()) { setResults([]); setOpen(false); return; }
+    if (!q.trim()) { setResults([]); setOpen(false); setSearchError(false); return; }
     // Most clients are individual contacts who happen to work at a company,
     // so we lead with customers — matched by their own name OR their cached
     // company_name (so typing "Acme" still surfaces every contact at Acme).
@@ -105,36 +107,51 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: SearchResult)
     // which previously hid every newly-added individual customer from the
     // search. Running them separately and de-duping by id sidesteps that.
     const trimmed = q.trim().replace(/[%,]/g, "");
-    const [byName, byCompany, { data: companies }] = await Promise.all([
-      axiom.from("customers").select("id,name,email,phone,company_name").ilike("name", `%${trimmed}%`).limit(8),
-      axiom.from("customers").select("id,name,email,phone,company_name").ilike("company_name", `%${trimmed}%`).limit(8),
-      axiom.from("companies").select("id,name,phone").ilike("name", `%${trimmed}%`).limit(4),
-    ]);
-    const seenCustomerIds = new Set<string>();
-    const customerRows = [...(byName.data || []), ...(byCompany.data || [])].filter((c) => {
-      if (!c?.id || seenCustomerIds.has(c.id)) return false;
-      seenCustomerIds.add(c.id);
-      return true;
-    });
-    const merged: SearchResult[] = [
-      ...customerRows.map((c) => ({
-        id: c.id,
-        name: c.name,
-        email: c.email || "",
-        phone: c.phone || "",
-        company_name: c.company_name || "",
-        type: "customer" as const,
-      })),
-      ...((companies || []).map((co) => ({
-        id: co.id,
-        name: co.name,
-        email: "",
-        phone: co.phone || "",
-        type: "company" as const,
-      }))),
-    ];
-    setResults(merged);
-    setOpen(true);
+    try {
+      const [byName, byCompany, companiesRes] = await Promise.all([
+        axiom.from("customers").select("id,name,email,phone,company_name").ilike("name", `%${trimmed}%`).limit(8),
+        axiom.from("customers").select("id,name,email,phone,company_name").ilike("company_name", `%${trimmed}%`).limit(8),
+        axiom.from("companies").select("id,name,phone").ilike("name", `%${trimmed}%`).limit(4),
+      ]);
+      if (byName.error) console.error("[customer-search] byName failed:", byName.error);
+      if (byCompany.error) console.error("[customer-search] byCompany failed:", byCompany.error);
+      if (companiesRes.error) console.error("[customer-search] companies failed:", companiesRes.error);
+
+      const seenCustomerIds = new Set<string>();
+      const customerRows = [...(byName.data || []), ...(byCompany.data || [])].filter((c) => {
+        if (!c?.id || seenCustomerIds.has(c.id)) return false;
+        seenCustomerIds.add(c.id);
+        return true;
+      });
+      const merged: SearchResult[] = [
+        ...customerRows.map((c) => ({
+          id: c.id,
+          name: c.name,
+          email: c.email || "",
+          phone: c.phone || "",
+          company_name: c.company_name || "",
+          type: "customer" as const,
+        })),
+        ...((companiesRes.data || []).map((co) => ({
+          id: co.id,
+          name: co.name,
+          email: "",
+          phone: co.phone || "",
+          type: "company" as const,
+        }))),
+      ];
+      setResults(merged);
+      setSearchError(false);
+      setOpen(true);
+    } catch (err) {
+      // Unhandled rejection — most commonly a flaky fetch on iPad/cellular.
+      // Surface this in the dropdown so the user knows it isn't "no match";
+      // it's a network/auth issue worth retrying.
+      console.error("[customer-search] search threw:", err);
+      setResults([]);
+      setSearchError(true);
+      setOpen(true);
+    }
   }
 
   function pick(c: SearchResult) {
@@ -165,7 +182,8 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: SearchResult)
               value={query}
               onChange={(e) => search(e.target.value)}
               placeholder="Search by contact name or company…"
-              className="w-full bg-card border border-border pl-9 pr-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+              className="w-full bg-card border border-border pl-9 pr-4 py-3 text-foreground focus:outline-none focus:border-accent"
+              style={{ fontSize: 16 }}
             />
           </div>
         )}
@@ -192,7 +210,12 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: SearchResult)
           ))}
         </div>
       )}
-      {open && results.length === 0 && query && (
+      {open && searchError && (
+        <div className="absolute z-20 top-full left-0 right-0 bg-card border border-red-500/40 mt-0.5 px-4 py-3 text-sm text-red-400">
+          Search failed — check your connection and try again.
+        </div>
+      )}
+      {open && !searchError && results.length === 0 && query && (
         <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border mt-0.5 px-4 py-3 text-sm text-muted">
           No results — <a href="/axiom/customers" className="text-accent underline">add a customer</a>
         </div>
