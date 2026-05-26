@@ -1004,8 +1004,11 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   </style>
 </head>
 <body>
-  <div class="no-print" style="position:sticky;top:0;background:#111;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;z-index:1000;">
-    <span style="color:#fff;font-size:14px;letter-spacing:1px;">Proposal Preview</span>
+  <div class="no-print" style="position:sticky;top:0;background:#111;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;gap:16px;z-index:1000;">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <button onclick="window.close()" aria-label="Close preview" style="background:transparent;border:1px solid #555;color:#fff;width:38px;height:38px;font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✕</button>
+      <span style="color:#fff;font-size:14px;letter-spacing:1px;">Proposal Preview</span>
+    </div>
     <button onclick="window.print()" style="background:#c4a24d;color:#0a0a0a;border:none;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:1px;">SAVE AS PDF / PRINT</button>
   </div>
   ${proposalBody}

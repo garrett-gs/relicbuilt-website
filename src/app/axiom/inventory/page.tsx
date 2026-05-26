@@ -272,8 +272,11 @@ function InventoryTab({
   </style>
 </head>
 <body>
-  <div class="no-print" style="padding:12px 20px;background:#111;display:flex;justify-content:space-between;align-items:center;">
-    <span style="color:#fff;font-size:14px;">Inventory Take Sheet</span>
+  <div class="no-print" style="padding:12px 20px;background:#111;display:flex;justify-content:space-between;align-items:center;gap:16px;">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <button onclick="window.close()" aria-label="Close" style="background:transparent;border:1px solid #555;color:#fff;width:34px;height:34px;font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✕</button>
+      <span style="color:#fff;font-size:14px;">Inventory Take Sheet</span>
+    </div>
     <button onclick="window.print()" style="background:#c8a55a;color:#111;border:none;padding:8px 20px;font-size:13px;font-weight:600;cursor:pointer;letter-spacing:1px;">PRINT</button>
   </div>
 
