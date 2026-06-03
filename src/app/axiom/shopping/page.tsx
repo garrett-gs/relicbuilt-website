@@ -295,7 +295,7 @@ function ShoppingListCard({
 
   return (
     <div className="border border-border bg-card">
-      <div className="px-4 py-3 border-b border-border flex items-center gap-3 bg-[#1f1f1f]">
+      <div className="px-4 py-3 border-b border-border flex items-center gap-3">
         {editingName ? (
           <input
             autoFocus
@@ -318,7 +318,7 @@ function ShoppingListCard({
           />
         ) : (
           <>
-            <h2 className="text-lg font-semibold text-foreground flex-1 truncate">{list.name}</h2>
+            <h2 className="text-2xl font-bold text-accent flex-1 truncate tracking-wide">{list.name}</h2>
             <span className="text-xs text-muted">{active.length}</span>
             <button
               onClick={() => setEditingName(true)}
