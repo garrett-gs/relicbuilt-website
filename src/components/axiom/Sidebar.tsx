@@ -19,6 +19,7 @@ import {
   FileText,
   Calculator,
   ShoppingCart,
+  ShoppingBag,
   Receipt,
   Camera,
   Activity,
@@ -56,6 +57,7 @@ const navSections = [
       { href: "/axiom/timeclock", icon: Clock, label: "Time Clock" },
       { href: "/axiom/calendar", icon: CalendarDays, label: "Build Calendar" },
       { href: "/axiom/inventory", icon: Warehouse, label: "Inventory" },
+      { href: "/axiom/shopping", icon: ShoppingBag, label: "Shopping" },
     ],
   },
   {

@@ -528,6 +528,24 @@ export interface TeamMember {
   };
 }
 
+// ── Shopping Lists ──────────────────────────────────────────
+
+export interface ShoppingItem {
+  id: string;
+  text: string;
+  purchased: boolean;
+  purchased_at?: string;
+  created_at: string;
+}
+
+export interface ShoppingList {
+  id: string;
+  name: string;
+  items: ShoppingItem[];
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Time Entries ────────────────────────────────────────────
 
 export interface TimeEntry {
