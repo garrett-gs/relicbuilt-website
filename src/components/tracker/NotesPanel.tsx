@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import {
   Plus, X, Trash2, ChevronDown, Folder, FileText,
   Image as ImageIcon, Link as LinkIcon, BookOpen,
+  IndentIncrease, IndentDecrease,
 } from "lucide-react";
 import ImageUpload from "@/components/ui/ImageUpload";
 
@@ -213,8 +214,15 @@ export default function NotesPanel() {
           pointer-events: none;
           font-style: italic;
         }
-        .notes-editor ul, .note-view ul { list-style: disc; padding-left: 1.4em; margin: 2px 0; }
-        .notes-editor ol, .note-view ol { list-style: decimal; padding-left: 1.4em; margin: 2px 0; }
+        /* Cascading list styles so nested numbered lists go 1. → a. → i. → 1.
+           and nested bullet lists go • → ◦ → ▪ → • */
+        .notes-editor ul, .note-view ul { list-style-type: disc; padding-left: 1.4em; margin: 2px 0; }
+        .notes-editor ul ul, .note-view ul ul { list-style-type: circle; }
+        .notes-editor ul ul ul, .note-view ul ul ul { list-style-type: square; }
+        .notes-editor ol, .note-view ol { list-style-type: decimal; padding-left: 1.4em; margin: 2px 0; }
+        .notes-editor ol ol, .note-view ol ol { list-style-type: lower-alpha; }
+        .notes-editor ol ol ol, .note-view ol ol ol { list-style-type: lower-roman; }
+        .notes-editor ol ol ol ol, .note-view ol ol ol ol { list-style-type: decimal; }
         .notes-editor li, .note-view li { margin: 1px 0; }
         .notes-editor img, .note-view img { max-width: 100%; height: auto; display: block; margin: 4px 0; border-radius: 2px; }
         .notes-editor a, .note-view a { color: #c4a24d; text-decoration: underline; }
@@ -259,6 +267,8 @@ export default function NotesPanel() {
             <div className="w-px h-4 bg-border mx-0.5 shrink-0" />
             <NoteToolBtn onMouseDown={() => execCmd("insertUnorderedList")} title="Bullet list"><span className="text-sm leading-none">•</span></NoteToolBtn>
             <NoteToolBtn onMouseDown={() => execCmd("insertOrderedList")} title="Numbered list"><span className="text-xs">1.</span></NoteToolBtn>
+            <NoteToolBtn onMouseDown={() => execCmd("outdent")} title="Outdent (Shift+Tab)"><IndentDecrease size={11} /></NoteToolBtn>
+            <NoteToolBtn onMouseDown={() => execCmd("indent")} title="Indent sub-item (Tab)"><IndentIncrease size={11} /></NoteToolBtn>
             <NoteToolBtn onMouseDown={insertCheckbox} title="Checkbox"><span className="text-xs">☐</span></NoteToolBtn>
             <div className="w-px h-4 bg-border mx-0.5 shrink-0" />
             <NoteToolBtn onMouseDown={() => { setShowImageInput((v) => !v); setShowLinkInput(false); }} title="Insert image">
@@ -321,6 +331,25 @@ export default function NotesPanel() {
             contentEditable
             suppressContentEditableWarning
             onInput={() => scheduleAutoSave(getCurrentContent())}
+            onKeyDown={(e) => {
+              // Tab inside a list = nest sub-item; Shift+Tab = unnest.
+              // Outside a list, default browser behavior (focus move) wins
+              // so the user can still tab out of the editor.
+              if (e.key !== "Tab") return;
+              const sel = window.getSelection();
+              if (!sel || sel.rangeCount === 0) return;
+              const node = sel.anchorNode;
+              let el: HTMLElement | null = node instanceof HTMLElement ? node : node?.parentElement || null;
+              while (el && el !== editorRef.current) {
+                if (el.tagName === "LI") {
+                  e.preventDefault();
+                  document.execCommand(e.shiftKey ? "outdent" : "indent");
+                  scheduleAutoSave(getCurrentContent());
+                  return;
+                }
+                el = el.parentElement;
+              }
+            }}
             className="notes-editor flex-1 overflow-auto bg-card border border-border p-3 text-sm text-foreground focus:outline-none"
             style={{ lineHeight: "1.7", minHeight: "120px" }}
           />
