@@ -389,6 +389,10 @@ export interface PurchaseOrder {
   unit_price: number;
   line_items: POLineItem[];
   notes?: string;
+  // Sidemark / customer reference number that travels with the goods —
+  // shown prominently on the supplier-facing PO so anything that ships
+  // can be tagged or staged correctly on the vendor's side.
+  sidemark?: string;
   custom_work_id?: string;
   status: "pending" | "approved" | "rejected";
   need_by_date?: string;

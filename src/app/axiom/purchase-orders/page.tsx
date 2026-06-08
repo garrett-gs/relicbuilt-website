@@ -241,7 +241,7 @@ function OrdersTab() {
 
   const grandTotal = filtered.reduce((s, p) => s + poTotal(p), 0);
 
-  async function createPO(vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, customWorkId?: string) {
+  async function createPO(vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, customWorkId?: string) {
     const total = lineItems.reduce((s, li) => s + li.quantity * li.unit_price, 0);
     const { data } = await axiom.from("purchase_orders").insert({
       po_number: "PO-TEMP",
@@ -252,6 +252,7 @@ function OrdersTab() {
       unit_price: total,
       line_items: lineItems,
       notes: notes || null,
+      sidemark: sidemark.trim() || null,
       need_by_date: needByDate || null,
       delivery_method: deliveryMethod || null,
       delivery_date: deliveryDate || null,
@@ -287,7 +288,7 @@ function OrdersTab() {
     load();
   }
 
-  async function updatePO(id: string, vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, customWorkId?: string) {
+  async function updatePO(id: string, vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, customWorkId?: string) {
     const total = lineItems.reduce((s, li) => s + li.quantity * li.unit_price, 0);
     await axiom.from("purchase_orders").update({
       vendor_id: vendorId || null,
@@ -297,6 +298,7 @@ function OrdersTab() {
       unit_price: total,
       line_items: lineItems,
       notes: notes || null,
+      sidemark: sidemark.trim() || null,
       need_by_date: needByDate || null,
       delivery_method: deliveryMethod || null,
       delivery_date: deliveryDate || null,
@@ -661,8 +663,8 @@ function OrdersTab() {
           po={editPO}
           vendors={vendors}
           projects={projects}
-          onSubmit={(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, customWorkId) =>
-            updatePO(editPO.id, vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, customWorkId)
+          onSubmit={(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, customWorkId) =>
+            updatePO(editPO.id, vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, customWorkId)
           }
           onClose={() => setEditPO(null)}
         />
@@ -740,7 +742,7 @@ function OrdersTab() {
 function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
   vendors: Vendor[];
   projects: SimpleProject[];
-  onSubmit: (vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, customWorkId?: string) => void;
+  onSubmit: (vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, customWorkId?: string) => void;
   onClose: () => void;
 }) {
   const [vendorId, setVendorId] = useState("");
@@ -748,6 +750,7 @@ function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [lineItems, setLineItems] = useState<POLineItem[]>([]);
   const [notes, setNotes] = useState("");
+  const [sidemark, setSidemark] = useState("");
   const [needByDate, setNeedByDate] = useState("");
   const [catalogSearch, setCatalogSearch] = useState("");
   const [deliveryMethod, setDeliveryMethod] = useState("");
@@ -933,6 +936,16 @@ function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
                     inputClassName="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent hover:border-accent transition-colors text-left"
                   />
                 </div>
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Sidemark / Reference #</label>
+                  <input
+                    value={sidemark}
+                    onChange={(e) => setSidemark(e.target.value)}
+                    placeholder="e.g. Smith Kitchen 2026"
+                    className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+                    style={{ fontSize: 16 }}
+                  />
+                </div>
               </div>
 
               <div>
@@ -941,7 +954,7 @@ function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
               </div>
 
               <div className="flex gap-3">
-                <Button onClick={() => onSubmit(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, projectId)} disabled={!vendorName || lineItems.length === 0}>Create P.O.</Button>
+                <Button onClick={() => onSubmit(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, projectId)} disabled={!vendorName || lineItems.length === 0}>Create P.O.</Button>
                 <Button variant="outline" onClick={onClose}>Cancel</Button>
               </div>
             </div>
@@ -1009,7 +1022,7 @@ function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
   po: PurchaseOrder;
   vendors: Vendor[];
   projects: SimpleProject[];
-  onSubmit: (vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, customWorkId?: string) => void;
+  onSubmit: (vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, customWorkId?: string) => void;
   onClose: () => void;
 }) {
   const [vendorId, setVendorId] = useState(po.vendor_id || "");
@@ -1017,6 +1030,7 @@ function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [lineItems, setLineItems] = useState<POLineItem[]>(po.line_items || []);
   const [notes, setNotes] = useState(po.notes || "");
+  const [sidemark, setSidemark] = useState(po.sidemark || "");
   const [needByDate, setNeedByDate] = useState(po.need_by_date || "");
   const [catalogSearch, setCatalogSearch] = useState("");
   const [deliveryMethod, setDeliveryMethod] = useState(po.delivery_method || "");
@@ -1178,6 +1192,16 @@ function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
                     inputClassName="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent hover:border-accent transition-colors text-left"
                   />
                 </div>
+                <div>
+                  <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Sidemark / Reference #</label>
+                  <input
+                    value={sidemark}
+                    onChange={(e) => setSidemark(e.target.value)}
+                    placeholder="e.g. Smith Kitchen 2026"
+                    className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+                    style={{ fontSize: 16 }}
+                  />
+                </div>
               </div>
 
               <div>
@@ -1186,7 +1210,7 @@ function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
               </div>
 
               <div className="flex gap-3">
-                <Button onClick={() => onSubmit(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, projectId || undefined)} disabled={!vendorName || lineItems.length === 0}>Save Changes</Button>
+                <Button onClick={() => onSubmit(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, projectId || undefined)} disabled={!vendorName || lineItems.length === 0}>Save Changes</Button>
                 <Button variant="outline" onClick={onClose}>Cancel</Button>
               </div>
             </div>

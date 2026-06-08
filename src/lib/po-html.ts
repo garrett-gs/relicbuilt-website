@@ -33,10 +33,25 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
         </div>
       </div>
 
-      <div style="margin-bottom:24px;">
-        <p style="margin:0;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#888;">Vendor</p>
-        <p style="margin:4px 0 0;font-size:16px;font-weight:bold;">${po.vendor_name}</p>
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:24px;">
+        <div>
+          <p style="margin:0;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#888;">Vendor</p>
+          <p style="margin:4px 0 0;font-size:16px;font-weight:bold;">${po.vendor_name}</p>
+        </div>
+        ${po.sidemark ? `
+          <div style="text-align:right;min-width:200px;">
+            <p style="margin:0;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#888;">Sidemark / Reference</p>
+            <p style="margin:4px 0 0;font-size:16px;font-weight:bold;color:#111;">${po.sidemark}</p>
+          </div>
+        ` : ""}
       </div>
+
+      ${po.sidemark ? `
+        <div style="margin-bottom:24px;padding:14px 18px;background:#fff9e6;border:2px solid #c4a24d;">
+          <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;color:#8a6a1f;">⚑ Mark all shipments with</p>
+          <p style="margin:6px 0 0;font-size:20px;font-weight:bold;color:#111;letter-spacing:0.02em;">${po.sidemark}</p>
+        </div>
+      ` : ""}
 
       <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:24px;">
         <thead>
