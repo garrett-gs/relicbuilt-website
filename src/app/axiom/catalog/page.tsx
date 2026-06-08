@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import {
   ProductCatalog,
@@ -347,25 +347,79 @@ function CatalogHeader({ catalog, onRename, onDelete }: {
 
 // ─── Product Detail ─────────────────────────────────────────────────────
 
+// Local-first editing with debounced server save. The catalog page's
+// parent reloads the product row after every persisted update, which
+// caused the controlled <input value={product.x}> bindings to re-render
+// mid-keystroke and bounce the cursor. Now every input reads from a
+// local draft updated synchronously; the supabase write fires 600ms
+// after the user stops typing.
+function useDebouncedDraft<T extends { id: string }>(
+  initial: T,
+  save: (patch: Partial<T>) => void,
+  delay = 600,
+): [T, (patch: Partial<T>) => void] {
+  const [draft, setDraft] = useState<T>(initial);
+  const idRef = useRef(initial.id);
+  const pendingRef = useRef<Partial<T>>({});
+  const timerRef = useRef<number | null>(null);
+  const saveRef = useRef(save);
+  useEffect(() => { saveRef.current = save; }, [save]);
+
+  // Only reset draft when the user switches to a different product —
+  // NOT when the parent re-renders us after a save with a fresh row.
+  useEffect(() => {
+    if (initial.id !== idRef.current) {
+      idRef.current = initial.id;
+      setDraft(initial);
+      pendingRef.current = {};
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+    }
+  }, [initial]);
+
+  const patch = useCallback((p: Partial<T>) => {
+    setDraft((cur) => ({ ...cur, ...p }));
+    pendingRef.current = { ...pendingRef.current, ...p };
+    if (timerRef.current) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      const toSave = pendingRef.current;
+      pendingRef.current = {};
+      if (Object.keys(toSave).length > 0) saveRef.current(toSave);
+    }, delay);
+  }, [delay]);
+
+  // Flush pending edits on unmount (e.g. user navigates away mid-typing).
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) window.clearTimeout(timerRef.current);
+      if (Object.keys(pendingRef.current).length > 0) {
+        saveRef.current(pendingRef.current);
+      }
+    };
+  }, []);
+
+  return [draft, patch];
+}
+
 function ProductDetail({ product, onUpdate, onDelete }: {
   product: Product;
   onUpdate: (patch: Partial<Product>) => void;
   onDelete: () => void;
 }) {
+  const [draft, patchDraft] = useDebouncedDraft(product, onUpdate);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Totals
-  const materialsTotal = (product.materials || []).reduce(
+  const materialsTotal = (draft.materials || []).reduce(
     (s, m) => s + (Number(m.quantity) || 0) * (Number(m.unit_cost) || 0), 0,
   );
-  const partsTotal = (product.parts || []).reduce(
+  const partsTotal = (draft.parts || []).reduce(
     (s, p) => s + (Number(p.cost) || 0) * (Number(p.quantity) || 0), 0,
   );
-  const laborTotal = (product.labor_items || []).reduce(
+  const laborTotal = (draft.labor_items || []).reduce(
     (s, l) => s + (Number(l.hours) || 0) * (Number(l.rate) || 0), 0,
   );
   const subtotal = materialsTotal + partsTotal + laborTotal;
-  const markupAmount = subtotal * ((Number(product.markup_percent) || 0) / 100);
+  const markupAmount = subtotal * ((Number(draft.markup_percent) || 0) / 100);
   const grandTotal = subtotal + markupAmount;
 
   return (
@@ -374,15 +428,15 @@ function ProductDetail({ product, onUpdate, onDelete }: {
       <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
         <div className="min-w-0 flex-1">
           <input
-            value={product.name}
-            onChange={(e) => onUpdate({ name: e.target.value })}
+            value={draft.name}
+            onChange={(e) => patchDraft({ name: e.target.value })}
             placeholder="Product name"
             className="w-full bg-transparent text-2xl font-semibold text-foreground focus:outline-none focus:border-b focus:border-accent"
           />
           <div className="flex items-center gap-3 mt-1">
             <input
-              value={product.sku || ""}
-              onChange={(e) => onUpdate({ sku: e.target.value || undefined })}
+              value={draft.sku || ""}
+              onChange={(e) => patchDraft({ sku: e.target.value || undefined })}
               placeholder="SKU (optional)"
               className="bg-transparent text-xs text-muted focus:outline-none focus:text-foreground font-mono"
               style={{ width: 200 }}
@@ -392,11 +446,11 @@ function ProductDetail({ product, onUpdate, onDelete }: {
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => onUpdate({ archived: !product.archived })}
+            onClick={() => patchDraft({ archived: !draft.archived })}
             className="p-1.5 text-muted hover:text-foreground"
-            title={product.archived ? "Restore" : "Archive"}
+            title={draft.archived ? "Restore" : "Archive"}
           >
-            {product.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+            {draft.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
           </button>
           {!confirmDelete ? (
             <button onClick={() => setConfirmDelete(true)} className="p-1.5 text-muted hover:text-red-500" title="Delete">
@@ -416,11 +470,11 @@ function ProductDetail({ product, onUpdate, onDelete }: {
       <div className="grid grid-cols-1 md:grid-cols-[180px_1fr] gap-5">
         <div>
           <p className={lbl}>Image</p>
-          {product.image_url ? (
+          {draft.image_url ? (
             <div className="relative border border-border bg-card">
-              <img src={product.image_url} alt={product.name} className="w-full aspect-square object-cover" />
+              <img src={draft.image_url} alt={draft.name} className="w-full aspect-square object-cover" />
               <button
-                onClick={() => onUpdate({ image_url: undefined })}
+                onClick={() => patchDraft({ image_url: undefined })}
                 className="absolute top-1 right-1 bg-background/80 text-muted hover:text-red-500 p-1"
                 title="Remove image"
               >
@@ -429,7 +483,7 @@ function ProductDetail({ product, onUpdate, onDelete }: {
             </div>
           ) : (
             <ImageUpload
-              onUploaded={(url) => onUpdate({ image_url: url })}
+              onUploaded={(url) => patchDraft({ image_url: url })}
               label="Add image"
             />
           )}
@@ -437,8 +491,8 @@ function ProductDetail({ product, onUpdate, onDelete }: {
         <div>
           <p className={lbl}>Description</p>
           <textarea
-            value={product.description || ""}
-            onChange={(e) => onUpdate({ description: e.target.value || undefined })}
+            value={draft.description || ""}
+            onChange={(e) => patchDraft({ description: e.target.value || undefined })}
             placeholder="What it is, dimensions, finish, any details you want to remember between builds…"
             rows={6}
             className={inp + " resize-y min-h-[140px]"}
@@ -448,22 +502,22 @@ function ProductDetail({ product, onUpdate, onDelete }: {
 
       {/* Materials */}
       <MaterialsSection
-        items={product.materials || []}
-        onChange={(items) => onUpdate({ materials: items })}
+        items={draft.materials || []}
+        onChange={(items) => patchDraft({ materials: items })}
         subtotal={materialsTotal}
       />
 
       {/* Parts */}
       <PartsSection
-        items={product.parts || []}
-        onChange={(items) => onUpdate({ parts: items })}
+        items={draft.parts || []}
+        onChange={(items) => patchDraft({ parts: items })}
         subtotal={partsTotal}
       />
 
       {/* Labor */}
       <LaborSection
-        items={product.labor_items || []}
-        onChange={(items) => onUpdate({ labor_items: items })}
+        items={draft.labor_items || []}
+        onChange={(items) => patchDraft({ labor_items: items })}
         subtotal={laborTotal}
       />
 
@@ -486,8 +540,8 @@ function ProductDetail({ product, onUpdate, onDelete }: {
                   type="number"
                   step="0.5"
                   min="0"
-                  value={product.markup_percent ?? 0}
-                  onChange={(e) => onUpdate({ markup_percent: Number(e.target.value) || 0 })}
+                  value={draft.markup_percent ?? 0}
+                  onChange={(e) => patchDraft({ markup_percent: Number(e.target.value) || 0 })}
                   className="w-16 bg-background border border-border px-2 py-0.5 text-xs text-foreground focus:outline-none focus:border-accent"
                 />
                 <span className="text-xs text-muted">%</span>
@@ -504,16 +558,16 @@ function ProductDetail({ product, onUpdate, onDelete }: {
 
       {/* Documents */}
       <DocumentsSection
-        docs={product.documents || []}
-        onChange={(docs) => onUpdate({ documents: docs })}
+        docs={draft.documents || []}
+        onChange={(docs) => patchDraft({ documents: docs })}
       />
 
       {/* Internal Notes */}
       <div>
         <p className={lbl}>Internal Notes</p>
         <textarea
-          value={product.notes || ""}
-          onChange={(e) => onUpdate({ notes: e.target.value || undefined })}
+          value={draft.notes || ""}
+          onChange={(e) => patchDraft({ notes: e.target.value || undefined })}
           placeholder="Build notes, gotchas, supplier preferences, etc."
           rows={4}
           className={inp + " resize-y"}
