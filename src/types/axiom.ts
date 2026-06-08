@@ -571,6 +571,10 @@ export interface ProductMaterial {
   unit: string;             // "ea", "ft", "sq ft", "lf", etc.
   unit_cost: number;
   notes?: string;
+  // When set, this row is linked to a row in inventory_items. Future
+  // price-sync features will use this to pull the latest unit_cost or
+  // push a manual edit back to inventory.
+  inventory_item_id?: string;
 }
 
 export interface ProductPart {

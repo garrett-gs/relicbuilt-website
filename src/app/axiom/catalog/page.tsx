@@ -16,10 +16,21 @@ import ImageUpload from "@/components/ui/ImageUpload";
 import FileUpload from "@/components/ui/FileUpload";
 import { cn } from "@/lib/utils";
 import {
-  Plus, X, Trash2, Pencil, FileText, Link as LinkIcon,
+  Plus, X, Trash2, Pencil, FileText, Link as LinkIcon, Link2, Link2Off,
   Package, ChevronDown, ChevronRight, Archive, ArchiveRestore,
-  ExternalLink, Clock, Wand2, Check,
+  ExternalLink, Clock, Wand2, Check, Search,
 } from "lucide-react";
+
+// Subset of InventoryItem we pull for the link picker — only the fields
+// we need to autofill the material row.
+interface InventoryPickerItem {
+  id: string;
+  description: string;
+  unit: string;
+  unit_cost: number;
+  item_number?: string;
+  vendor_name?: string;
+}
 
 const inp = "w-full bg-card border border-border px-3 py-2 text-foreground text-sm focus:outline-none focus:border-accent";
 const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
@@ -629,6 +640,9 @@ function SectionShell({
 function MaterialsSection({ items, onChange, subtotal }: {
   items: ProductMaterial[]; onChange: (items: ProductMaterial[]) => void; subtotal: number;
 }) {
+  // Which row (if any) is currently in the inventory-link picker.
+  const [pickingForId, setPickingForId] = useState<string | null>(null);
+
   function update(id: string, patch: Partial<ProductMaterial>) {
     onChange(items.map((m) => m.id === id ? { ...m, ...patch } : m));
   }
@@ -638,6 +652,19 @@ function MaterialsSection({ items, onChange, subtotal }: {
       id: crypto.randomUUID(), description: "", quantity: 1, unit: "ea", unit_cost: 0,
     }]);
   }
+  function applyInventoryPick(rowId: string, pick: InventoryPickerItem) {
+    update(rowId, {
+      inventory_item_id: pick.id,
+      description: pick.description,
+      unit: pick.unit || "ea",
+      unit_cost: pick.unit_cost || 0,
+    });
+    setPickingForId(null);
+  }
+  function unlink(rowId: string) {
+    update(rowId, { inventory_item_id: undefined });
+  }
+
   return (
     <SectionShell title="Materials" subtotal={subtotal} count={items.length} onAdd={add}>
       {items.length === 0 ? (
@@ -646,6 +673,7 @@ function MaterialsSection({ items, onChange, subtotal }: {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-[10px] uppercase tracking-wider text-muted border-b border-border">
+              <th className="w-8"></th>
               <th className="text-left px-3 py-2 font-normal">Description</th>
               <th className="text-right px-2 py-2 font-normal w-16">Qty</th>
               <th className="text-left px-2 py-2 font-normal w-20">Unit</th>
@@ -655,30 +683,149 @@ function MaterialsSection({ items, onChange, subtotal }: {
             </tr>
           </thead>
           <tbody>
-            {items.map((m) => (
-              <tr key={m.id} className="border-b border-border last:border-b-0 group">
-                <td className="px-2 py-1">
-                  <input value={m.description} onChange={(e) => update(m.id, { description: e.target.value })} placeholder="Walnut board 8/4…" className="w-full bg-transparent text-sm text-foreground focus:outline-none focus:border-b focus:border-accent" />
-                </td>
-                <td className="px-2 py-1">
-                  <input type="number" step="0.01" value={m.quantity} onChange={(e) => update(m.id, { quantity: Number(e.target.value) })} className="w-full bg-transparent text-right text-sm text-foreground font-mono focus:outline-none" />
-                </td>
-                <td className="px-2 py-1">
-                  <input value={m.unit} onChange={(e) => update(m.id, { unit: e.target.value })} placeholder="ea" className="w-full bg-transparent text-sm text-foreground focus:outline-none" />
-                </td>
-                <td className="px-2 py-1">
-                  <input type="number" step="0.01" value={m.unit_cost} onChange={(e) => update(m.id, { unit_cost: Number(e.target.value) })} className="w-full bg-transparent text-right text-sm text-foreground font-mono focus:outline-none" />
-                </td>
-                <td className="px-2 py-1 text-right font-mono text-sm">{money((m.quantity || 0) * (m.unit_cost || 0))}</td>
-                <td className="px-1 py-1 text-center">
-                  <button onClick={() => remove(m.id)} className="text-muted opacity-0 group-hover:opacity-100 hover:text-red-500"><X size={11} /></button>
-                </td>
-              </tr>
-            ))}
+            {items.map((m) => {
+              const linked = !!m.inventory_item_id;
+              return (
+                <tr key={m.id} className="border-b border-border last:border-b-0 group">
+                  <td className="px-1 py-1 text-center">
+                    {linked ? (
+                      <button
+                        onClick={() => unlink(m.id)}
+                        className="text-accent hover:text-red-500"
+                        title="Linked to Inventory — click to unlink"
+                      >
+                        <Link2 size={13} />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setPickingForId(m.id)}
+                        className="text-muted opacity-0 group-hover:opacity-100 hover:text-accent"
+                        title="Link to an Inventory item"
+                      >
+                        <Link2Off size={13} />
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-2 py-1">
+                    <input value={m.description} onChange={(e) => update(m.id, { description: e.target.value })} placeholder="Walnut board 8/4…" className="w-full bg-transparent text-sm text-foreground focus:outline-none focus:border-b focus:border-accent" />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input type="number" step="0.01" value={m.quantity} onChange={(e) => update(m.id, { quantity: Number(e.target.value) })} className="w-full bg-transparent text-right text-sm text-foreground font-mono focus:outline-none" />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input value={m.unit} onChange={(e) => update(m.id, { unit: e.target.value })} placeholder="ea" className="w-full bg-transparent text-sm text-foreground focus:outline-none" />
+                  </td>
+                  <td className="px-2 py-1">
+                    <input type="number" step="0.01" value={m.unit_cost} onChange={(e) => update(m.id, { unit_cost: Number(e.target.value) })} className="w-full bg-transparent text-right text-sm text-foreground font-mono focus:outline-none" />
+                  </td>
+                  <td className="px-2 py-1 text-right font-mono text-sm">{money((m.quantity || 0) * (m.unit_cost || 0))}</td>
+                  <td className="px-1 py-1 text-center">
+                    <button onClick={() => remove(m.id)} className="text-muted opacity-0 group-hover:opacity-100 hover:text-red-500"><X size={11} /></button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       )}
+
+      {pickingForId && (
+        <InventoryLinkModal
+          onClose={() => setPickingForId(null)}
+          onPick={(pick) => applyInventoryPick(pickingForId, pick)}
+        />
+      )}
     </SectionShell>
+  );
+}
+
+// Search-and-pick modal for linking a material row to an inventory_items
+// row. Live ilike search on description / item_number, capped at 20
+// results so the list stays tappable on iPad.
+function InventoryLinkModal({ onClose, onPick }: {
+  onClose: () => void;
+  onPick: (item: InventoryPickerItem) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<InventoryPickerItem[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    const handle = window.setTimeout(async () => {
+      const q = query.trim().replace(/[%,]/g, "");
+      let req = axiom
+        .from("inventory_items")
+        .select("id,description,unit,unit_cost,item_number")
+        .eq("active", true)
+        .order("description")
+        .limit(20);
+      if (q) {
+        // ilike on description OR item_number for fast SKU lookups
+        req = req.or(`description.ilike.%${q}%,item_number.ilike.%${q}%`);
+      }
+      const { data } = await req;
+      if (cancelled) return;
+      setResults((data as InventoryPickerItem[]) || []);
+      setLoading(false);
+    }, 200);
+    return () => { cancelled = true; window.clearTimeout(handle); };
+  }, [query]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="bg-background border border-border w-full max-w-xl max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+          <h3 className="text-sm font-semibold flex items-center gap-2"><Link2 size={14} className="text-accent" /> Link to Inventory</h3>
+          <button onClick={onClose} className="text-muted hover:text-foreground"><X size={16} /></button>
+        </div>
+        <div className="px-5 py-3 border-b border-border">
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search inventory by description or SKU…"
+              className="w-full bg-card border border-border pl-9 pr-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-accent"
+              style={{ fontSize: 16 }}
+            />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <p className="text-xs text-muted italic p-4">Searching…</p>
+          ) : results.length === 0 ? (
+            <p className="text-xs text-muted italic p-4">No matches. Try a different search, or close and type the material in manually.</p>
+          ) : (
+            <ul>
+              {results.map((r) => (
+                <li key={r.id}>
+                  <button
+                    onClick={() => onPick(r)}
+                    className="w-full text-left px-5 py-3 border-b border-border hover:bg-card flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-foreground truncate">{r.description}</p>
+                      <p className="text-xs text-muted truncate mt-0.5">
+                        {r.item_number && <span className="font-mono">{r.item_number}</span>}
+                        {r.item_number && r.vendor_name && " · "}
+                        {r.vendor_name}
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-mono text-foreground">{money(r.unit_cost)}</p>
+                      <p className="text-xs text-muted">per {r.unit || "ea"}</p>
+                    </div>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
