@@ -559,6 +559,74 @@ export interface ProjectPunchItem {
   created_at: string;
 }
 
+// ── Product Catalog ─────────────────────────────────────────
+// Reusable product templates for repeat-client work (e.g. Wallflower
+// Relic). A Catalog groups products; each Product has full estimator-
+// style cost breakdown plus a documents bucket.
+
+export interface ProductMaterial {
+  id: string;
+  description: string;
+  quantity: number;
+  unit: string;             // "ea", "ft", "sq ft", "lf", etc.
+  unit_cost: number;
+  notes?: string;
+}
+
+export interface ProductPart {
+  id: string;
+  description: string;
+  quantity: number;
+  source?: string;          // vendor or "in-house"
+  cost?: number;            // optional per-part cost
+  notes?: string;
+}
+
+export interface ProductLaborItem {
+  id: string;
+  description: string;      // "Fabrication", "Finishing", etc.
+  hours: number;
+  rate: number;
+}
+
+export interface ProductDocument {
+  id: string;
+  name: string;
+  url: string;
+  kind: "upload" | "link";  // "upload" stored in portal-images, "link" external
+  size_bytes?: number;
+  uploaded_at: string;
+}
+
+export interface ProductCatalog {
+  id: string;
+  name: string;
+  client_name?: string;
+  customer_id?: string;
+  company_id?: string;
+  notes?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Product {
+  id: string;
+  catalog_id: string;
+  name: string;
+  sku?: string;
+  description?: string;
+  image_url?: string;
+  materials: ProductMaterial[];
+  parts: ProductPart[];
+  labor_items: ProductLaborItem[];
+  markup_percent: number;
+  documents: ProductDocument[];
+  notes?: string;
+  archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Time Entries ────────────────────────────────────────────
 
 export interface TimeEntry {
