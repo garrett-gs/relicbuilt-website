@@ -9,7 +9,6 @@ import { axiom } from "@/lib/axiom-supabase";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
-  CheckSquare,
   Hammer,
   Clock,
   CalendarDays,
@@ -19,7 +18,7 @@ import {
   FileText,
   Calculator,
   ShoppingCart,
-  ShoppingBag,
+  LayoutList,
   Receipt,
   Camera,
   Activity,
@@ -37,7 +36,7 @@ const navSections = [
     label: "Overview",
     items: [
       { href: "/axiom/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-      { href: "/axiom/tasks", icon: CheckSquare, label: "Tasks" },
+      { href: "/axiom/tracker", icon: LayoutList, label: "Tracker" },
       { href: "/axiom/crew", icon: HardHat, label: "Crew", adminOnly: true },
     ],
   },
@@ -57,7 +56,6 @@ const navSections = [
       { href: "/axiom/timeclock", icon: Clock, label: "Time Clock" },
       { href: "/axiom/calendar", icon: CalendarDays, label: "Build Calendar" },
       { href: "/axiom/inventory", icon: Warehouse, label: "Inventory" },
-      { href: "/axiom/shopping", icon: ShoppingBag, label: "Shopping" },
     ],
   },
   {

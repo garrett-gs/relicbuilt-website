@@ -76,6 +76,7 @@ export interface CustomWork {
   actual_cost: number;
   materials: Material[];
   labor_log: LaborEntry[];
+  punch_list?: ProjectPunchItem[];
   start_date?: string;
   due_date?: string;
   image_url?: string;
@@ -544,6 +545,18 @@ export interface ShoppingList {
   items: ShoppingItem[];
   created_at: string;
   updated_at: string;
+}
+
+// ── Project Punch List ──────────────────────────────────────
+// Per-project to-do items shown on the Tracker page's Projects tab.
+// Stored as a jsonb array on the custom_work row.
+
+export interface ProjectPunchItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  completed_at?: string;
+  created_at: string;
 }
 
 // ── Time Entries ────────────────────────────────────────────
