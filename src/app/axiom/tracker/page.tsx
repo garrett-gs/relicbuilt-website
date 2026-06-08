@@ -14,16 +14,18 @@ import {
   Plus, X, Trash2, Check, Undo2, Pencil, ChevronDown, ChevronRight,
   Hammer,
 } from "lucide-react";
+import NotesPanel from "@/components/tracker/NotesPanel";
 
 const inp = "w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent";
 const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
 
-type Tab = "tasks" | "shopping" | "projects";
+type Tab = "tasks" | "shopping" | "projects" | "notes";
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "tasks", label: "Tasks" },
   { key: "shopping", label: "Shopping" },
   { key: "projects", label: "Projects" },
+  { key: "notes", label: "Notes" },
 ];
 
 export default function TrackerPage() {
@@ -34,7 +36,7 @@ export default function TrackerPage() {
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     const t = sp.get("tab");
-    if (t === "tasks" || t === "shopping" || t === "projects") setTab(t);
+    if (t === "tasks" || t === "shopping" || t === "projects" || t === "notes") setTab(t);
   }, []);
 
   return (
@@ -63,6 +65,7 @@ export default function TrackerPage() {
       {tab === "tasks" && <TasksTab />}
       {tab === "shopping" && <ShoppingTab />}
       {tab === "projects" && <ProjectsTab />}
+      {tab === "notes" && <NotesPanel />}
     </div>
   );
 }
