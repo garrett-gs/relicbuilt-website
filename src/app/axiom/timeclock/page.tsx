@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { axiom } from "@/lib/axiom-supabase";
-import { TeamMember, CustomWork, TimeEntry } from "@/types/axiom";
-import { Clock, X, CheckCircle2, LogIn, LogOut, ArrowLeft, Plus } from "lucide-react";
+import { TeamMember, CustomWork, TimeEntry, Product, ProductCatalog } from "@/types/axiom";
+import { Clock, X, CheckCircle2, LogIn, LogOut, ArrowLeft, Plus, Package } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import DateField from "@/components/ui/DateField";
@@ -42,6 +42,9 @@ function hoursFromEntry(entry: TimeEntry) {
 export default function TimeClockPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [projects, setProjects] = useState<CustomWork[]>([]);
+  const [productOptions, setProductOptions] = useState<Product[]>([]);
+  const [catalogsById, setCatalogsById] = useState<Map<string, ProductCatalog>>(new Map());
+  const productIdSet = useMemo(() => new Set(productOptions.map(p => p.id)), [productOptions]);
   const [step, setStep] = useState<Step>("select_member");
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
   const [pin, setPin] = useState("");
@@ -83,6 +86,14 @@ export default function TimeClockPage() {
     });
     axiom.from("custom_work").select("*").in("status", ["new", "in_review", "quoted", "in_progress"]).order("project_name").then(({ data }) => {
       if (data) setProjects(data);
+    });
+    // Catalog products — non-archived only. The picker shows them under
+    // their own header after active projects.
+    axiom.from("products").select("id,catalog_id,name,sku,archived").eq("archived", false).order("name").then(({ data }) => {
+      if (data) setProductOptions(data as Product[]);
+    });
+    axiom.from("product_catalogs").select("id,name,client_name").order("name").then(({ data }) => {
+      if (data) setCatalogsById(new Map((data as ProductCatalog[]).map((c) => [c.id, c])));
     });
   }, []);
 
@@ -150,10 +161,13 @@ export default function TimeClockPage() {
     }
 
     const isShop = project.id === SHOP_BUCKET_ID;
+    const product = productIdSet.has(project.id) ? productOptions.find((p) => p.id === project.id) : null;
+    const isProduct = !!product;
     const { data } = await axiom.from("time_entries").insert({
       member_name: selectedMember!.name,
-      custom_work_id: isShop ? null : project.id,
-      project_name: isShop ? "Shop" : project.project_name,
+      custom_work_id: isShop || isProduct ? null : project.id,
+      product_id: isProduct ? product!.id : null,
+      project_name: isShop ? "Shop" : isProduct ? product!.name : project.project_name,
       clock_in: new Date().toISOString(),
       hourly_rate: selectedMember!.hourly_rate || 60,
     }).select().single();
@@ -409,7 +423,7 @@ export default function TimeClockPage() {
             {selectedMember?.name}
           </h2>
           <p className="text-center text-sm text-muted mb-4">Select a project</p>
-          <div className="space-y-2 max-h-96 overflow-y-auto">
+          <div className="space-y-2 max-h-[28rem] overflow-y-auto">
             {[SHOP_BUCKET, ...projects].map((p) => {
               const isShop = p.id === SHOP_BUCKET_ID;
               const isClockedIn = isShop
@@ -446,6 +460,50 @@ export default function TimeClockPage() {
                 </button>
               );
             })}
+
+            {productOptions.length > 0 && (
+              <>
+                <p className="text-[10px] uppercase tracking-widest text-muted pt-3 pb-1">Catalog Products</p>
+                {productOptions.map((prod) => {
+                  // Wrap the product so the same handleClockIn-takes-CustomWork
+                  // interface can branch on productIdSet without a separate
+                  // setter pathway.
+                  const asTarget = { id: prod.id, project_name: prod.name, client_name: "", status: "in_progress" } as CustomWork;
+                  const isClockedIn = activeEntry?.product_id === prod.id;
+                  const catalog = catalogsById.get(prod.catalog_id);
+                  return (
+                    <button
+                      key={prod.id}
+                      onClick={() => { if (isClockedIn) { setStep("clocked_in"); } else { setSelectedProject(asTarget); setStep("confirm_clock_in"); } }}
+                      className={cn(
+                        "w-full border p-4 text-left transition-colors flex items-center justify-between",
+                        isClockedIn
+                          ? "bg-green-500/10 border-green-500/50 hover:border-green-500"
+                          : "bg-card border-border hover:border-accent",
+                      )}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm flex items-center gap-1.5">
+                          <Package size={12} className="text-accent shrink-0" />
+                          {prod.name}
+                        </p>
+                        {catalog && (
+                          <p className="text-xs text-muted truncate">
+                            {catalog.name}{catalog.client_name ? ` — ${catalog.client_name}` : ""}
+                          </p>
+                        )}
+                      </div>
+                      <span className={cn(
+                        "text-xs px-2 py-1 border flex items-center gap-1 shrink-0",
+                        isClockedIn ? "border-green-500 text-green-500" : "border-border text-muted",
+                      )}>
+                        {isClockedIn ? <><Clock size={10} /> Clocked In</> : "Catalog"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </>
+            )}
           </div>
           <button onClick={reset} className="mt-4 text-xs text-muted hover:text-foreground flex items-center gap-1 mx-auto">
             <X size={12} /> Cancel

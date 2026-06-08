@@ -633,6 +633,11 @@ export interface TimeEntry {
   id: string;
   member_name: string;
   custom_work_id?: string;
+  // Set when the time entry was clocked against a Catalog product instead
+  // of a project. custom_work_id stays null in that case; the project_name
+  // string is filled with the product's display name so existing reports
+  // and lists keep working without a join.
+  product_id?: string;
   project_name?: string;
   clock_in: string;
   clock_out?: string;

@@ -9,6 +9,7 @@ import {
   ProductPart,
   ProductLaborItem,
   ProductDocument,
+  TimeEntry,
 } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import ImageUpload from "@/components/ui/ImageUpload";
@@ -17,7 +18,7 @@ import { cn } from "@/lib/utils";
 import {
   Plus, X, Trash2, Pencil, FileText, Link as LinkIcon,
   Package, ChevronDown, ChevronRight, Archive, ArchiveRestore,
-  ExternalLink,
+  ExternalLink, Clock, Wand2, Check,
 } from "lucide-react";
 
 const inp = "w-full bg-card border border-border px-3 py-2 text-foreground text-sm focus:outline-none focus:border-accent";
@@ -521,6 +522,15 @@ function ProductDetail({ product, onUpdate, onDelete }: {
         subtotal={laborTotal}
       />
 
+      {/* Tracked Time — actual hours logged against this product from the
+          time clock. One-button "Apply to Labor" replaces the manual
+          labor rows with a per-member rollup of what was actually spent. */}
+      <TrackedTimeSection
+        productId={draft.id}
+        onApply={(items) => patchDraft({ labor_items: items })}
+        currentLaborCount={(draft.labor_items || []).length}
+      />
+
       {/* Cost breakdown */}
       <div className="border border-border bg-card p-4">
         <p className={lbl}>Cost Breakdown</p>
@@ -781,6 +791,152 @@ function LaborSection({ items, onChange, subtotal }: {
 }
 
 // ─── Documents ──────────────────────────────────────────────────────────
+
+// ─── Tracked Time ───────────────────────────────────────────────────────
+
+function TrackedTimeSection({ productId, onApply, currentLaborCount }: {
+  productId: string;
+  onApply: (items: ProductLaborItem[]) => void;
+  currentLaborCount: number;
+}) {
+  const [entries, setEntries] = useState<TimeEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [confirmApply, setConfirmApply] = useState(false);
+  const [applied, setApplied] = useState(false);
+
+  useEffect(() => {
+    setApplied(false);
+    setConfirmApply(false);
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const { data } = await axiom
+        .from("time_entries")
+        .select("*")
+        .eq("product_id", productId)
+        .not("clock_out", "is", null)
+        .order("clock_in", { ascending: true });
+      if (!cancelled) {
+        setEntries((data as TimeEntry[]) || []);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [productId]);
+
+  // Group by member_name (and hourly_rate, in case it changed mid-build).
+  const groups = useMemo(() => {
+    const map = new Map<string, { member: string; hours: number; rate: number; count: number }>();
+    for (const e of entries) {
+      const key = `${e.member_name}::${e.hourly_rate}`;
+      const existing = map.get(key);
+      const hrs = Number(e.hours) || 0;
+      if (existing) {
+        existing.hours += hrs;
+        existing.count += 1;
+      } else {
+        map.set(key, { member: e.member_name, hours: hrs, rate: e.hourly_rate || 0, count: 1 });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.hours - a.hours);
+  }, [entries]);
+
+  const totalHours = groups.reduce((s, g) => s + g.hours, 0);
+  const totalCost = groups.reduce((s, g) => s + g.hours * g.rate, 0);
+
+  function applyToLabor() {
+    const items: ProductLaborItem[] = groups.map((g) => ({
+      id: crypto.randomUUID(),
+      description: g.member,
+      hours: Math.round(g.hours * 100) / 100,
+      rate: g.rate,
+    }));
+    onApply(items);
+    setApplied(true);
+    setConfirmApply(false);
+  }
+
+  return (
+    <div className="border border-border">
+      <div className="bg-card px-4 py-2.5 flex items-center justify-between">
+        <span className="flex items-center gap-2 text-sm font-medium">
+          <Clock size={13} className="text-accent" />
+          Tracked Time <span className="text-xs text-muted font-normal">({entries.length} {entries.length === 1 ? "entry" : "entries"})</span>
+        </span>
+        <span className="text-sm font-mono text-foreground">{money(totalCost)}</span>
+      </div>
+      <div className="border-t border-border p-3">
+        {loading ? (
+          <p className="text-xs text-muted italic">Loading…</p>
+        ) : entries.length === 0 ? (
+          <p className="text-xs text-muted italic">
+            No tracked time yet. Pick this product on the time clock and clock in while you build one. Once it&apos;s done, come back here and hit <span className="text-accent">Apply to Labor</span>.
+          </p>
+        ) : (
+          <>
+            <table className="w-full text-sm mb-3">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wider text-muted border-b border-border">
+                  <th className="text-left px-2 py-1.5 font-normal">Team Member</th>
+                  <th className="text-right px-2 py-1.5 font-normal w-20">Hours</th>
+                  <th className="text-right px-2 py-1.5 font-normal w-24">Rate $/hr</th>
+                  <th className="text-right px-2 py-1.5 font-normal w-28">Cost</th>
+                  <th className="text-right px-2 py-1.5 font-normal w-16">Sessions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groups.map((g, i) => (
+                  <tr key={i} className="border-b border-border last:border-b-0">
+                    <td className="px-2 py-1.5">{g.member}</td>
+                    <td className="px-2 py-1.5 text-right font-mono">{g.hours.toFixed(2)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono">{money(g.rate)}</td>
+                    <td className="px-2 py-1.5 text-right font-mono">{money(g.hours * g.rate)}</td>
+                    <td className="px-2 py-1.5 text-right text-muted text-xs">{g.count}</td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-accent/30">
+                  <td className="px-2 py-1.5 text-foreground font-bold">Total</td>
+                  <td className="px-2 py-1.5 text-right font-mono font-bold">{totalHours.toFixed(2)}</td>
+                  <td></td>
+                  <td className="px-2 py-1.5 text-right font-mono font-bold text-accent">{money(totalCost)}</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-xs text-muted">
+                Applying replaces the Labor section above with one line per team member.
+                {currentLaborCount > 0 && !confirmApply && !applied && (
+                  <span className="text-orange-400"> Current labor ({currentLaborCount} {currentLaborCount === 1 ? "row" : "rows"}) will be overwritten.</span>
+                )}
+              </p>
+              {applied ? (
+                <span className="text-xs text-green-400 flex items-center gap-1"><Check size={12} /> Applied to Labor</span>
+              ) : !confirmApply ? (
+                <button
+                  onClick={() => {
+                    if (currentLaborCount > 0) setConfirmApply(true);
+                    else applyToLabor();
+                  }}
+                  className="flex items-center gap-1.5 bg-accent text-background px-3 py-1.5 text-xs font-semibold hover:bg-accent/90"
+                >
+                  <Wand2 size={12} /> Apply to Labor
+                </button>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-orange-400">Overwrite current labor?</span>
+                  <button onClick={applyToLabor} className="bg-accent text-background px-3 py-1.5 text-xs font-semibold">Yes, replace</button>
+                  <button onClick={() => setConfirmApply(false)} className="border border-border text-muted px-3 py-1.5 text-xs">Cancel</button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function DocumentsSection({ docs, onChange }: {
   docs: ProductDocument[]; onChange: (d: ProductDocument[]) => void;
