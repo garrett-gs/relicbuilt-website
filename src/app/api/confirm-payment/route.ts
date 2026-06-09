@@ -86,8 +86,24 @@ export async function POST(req: NextRequest) {
     const stripe = getStripe();
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-    if (session.payment_status !== "paid") {
-      return NextResponse.json({ error: "Payment not completed" }, { status: 400 });
+    // For Card payments, payment_status flips to "paid" the moment the
+    // charge succeeds (synchronous). For ACH, payment_status stays
+    // "unpaid" for 3-5 business days while the bank transfer settles —
+    // but session.status is "complete" the moment the customer finishes
+    // checkout. Gating on session.status is what actually means "the
+    // customer made it through Stripe Checkout"; ACH-specific copy
+    // about settlement is handled downstream by notify-payment-team.
+    if (session.status !== "complete") {
+      console.warn(
+        "[confirm-payment] session not complete:",
+        sessionId,
+        "status:", session.status,
+        "payment_status:", session.payment_status,
+      );
+      const msg = session.status === "expired"
+        ? "Your checkout session expired. Please start again from the invoice link."
+        : "Payment not completed";
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
 
     if (session.metadata?.invoice_id !== invoiceId) {
