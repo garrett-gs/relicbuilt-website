@@ -17,7 +17,7 @@
 //   • Other GETs (images, fonts, manifest): stale-while-revalidate.
 //   • Anything else: passthrough.
 
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const SHELL_CACHE = `relic-shell-${CACHE_VERSION}`;
 const ASSETS_CACHE = `relic-assets-${CACHE_VERSION}`;
 const PAGES_CACHE = `relic-pages-${CACHE_VERSION}`;
