@@ -725,6 +725,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   onGenerateRecap: () => void;
   userEmail: string;
 }) {
+  const [projectName, setProjectName] = useState(project.project_name || "");
   const [customerId, setCustomerId] = useState(project.customer_id || "");
   // Seed with client_name so the badge shows immediately; async lookup will refine it
   const [customerName, setCustomerName] = useState(project.customer_id ? (project.client_name || "") : "");
@@ -1342,6 +1343,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 
   function save() {
     onUpdate({
+      project_name: projectName.trim() || project.project_name,
       customer_id: customerId || undefined,
       company_id: companyId || undefined,
       company_name: companyName || undefined,
@@ -1394,6 +1396,18 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             setClientPhone(formatPhone(c.phone || ""));
             markDirty();
           }}
+        />
+      </div>
+
+      {/* Project name — editable so typos / renames can be fixed without
+          having to delete and recreate the project. Save button at the
+          bottom of the detail commits it. */}
+      <div>
+        <Field
+          label="Project Name"
+          value={projectName}
+          onChange={(v) => { setProjectName(v); markDirty(); }}
+          required
         />
       </div>
 
