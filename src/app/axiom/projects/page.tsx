@@ -917,20 +917,32 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   // a start date when the user sets/changes the due date. We pick the original
   // estimate (change_order_for_id is null) so change orders don't inflate it.
   const [estimateLaborHours, setEstimateLaborHours] = useState(0);
+  // Images from the linked estimate, surfaced alongside the project's own
+  // inspiration_images in the proposal image picker so they're available
+  // without copying data. Read live from the original estimate.
+  const [estimateImages, setEstimateImages] = useState<string[]>([]);
   useEffect(() => {
     if (!project.id) return;
     axiom.from("estimates")
-      .select("labor_items, change_order_for_id, created_at")
+      .select("labor_items, images, change_order_for_id, created_at")
       .eq("custom_work_id", project.id)
       .is("change_order_for_id", null)
       .order("created_at", { ascending: true })
       .limit(1)
       .then(({ data }) => {
-        const row = data?.[0] as { labor_items?: { hours?: number }[] } | undefined;
+        const row = data?.[0] as { labor_items?: { hours?: number }[]; images?: string[] } | undefined;
         const hours = (row?.labor_items || []).reduce((s, it) => s + (Number(it?.hours) || 0), 0);
         setEstimateLaborHours(hours);
+        setEstimateImages(Array.isArray(row?.images) ? row.images : []);
       });
   }, [project.id]);
+
+  // The project's image pool for the proposal picker: its own inspiration
+  // images plus any estimate images that aren't already there (deduped).
+  const projectImagePool = [
+    ...(project.inspiration_images || []),
+    ...estimateImages.filter((u) => !(project.inspiration_images || []).includes(u)),
+  ];
 
   function handleDueDateChange(v: string) {
     setDueDate(v);
@@ -2365,12 +2377,12 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
             <p className="text-xs uppercase tracking-wider text-muted">Proposal Images</p>
           </div>
 
-          {/* Pick from inspiration images */}
-          {(project.inspiration_images || []).length > 0 && (
+          {/* Pick from project images — inspiration images + estimate images */}
+          {projectImagePool.length > 0 && (
             <div className="mb-4">
               <p className="text-xs text-muted mb-2">Select from project images:</p>
               <div className="grid grid-cols-5 gap-2">
-                {(project.inspiration_images || []).map((url, i) => {
+                {projectImagePool.map((url, i) => {
                   const isSelected = proposalImages.includes(url);
                   return (
                     <button
@@ -2420,7 +2432,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
               ))}
             </div>
           )}
-          {proposalImages.length === 0 && (project.inspiration_images || []).length === 0 && (
+          {proposalImages.length === 0 && projectImagePool.length === 0 && (
             <p className="text-sm text-muted">Upload images above to add visuals to the proposal.</p>
           )}
         </div>
