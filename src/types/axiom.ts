@@ -472,6 +472,10 @@ export interface WallflowerWorkOrder {
   notes?: string;
   images?: string[];
   submitted_by?: string;
+  // Inbound from Wallflower's send-to-RELIC payload (read-only on our side).
+  // item_image_url is the item photo; reference_images are inspiration shots.
+  item_image_url?: string;
+  reference_images?: { url: string; name?: string; uploaded_at?: string }[];
   created_at: string;
   updated_at: string;
 }

@@ -10,7 +10,7 @@ import DateField from "@/components/ui/DateField";
 import { cn, formatDueDate } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2, Calculator, ClipboardList,
-  Check, Image as ImageIcon, Loader2, Upload,
+  Check, Image as ImageIcon, Loader2, Upload, Paperclip,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -501,6 +501,50 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate 
           ))}
         </select>
       </div>
+
+      {/* Inbound from Wallflower — item photo + reference images (read-only).
+          These live on Wallflower's public storage; we only render the URLs. */}
+      {(order.item_image_url || (order.reference_images && order.reference_images.length > 0)) && (
+        <div className="bg-card border border-border p-4 space-y-4">
+          <p className="text-xs uppercase tracking-wider text-muted">From Wallflower</p>
+
+          {order.item_image_url && (
+            <div>
+              <div className={lbl}>Item</div>
+              <a href={order.item_image_url} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={order.item_image_url}
+                  alt={order.item_name}
+                  className="w-32 h-32 object-cover border border-border hover:opacity-90 transition-opacity"
+                />
+              </a>
+            </div>
+          )}
+
+          {order.reference_images && order.reference_images.length > 0 && (
+            <div>
+              <div className={cn(lbl, "flex items-center gap-1.5")}>
+                <Paperclip size={12} />
+                Reference / Inspiration ({order.reference_images.length})
+              </div>
+              <div className="grid grid-cols-4 gap-2">
+                {order.reference_images.map((img, i) => (
+                  <a
+                    key={i}
+                    href={img.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={img.name || ""}
+                    className="aspect-square overflow-hidden border border-border bg-card hover:opacity-90 transition-opacity"
+                  >
+                    <img src={img.url} alt={img.name || ""} className="w-full h-full object-cover" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Details grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

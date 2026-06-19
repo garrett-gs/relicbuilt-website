@@ -16,9 +16,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     // wallflower_order_id / wallflower_order_number are the Wallflower-side
     // identifiers — we store them on the row so our outbound status webhook
-    // can address the work order on Wallflower's side. The other fields not
-    // listed here (item_image_url, inventory_id, etc.) come through the
-    // payload but aren't part of this status flow, so we ignore them.
+    // can address the work order on Wallflower's side.
+    //
+    // item_image_url is the item photo; reference_images is an array of
+    // inspiration / reference photos ({ url, name, uploaded_at }). The images
+    // live on Wallflower's public storage — we only persist the URLs.
     const {
       wallflower_order_id,
       wallflower_order_number,
@@ -32,6 +34,8 @@ export async function POST(req: NextRequest) {
       description,
       quantity,
       submitted_by,
+      item_image_url,
+      reference_images,
     } = body;
 
     if (!item_name?.trim()) {
@@ -58,6 +62,8 @@ export async function POST(req: NextRequest) {
         description: description || null,
         quantity: quantity || 1,
         submitted_by: submitted_by || "Wallflower",
+        item_image_url: item_image_url || null,
+        reference_images: Array.isArray(reference_images) ? reference_images : [],
       })
       .select()
       .single();
