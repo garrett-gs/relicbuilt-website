@@ -225,6 +225,8 @@ export default function WallflowerPage() {
           )}
           {filtered.map((wo) => {
             const active = selected?.id === wo.id;
+            const thumbUrl = wo.item_image_url || wo.reference_images?.[0]?.url;
+            const imgCount = (wo.item_image_url ? 1 : 0) + (wo.reference_images?.length || 0);
             return (
               <div
                 key={wo.id}
@@ -234,7 +236,17 @@ export default function WallflowerPage() {
                   active ? "border-accent" : "hover:border-accent/40"
                 )}
               >
-                <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-2">
+                  {thumbUrl && (
+                    <div className="relative shrink-0">
+                      <img src={thumbUrl} alt="" className="w-10 h-10 object-cover border border-border" />
+                      {imgCount > 1 && (
+                        <span className="absolute -bottom-1 -right-1 bg-background border border-border text-[9px] leading-none px-1 py-0.5 text-muted flex items-center gap-0.5">
+                          <Paperclip size={8} />{imgCount}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-sm truncate">{wo.item_name}</p>
                     <p className="text-muted text-xs">{wo.work_type} · {wo.scope}</p>
