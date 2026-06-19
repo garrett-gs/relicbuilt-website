@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
-import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, ProposalScope, ProposalCostSection, ProposalCostItem, BuildComment, ApprovalRequest, ProjectChecklist, Invoice, InventoryItem, TeamMember } from "@/types/axiom";
+import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, ProposalScope, ProposalCostSection, ProposalCostItem, BuildComment, ApprovalRequest, ProjectChecklist, Invoice, InventoryItem, TeamMember, EstimateLineItem, EstimateLaborItem } from "@/types/axiom";
 import ChecklistPanel from "@/components/axiom/ChecklistPanel";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
@@ -13,7 +13,7 @@ import { cn, formatPhone, formatDueDate, suggestStartDate } from "@/lib/utils";
 import { resolveClientEmail } from "@/lib/resolve-email";
 import DateField from "@/components/ui/DateField";
 import FileUpload from "@/components/ui/FileUpload";
-import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee } from "lucide-react";
+import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee, ChevronDown, ChevronRight } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { useRouter } from "next/navigation";
 import { generateProposalHtml } from "@/lib/proposal-html";
@@ -136,6 +136,153 @@ function ChangeOrdersPanel({ projectId }: { projectId: string }) {
           <p className="text-right text-xs text-muted mt-2">
             Combined: <strong className="text-accent font-mono">{money(orders.reduce((s, o) => s + totalFor(o), 0))}</strong>
           </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Collapsible, read-only view of the estimate that spawned this project —
+// materials, labor, markup, total, and any estimate images. Pulls the
+// ORIGINAL estimate (change_order_for_id is null) live, so it always reflects
+// the current estimate and needs no data copy/migration. Collapsed by default
+// to keep the project file short; expand for context without leaving the page.
+interface LinkedEstimate {
+  id: string;
+  estimate_number: string;
+  status: string;
+  line_items?: EstimateLineItem[];
+  labor_items?: EstimateLaborItem[];
+  markup_percent?: number;
+  images?: string[];
+}
+
+function EstimatePanel({ projectId }: { projectId: string }) {
+  const [estimate, setEstimate] = useState<LinkedEstimate | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [open, setOpen] = useState(false);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!projectId) return;
+    axiom.from("estimates")
+      .select("id,estimate_number,status,line_items,labor_items,markup_percent,images")
+      .eq("custom_work_id", projectId)
+      .is("change_order_for_id", null)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .then(({ data }) => {
+        setEstimate((data?.[0] as LinkedEstimate) || null);
+        setLoaded(true);
+      });
+  }, [projectId]);
+
+  // Nothing to show for manually-created projects with no linked estimate.
+  if (!loaded || !estimate) return null;
+
+  const lineItems = estimate.line_items || [];
+  const laborItems = estimate.labor_items || [];
+  const images = estimate.images || [];
+  const materialsTotal = lineItems.reduce((s, li) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
+  const laborTotal = laborItems.reduce((s, li) => s + (li.cost || 0), 0);
+  const markupPct = estimate.markup_percent || 0;
+  const markup = (materialsTotal + laborTotal) * markupPct / 100;
+  const total = materialsTotal + laborTotal + markup;
+
+  return (
+    <div className="bg-card border border-border">
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-3 px-4 py-3 text-left">
+        {open ? <ChevronDown size={16} className="text-accent shrink-0" /> : <ChevronRight size={16} className="text-accent shrink-0" />}
+        <h3 className="text-sm font-semibold text-foreground">
+          Estimate
+          <span className="text-muted text-xs font-normal ml-2 font-mono">{estimate.estimate_number}</span>
+        </h3>
+        <span className="flex-1" />
+        <span className="text-muted text-xs hidden sm:inline">{lineItems.length} materials · {laborItems.length} labor{images.length > 0 ? ` · ${images.length} images` : ""}</span>
+        <span className="font-mono text-sm text-accent">{money(total)}</span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-5 border-t border-border pt-4">
+          {/* Materials */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-xs uppercase tracking-wider text-muted">Materials</h4>
+              <button onClick={() => router.push("/axiom/estimator")} className="text-accent text-xs flex items-center gap-1">
+                <ExternalLink size={11} /> Open estimate
+              </button>
+            </div>
+            {lineItems.length === 0 ? (
+              <p className="text-muted text-sm italic">No materials on the estimate.</p>
+            ) : (
+              <div className="space-y-1">
+                {lineItems.map((li, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm py-1 border-b border-border/50">
+                    <span className="flex-1 text-foreground">{li.description || "—"}</span>
+                    <span className="text-muted text-xs whitespace-nowrap">{li.quantity} {li.unit || ""} × {money(li.unit_price)}</span>
+                    <span className="font-mono text-foreground w-20 text-right">{money((li.quantity || 0) * (li.unit_price || 0))}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between text-sm pt-1">
+                  <span className="text-muted">Materials subtotal</span>
+                  <span className="font-mono text-foreground">{money(materialsTotal)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Labor */}
+          <div>
+            <h4 className="text-xs uppercase tracking-wider text-muted mb-2">Labor</h4>
+            {laborItems.length === 0 ? (
+              <p className="text-muted text-sm italic">No labor on the estimate.</p>
+            ) : (
+              <div className="space-y-1">
+                {laborItems.map((li, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm py-1 border-b border-border/50">
+                    <span className="flex-1 text-foreground">{li.description || "—"}</span>
+                    <span className="text-muted text-xs whitespace-nowrap">{li.hours} hr × {money(li.rate)}</span>
+                    <span className="font-mono text-foreground w-20 text-right">{money(li.cost || 0)}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between text-sm pt-1">
+                  <span className="text-muted">Labor subtotal</span>
+                  <span className="font-mono text-foreground">{money(laborTotal)}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Totals */}
+          <div className="space-y-1 border-t border-border pt-3">
+            {markupPct > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-muted">Markup ({markupPct}%)</span>
+                <span className="font-mono text-foreground">{money(markup)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm font-semibold">
+              <span className="text-foreground">Estimate total</span>
+              <span className="font-mono text-accent">{money(total)}</span>
+            </div>
+          </div>
+
+          {/* Images */}
+          {images.length > 0 && (
+            <div>
+              <h4 className="text-xs uppercase tracking-wider text-muted mb-2">
+                <ImageIcon size={11} className="inline mr-1.5" />
+                Estimate Images ({images.length})
+              </h4>
+              <div className="grid grid-cols-4 gap-2">
+                {images.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="aspect-square overflow-hidden border border-border hover:opacity-90 transition-opacity">
+                    <img src={url} alt="" className="w-full h-full object-cover" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1908,7 +2055,9 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         )}
       </div>
 
-      {/* Checklist */}
+      {/* Linked estimate — collapsible materials / labor / images for context */}
+      <EstimatePanel projectId={project.id} />
+
       <ChangeOrdersPanel projectId={project.id} />
 
       <ChecklistPanel projectId={project.id} initial={project.checklist || { sections: [] }} />
