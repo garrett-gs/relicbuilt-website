@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { Lead, LeadNote, LeadFollowUp, Customer } from "@/types/axiom";
 import { formatPhone, cn } from "@/lib/utils";
 import DateField from "@/components/ui/DateField";
+import EstimateDrawer from "@/components/axiom/EstimateDrawer";
 import {
   Search,
   User,
@@ -310,6 +310,13 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [converting, setConverting] = useState(false);
+  const [drawerEstimateId, setDrawerEstimateId] = useState<string | null>(null);
+
+  // Re-pull the lead after inline estimate edits (status may auto-advance).
+  async function refreshLead() {
+    const { data } = await axiom.from("leads").select("*").eq("id", lead.id).single();
+    if (data) onUpdate(data as Lead);
+  }
 
   // Notes feed + follow-ups
   const [newNote, setNewNote] = useState("");
@@ -318,8 +325,6 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
   const [newFollowUpText, setNewFollowUpText] = useState("");
   const [addingFollowUp, setAddingFollowUp] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
-
-  const router = useRouter();
 
   useEffect(() => {
     setEditing(false);
@@ -572,12 +577,14 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
 
     setConverting(false);
 
+    // Open the estimate editor inline instead of navigating to the Estimator.
     if (newEst?.id) {
-      router.push("/axiom/estimator");
+      setDrawerEstimateId(newEst.id);
     }
   }
 
   return (
+    <>
     <div className="flex-1 overflow-y-auto">
       {/* Header */}
       <div className="px-6 py-5 border-b border-border flex items-start justify-between gap-4">
@@ -886,10 +893,10 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
         <div className="pt-2 border-t border-border">
           {lead.estimate_id ? (
             <button
-              onClick={() => router.push("/axiom/estimator")}
+              onClick={() => setDrawerEstimateId(lead.estimate_id!)}
               className="w-full flex items-center justify-center gap-2 border border-accent/40 text-accent px-4 py-3 text-sm hover:bg-accent/10 transition-colors"
             >
-              <FileText size={14} /> View Estimate
+              <FileText size={14} /> View / Edit Estimate
             </button>
           ) : (
             <button
@@ -904,6 +911,15 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
         </div>
       </div>
     </div>
+
+    {drawerEstimateId && (
+      <EstimateDrawer
+        estimateId={drawerEstimateId}
+        onClose={() => setDrawerEstimateId(null)}
+        onChange={refreshLead}
+      />
+    )}
+    </>
   );
 }
 

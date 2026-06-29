@@ -7,12 +7,12 @@ import { useAuth } from "@/components/axiom/AuthProvider";
 import { WallflowerWorkOrder, TeamMember } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import DateField from "@/components/ui/DateField";
+import EstimateDrawer from "@/components/axiom/EstimateDrawer";
 import { cn, formatDueDate } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2, Calculator, ClipboardList,
   Check, Image as ImageIcon, Loader2, Upload, Paperclip,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "#f59e0b",
@@ -32,9 +32,9 @@ const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
 
 export default function WallflowerPage() {
   const { userEmail } = useAuth();
-  const router = useRouter();
   const [orders, setOrders] = useState<WallflowerWorkOrder[]>([]);
   const [selected, setSelected] = useState<WallflowerWorkOrder | null>(null);
+  const [drawerEstimateId, setDrawerEstimateId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
@@ -172,7 +172,10 @@ export default function WallflowerPage() {
         user_name: userEmail,
       });
 
-      router.push("/axiom/estimator");
+      // Reflect the new link locally and open the editor inline.
+      setSelected((prev) => prev && prev.id === wo.id ? { ...prev, estimate_id: data.id, status: "estimated" } : prev);
+      load();
+      setDrawerEstimateId(data.id);
     }
   }
 
@@ -287,6 +290,7 @@ export default function WallflowerPage() {
             onUpdate={(u) => updateOrder(selected.id, u)}
             onDelete={() => deleteOrder(selected.id)}
             onCreateEstimate={() => createEstimate(selected)}
+            onViewEstimate={() => selected.estimate_id && setDrawerEstimateId(selected.estimate_id)}
           />
         )}
       </div>
@@ -297,6 +301,15 @@ export default function WallflowerPage() {
           teamMembers={teamMembers}
           onSubmit={createOrder}
           onClose={() => setShowCreate(false)}
+        />
+      )}
+
+      {/* Inline estimate editor */}
+      {drawerEstimateId && (
+        <EstimateDrawer
+          estimateId={drawerEstimateId}
+          onClose={() => setDrawerEstimateId(null)}
+          onChange={load}
         />
       )}
     </div>
@@ -399,12 +412,13 @@ function CreateModal({ teamMembers, onSubmit, onClose }: {
 
 // ── Order Detail ─────────────────────────────────────────────
 
-function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate }: {
+function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate, onViewEstimate }: {
   order: WallflowerWorkOrder;
   teamMembers: TeamMember[];
   onUpdate: (u: Partial<WallflowerWorkOrder>) => void;
   onDelete: () => void;
   onCreateEstimate: () => void;
+  onViewEstimate: () => void;
 }) {
   const [itemName, setItemName] = useState(order.item_name);
   const [itemSource, setItemSource] = useState(order.item_source);
@@ -674,8 +688,8 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate 
             <p className="text-xs uppercase tracking-wider text-muted mb-1">Linked Estimate</p>
             <p className="text-sm text-accent font-mono">Estimate created</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => window.location.href = "/axiom/estimator"}>
-            <Calculator size={14} className="mr-1" /> View in Estimator
+          <Button variant="outline" size="sm" onClick={onViewEstimate}>
+            <Calculator size={14} className="mr-1" /> View / Edit Estimate
           </Button>
         </div>
       )}

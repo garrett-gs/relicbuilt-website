@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAxiomRole } from "@/components/axiom/useAxiomRole";
 import { useAutosave } from "@/components/axiom/useAutosave";
+import { persistEstimate, deleteEstimateById } from "@/lib/estimate-actions";
 import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, SalesNote } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
@@ -289,68 +290,13 @@ export default function EstimatorPage() {
   }
 
   async function updateEstimate(id: string, updates: Partial<Estimate>) {
-    await axiom.from("estimates").update({ ...updates, updated_at: new Date().toISOString() }).eq("id", id);
-
-    // Mirror estimate status changes back to Wallflower. The route no-ops
-    // for estimates that aren't linked to a Wallflower work order, so this
-    // is safe to fire on every status update without checking origin here.
-    if (updates.status) {
-      fetch("/api/wallflower-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: { estimateId: id }, status: updates.status }),
-      }).catch((err) => console.error("[wallflower-status] notify failed:", err));
-    }
-
-    // If the estimate was just marked "sent", advance any linked lead to "quoted"
-    if (updates.status === "sent") {
-      const { data: linkedLead } = await axiom.from("leads")
-        .select("id, status")
-        .eq("estimate_id", id)
-        .maybeSingle();
-      if (linkedLead && linkedLead.status !== "quoted" && linkedLead.status !== "lost") {
-        await axiom.from("leads")
-          .update({ status: "quoted", updated_at: new Date().toISOString() })
-          .eq("id", linkedLead.id);
-        await logActivity({
-          action: "updated",
-          entity: "lead",
-          entity_id: linkedLead.id,
-          label: "Lead auto-advanced to Quoted (estimate sent)",
-          user_name: userEmail,
-        });
-      }
-    }
-
-    // If the estimate was just marked "rejected", mark any linked lead "lost"
-    // so we don't keep the lead sitting in Quoted forever once the client
-    // passes on the bid.
-    if (updates.status === "rejected") {
-      const { data: linkedLead } = await axiom.from("leads")
-        .select("id, status")
-        .eq("estimate_id", id)
-        .maybeSingle();
-      if (linkedLead && linkedLead.status !== "lost") {
-        await axiom.from("leads")
-          .update({ status: "lost", updated_at: new Date().toISOString() })
-          .eq("id", linkedLead.id);
-        await logActivity({
-          action: "updated",
-          entity: "lead",
-          entity_id: linkedLead.id,
-          label: "Lead auto-marked Lost (estimate rejected)",
-          user_name: userEmail,
-        });
-      }
-    }
-
+    await persistEstimate(id, updates, userEmail);
     load();
     if (selected?.id === id) setSelected((prev) => prev ? { ...prev, ...updates } : prev);
   }
 
   async function deleteEstimate(id: string) {
-    await axiom.from("estimates").delete().eq("id", id);
-    await logActivity({ action: "deleted", entity: "estimate", entity_id: id, label: "Deleted estimate", user_name: userEmail });
+    await deleteEstimateById(id, userEmail);
     setSelected(null);
     load();
   }
@@ -708,7 +654,7 @@ function CreateModal({ onSubmit, onClose }: {
 
 // ── Estimate detail ───────────────────────────────────────────
 
-function EstimateDetail({ estimate, onUpdate, onDelete }: {
+export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   estimate: Estimate;
   onUpdate: (u: Partial<Estimate>) => void;
   onDelete: () => void;
