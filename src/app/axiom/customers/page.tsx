@@ -11,7 +11,7 @@ import { cn, formatPhone } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2,
   ChevronRight, ChevronDown,
-  Building2, User, UserPlus, ExternalLink, Pencil, Check,
+  Building2, User, UserPlus, ExternalLink, Pencil, Check, RefreshCw,
 } from "lucide-react";
 
 function money(n: number) {
@@ -29,6 +29,10 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
+
+  // Wallflower RELIC Nexus sync
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
 
   // What's selected in the detail panel
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
@@ -126,6 +130,33 @@ export default function CustomersPage() {
 
   // ── CRUD ──
 
+  async function syncFromWallflower() {
+    if (syncing) return;
+    if (!confirm("Pull companies and clients from Wallflower RELIC into Axiom? Matching records will be updated and new ones added.")) return;
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const { data: { session } } = await axiom.auth.getSession();
+      if (!session) { setSyncResult("Not signed in — please log in again."); return; }
+      const res = await fetch("/api/axiom/sync-wallflower", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      const json = await res.json();
+      if (!res.ok) { setSyncResult(json.error || "Sync failed."); return; }
+      const s = json.summary;
+      setSyncResult(
+        `Companies: +${s.companies.inserted} new, ${s.companies.updated} updated · ` +
+        `Clients: +${s.customers.inserted} new, ${s.customers.updated} updated.`
+      );
+      await loadAll();
+    } catch {
+      setSyncResult("Sync failed — check your connection and try again.");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   async function createCompany(form: Record<string, string>) {
     const { data } = await axiom.from("companies").insert({
       name: form.name, address: form.address, industry: form.industry,
@@ -208,7 +239,22 @@ export default function CustomersPage() {
       <div className="w-72 flex-shrink-0 flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-heading font-bold">Customers</h1>
+          <button
+            onClick={syncFromWallflower}
+            disabled={syncing}
+            title="Sync companies & clients from Wallflower RELIC"
+            className="flex items-center gap-1.5 text-xs uppercase tracking-wider text-muted hover:text-accent transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={cn(syncing && "animate-spin")} />
+            {syncing ? "Syncing…" : "Sync"}
+          </button>
         </div>
+
+        {syncResult && (
+          <p className="mb-3 text-xs text-muted bg-card border border-border px-3 py-2 leading-relaxed">
+            {syncResult}
+          </p>
+        )}
 
         <div className="relative mb-4">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
