@@ -16,9 +16,11 @@ type Tab = (typeof TABS)[number];
 export default function SettingsPage() {
   const { userEmail } = useAuth();
   const [settings, setSettings] = useState<Settings | null>(null);
-  const isAdmin = !!(settings?.team_members || []).find(
-    (m: TeamMember) => m.email?.toLowerCase() === userEmail.toLowerCase() && m.role === "admin"
-  );
+  const myRole = (settings?.team_members || []).find(
+    (m: TeamMember) => m.email?.toLowerCase() === userEmail.toLowerCase()
+  )?.role;
+  const isSuperAdmin = myRole === "superadmin";
+  const isAdmin = myRole === "admin" || isSuperAdmin;
   const [tab, setTab] = useState<Tab>("General");
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -142,6 +144,9 @@ export default function SettingsPage() {
                     members[i] = { ...members[i], role: e.target.value as TeamMember["role"] };
                     updateField("team_members", members);
                   }} className="bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent">
+                    {(isSuperAdmin || m.role === "superadmin") && (
+                      <option value="superadmin">Super Admin</option>
+                    )}
                     <option value="admin">Admin</option>
                     <option value="manager">Manager</option>
                     <option value="staff">Staff</option>

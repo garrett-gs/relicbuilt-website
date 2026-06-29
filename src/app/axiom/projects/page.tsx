@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useAxiomRole } from "@/components/axiom/useAxiomRole";
 import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, ProposalScope, ProposalCostSection, ProposalCostItem, BuildComment, ApprovalRequest, ProjectChecklist, Invoice, InventoryItem, TeamMember, EstimateLineItem, EstimateLaborItem } from "@/types/axiom";
 import ChecklistPanel from "@/components/axiom/ChecklistPanel";
 import Button from "@/components/ui/Button";
@@ -325,6 +326,7 @@ export default function ProjectsPage() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [projectsTab, setProjectsTab] = useState<"active" | "archive">("active");
+  const { isSuperAdmin } = useAxiomRole(); // Archive is super-admin only
 
   const load = useCallback(async () => {
     const { data } = await axiom.from("custom_work").select("*").order("created_at", { ascending: false });
@@ -473,15 +475,17 @@ export default function ProjectsPage() {
         >
           Active <span className="text-muted ml-1">({activeProjects.length})</span>
         </button>
-        <button
-          onClick={() => setProjectsTab("archive")}
-          className={cn(
-            "px-4 py-2 transition-colors",
-            projectsTab === "archive" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
-          )}
-        >
-          Archive <span className="text-muted ml-1">({archivedProjects.length})</span>
-        </button>
+        {isSuperAdmin && (
+          <button
+            onClick={() => setProjectsTab("archive")}
+            className={cn(
+              "px-4 py-2 transition-colors",
+              projectsTab === "archive" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
+            )}
+          >
+            Archive <span className="text-muted ml-1">({archivedProjects.length})</span>
+          </button>
+        )}
       </div>
 
       {/* Active Kanban — drops the Complete column. Dragging onto the
@@ -557,7 +561,7 @@ export default function ProjectsPage() {
           row to reopen the detail panel; moving them back to an active
           status (via the status dropdown in the panel) returns them to
           the Kanban. */}
-      {projectsTab === "archive" && (
+      {projectsTab === "archive" && isSuperAdmin && (
         <div className="bg-card border border-border rounded">
           {archivedProjects.length === 0 ? (
             <p className="text-muted text-sm p-6">No archived projects yet.</p>

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useAxiomRole } from "@/components/axiom/useAxiomRole";
 import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, SalesNote } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
@@ -234,6 +235,7 @@ export default function EstimatorPage() {
   // Working = anything still in the funnel (draft / sent / rejected / etc).
   // Accepted = the client signed off, so we get it out of the day-to-day list.
   const [tab, setTab] = useState<"working" | "accepted" | "archive">("working");
+  const { isSuperAdmin } = useAxiomRole(); // Archive is super-admin only
 
   const load = useCallback(async () => {
     const { data } = await axiom.from("estimates").select("*").order("created_at", { ascending: false });
@@ -392,18 +394,20 @@ export default function EstimatorPage() {
           >
             Accepted <span className="text-muted ml-1">({acceptedEstimates.length})</span>
           </button>
-          <button
-            onClick={() => {
-              setTab("archive");
-              if (selected && selected.status !== "rejected") setSelected(null);
-            }}
-            className={cn(
-              "flex-1 py-2 transition-colors",
-              tab === "archive" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
-            )}
-          >
-            Archive <span className="text-muted ml-1">({archivedEstimates.length})</span>
-          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={() => {
+                setTab("archive");
+                if (selected && selected.status !== "rejected") setSelected(null);
+              }}
+              className={cn(
+                "flex-1 py-2 transition-colors",
+                tab === "archive" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
+              )}
+            >
+              Archive <span className="text-muted ml-1">({archivedEstimates.length})</span>
+            </button>
+          )}
         </div>
         <div className="flex-1 overflow-y-auto space-y-2">
           {visibleEstimates.length === 0 && (

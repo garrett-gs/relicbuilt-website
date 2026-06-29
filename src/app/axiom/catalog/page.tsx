@@ -15,6 +15,7 @@ import Button from "@/components/ui/Button";
 import ImageUpload from "@/components/ui/ImageUpload";
 import FileUpload from "@/components/ui/FileUpload";
 import { cn } from "@/lib/utils";
+import { useAxiomRole } from "@/components/axiom/useAxiomRole";
 import {
   Plus, X, Trash2, Pencil, FileText, Link as LinkIcon, Link2, Link2Off,
   Package, ChevronDown, ChevronRight, Archive, ArchiveRestore,
@@ -45,6 +46,9 @@ export default function CatalogPage() {
   const [selectedCatalogId, setSelectedCatalogId] = useState<string | null>(null);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const { isSuperAdmin } = useAxiomRole(); // Archived products are super-admin only
+  // Never expose archived products to non-super-admins, even transiently.
+  const canSeeArchived = isSuperAdmin && showArchived;
   const [creatingCatalog, setCreatingCatalog] = useState(false);
   const [newCatalogName, setNewCatalogName] = useState("");
   const [newCatalogClient, setNewCatalogClient] = useState("");
@@ -78,8 +82,8 @@ export default function CatalogPage() {
   }, [selectedCatalogId, loadProducts]);
 
   const visibleProducts = useMemo(
-    () => products.filter((p) => showArchived ? p.archived : !p.archived),
-    [products, showArchived],
+    () => products.filter((p) => canSeeArchived ? p.archived : !p.archived),
+    [products, canSeeArchived],
   );
   const selectedProduct = products.find((p) => p.id === selectedProductId) || null;
 
@@ -269,12 +273,14 @@ export default function CatalogPage() {
                 </ul>
               )}
             </div>
-            <button
-              onClick={() => setShowArchived((v) => !v)}
-              className="text-xs text-muted hover:text-foreground mt-2 flex items-center gap-1"
-            >
-              {showArchived ? <><ArchiveRestore size={11} /> Show active</> : <><Archive size={11} /> Show archived</>}
-            </button>
+            {isSuperAdmin && (
+              <button
+                onClick={() => setShowArchived((v) => !v)}
+                className="text-xs text-muted hover:text-foreground mt-2 flex items-center gap-1"
+              >
+                {showArchived ? <><ArchiveRestore size={11} /> Show active</> : <><Archive size={11} /> Show archived</>}
+              </button>
+            )}
           </>
         )}
       </div>

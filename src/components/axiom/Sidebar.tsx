@@ -99,7 +99,7 @@ export default function Sidebar() {
           (m: { email?: string }) =>
             m.email?.toLowerCase() === userEmail.toLowerCase()
         );
-        if (me && (me.role === "admin" || me.role === "manager")) {
+        if (me && (me.role === "admin" || me.role === "manager" || me.role === "superadmin")) {
           setIsAdminOrManager(true);
         }
       });

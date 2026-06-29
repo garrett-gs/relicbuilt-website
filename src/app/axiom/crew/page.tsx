@@ -8,7 +8,7 @@ import { Clock, User, Hammer, RefreshCw } from "lucide-react";
 interface TeamMember {
   name: string;
   email: string;
-  role: "admin" | "manager" | "staff";
+  role: "superadmin" | "admin" | "manager" | "staff";
   hourly_rate: number;
   color?: string;
 }
@@ -53,7 +53,7 @@ export default function CrewPage() {
     const me = team.find(
       (m) => m.email?.toLowerCase() === userEmail.toLowerCase()
     );
-    if (!me || (me.role !== "admin" && me.role !== "manager")) {
+    if (!me || (me.role !== "admin" && me.role !== "manager" && me.role !== "superadmin")) {
       setAuthorized(false);
       return;
     }

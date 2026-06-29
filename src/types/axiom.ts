@@ -528,7 +528,7 @@ export interface TeamMember {
   name: string;
   email: string;
   phone?: string;
-  role: "admin" | "manager" | "staff";
+  role: "superadmin" | "admin" | "manager" | "staff";
   hourly_rate: number;
   pin?: string;
   color?: string;
