@@ -19,6 +19,7 @@ const navLinks = [
 export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
+  const isAxiom = pathname.startsWith("/axiom");
   const { items, setCartOpen } = useCart();
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -26,7 +27,7 @@ export default function Navbar() {
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2">
+        <Link href={isAxiom ? "/axiom/dashboard" : "/"} className="flex items-center gap-2">
           <Image
             src="/logo-emblem.png"
             alt="Relic"
@@ -34,8 +35,13 @@ export default function Navbar() {
             height={36}
             className="h-9 w-9"
           />
-          <span className="text-2xl font-bold tracking-widest text-foreground font-heading">
-            R&ensp;E&ensp;L&ensp;I&ensp;C
+          <span
+            className={cn(
+              "font-bold text-foreground font-heading",
+              isAxiom ? "text-2xl tracking-wide" : "text-2xl tracking-widest"
+            )}
+          >
+            {isAxiom ? "Wallflower RELIC" : <>R&ensp;E&ensp;L&ensp;I&ensp;C</>}
           </span>
         </Link>
 
