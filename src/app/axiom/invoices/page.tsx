@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useAutosave } from "@/components/axiom/useAutosave";
 import { Invoice, InvoiceLineItem, Payment, Settings } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
@@ -381,6 +382,9 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
     await axiom.from("invoices").update(updated).eq("id", inv.id);
     setInv(updated); setDirty(false); setSaved(true); onUpdate(updated);
   }
+
+  // Autosave ~900ms after the last edit; `inv` is a fresh object per change.
+  useAutosave(dirty, inv, save);
 
   async function addPayment(payment: Payment) {
     const payments = [...(inv.payments || []), payment];

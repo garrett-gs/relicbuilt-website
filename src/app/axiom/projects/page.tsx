@@ -5,6 +5,7 @@ import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAxiomRole } from "@/components/axiom/useAxiomRole";
+import { useAutosave } from "@/components/axiom/useAutosave";
 import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, ProposalScope, ProposalCostSection, ProposalCostItem, BuildComment, ApprovalRequest, ProjectChecklist, Invoice, InventoryItem, TeamMember, EstimateLineItem, EstimateLaborItem } from "@/types/axiom";
 import ChecklistPanel from "@/components/axiom/ChecklistPanel";
 import Button from "@/components/ui/Button";
@@ -1047,6 +1048,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [rev, setRev] = useState(0); // bumps on every edit; drives autosave debounce
 
   // Proposal & Invoices
   const [projectInvoices, setProjectInvoices] = useState<Invoice[]>([]);
@@ -1162,7 +1164,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   const actualCost = materialTotal + laborTotal + receiptTotal;
   const margin = quoted > 0 ? ((quoted - actualCost) / quoted) * 100 : 0;
 
-  function markDirty() { setDirty(true); setSaved(false); }
+  function markDirty() { setDirty(true); setSaved(false); setRev((r) => r + 1); }
 
   // Look up current user's team member name for task assignment
   useEffect(() => {
@@ -1534,6 +1536,9 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     setDirty(false);
     setSaved(true);
   }
+
+  // Autosave the project ~900ms after the last edit (rev bumps per change).
+  useAutosave(dirty, rev, save);
 
   const portalUrl = project.portal_token
     ? `${window.location.origin}/axiom/portal/${project.portal_token}`

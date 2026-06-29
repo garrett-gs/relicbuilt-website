@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { Settings, TeamMember } from "@/types/axiom";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useAutosave } from "@/components/axiom/useAutosave";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { Plus, Trash2, MessageSquare } from "lucide-react";
@@ -49,6 +50,10 @@ export default function SettingsPage() {
     setDirty(true);
     setSaved(false);
   }
+
+  // Autosave: persist ~900ms after the last edit. `settings` is a fresh object
+  // on every change, so it doubles as the debounce change key.
+  useAutosave(dirty, settings, save);
 
   if (!settings) return <div className="text-muted animate-pulse">Loading settings...</div>;
 

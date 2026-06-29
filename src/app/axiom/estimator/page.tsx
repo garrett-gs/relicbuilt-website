@@ -5,6 +5,7 @@ import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAxiomRole } from "@/components/axiom/useAxiomRole";
+import { useAutosave } from "@/components/axiom/useAutosave";
 import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, SalesNote } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
@@ -1052,6 +1053,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [laborOpen, setLaborOpen] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [rev, setRev] = useState(0); // bumps on every edit; drives autosave debounce
 
   // ── Claude chat ───────────────────────────────────────────────
   const [chatOpen, setChatOpen] = useState(false);
@@ -1064,7 +1066,7 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const router = useRouter();
-  function markDirty() { setDirty(true); setSaved(false); }
+  function markDirty() { setDirty(true); setSaved(false); setRev((r) => r + 1); }
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [vendorId, setVendorId] = useState(estimate.vendor_id || "");
   const [vendorName, setVendorName] = useState(estimate.vendor_name || "");
@@ -1386,6 +1388,9 @@ function EstimateDetail({ estimate, onUpdate, onDelete }: {
     setDirty(false);
     setSaved(true);
   }
+
+  // Autosave the estimate ~900ms after the last edit (rev bumps per change).
+  useAutosave(dirty, rev, save);
 
   const [wrSending, setWrSending] = useState(false);
   const [wrSent, setWrSent] = useState(!!(estimate as { sent_to_wr_at?: string }).sent_to_wr_at);
