@@ -61,7 +61,7 @@ export default function EstimateDrawer({
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-50" onClick={onClose} />
-      <aside className="fixed right-0 top-0 h-full w-full max-w-3xl bg-background border-l border-border z-50 overflow-y-auto shadow-2xl">
+      <aside className="fixed right-0 top-0 h-full w-[92vw] max-w-6xl bg-background border-l border-border z-50 overflow-y-auto shadow-2xl">
         <div className="sticky top-0 z-10 flex items-center justify-between px-5 py-3 border-b border-border bg-background">
           <h2 className="text-sm font-heading font-bold uppercase tracking-wider text-muted">
             Estimate
