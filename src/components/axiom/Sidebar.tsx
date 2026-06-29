@@ -133,8 +133,8 @@ export default function Sidebar() {
             height={28}
             className="h-7 w-7"
           />
-          <span className="text-lg font-heading font-bold tracking-widest text-foreground">
-            AXIOM
+          <span className="text-base font-heading font-bold tracking-wide text-foreground">
+            Wallflower RELIC
           </span>
         </Link>
       </div>

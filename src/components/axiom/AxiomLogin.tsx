@@ -37,11 +37,11 @@ export default function AxiomLogin() {
               className="h-16 w-16"
             />
           </div>
-          <h1 className="text-3xl font-heading font-bold tracking-widest text-foreground">
-            AXIOM
+          <h1 className="text-3xl font-heading font-bold tracking-wide text-foreground">
+            Wallflower RELIC
           </h1>
-          <p className="text-muted text-sm mt-2">
-            R&ensp;E&ensp;L&ensp;I&ensp;C Project Management
+          <p className="text-muted text-sm mt-2 tracking-wide">
+            Project Management
           </p>
         </div>
 
