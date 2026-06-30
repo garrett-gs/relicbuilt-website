@@ -47,7 +47,7 @@ const navSections = [
       { href: "/axiom/leads", icon: UserPlus, label: "Leads" },
       { href: "/axiom/customers", icon: Users, label: "Customers" },
       { href: "/axiom/catalog", icon: Package, label: "Catalog" },
-      { href: "/axiom/wallflower", icon: ClipboardList, label: "Wallflower RELIC" },
+      { href: "/axiom/wallflower", icon: ClipboardList, label: "Work Orders" },
     ],
   },
   {

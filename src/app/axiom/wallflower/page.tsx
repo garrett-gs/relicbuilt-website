@@ -187,7 +187,7 @@ export default function WallflowerPage() {
           <div>
             <h1 className="text-2xl font-heading font-bold flex items-center gap-2">
               <ClipboardList size={22} className="text-accent" />
-              Wallflower RELIC
+              Work Orders
             </h1>
             <p className="text-muted text-sm mt-0.5">{orders.length} work orders</p>
           </div>
