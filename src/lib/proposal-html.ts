@@ -62,9 +62,10 @@ export function generateProposalHtml(
 
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
-    <img src="${logoUrl}" alt="Wallflower RELIC" style="width:340px;max-width:55%;height:auto;object-fit:contain;" />
+    <img src="${logoUrl}" alt="Wallflower RELIC" style="width:440px;max-width:64%;height:auto;object-fit:contain;" />
     <div style="text-align:right;">
-      <h1 style="margin:0 0 10px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
+      <h1 style="margin:0 0 6px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
+      <p style="margin:0 0 10px;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.16em;color:#8b6914;">Custom Fabrication</p>
       ${biz.biz_name ? `<p style="margin:0;font-size:13px;font-weight:bold;color:#222;">${esc(biz.biz_name)}</p>` : ""}
       ${biz.biz_address ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(biz.biz_address)}</p>` : ""}
       ${addressLine2 ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(addressLine2)}</p>` : ""}
@@ -401,10 +402,11 @@ export function generateEstimateProposalHtml({
   // overflow into a second page before the page-break-after fires.
   const coverPageHtml = coverImage ? `
   <section class="proposal-page proposal-cover" style="${cardBaseStyle}page-break-after:always;display:flex;flex-direction:column;align-items:center;text-align:center;min-height:8.25in;">
-    <img src="${logoUrl}" alt="${esc(biz.biz_name || "RELIC")}" style="width:75%;max-width:520px;height:auto;object-fit:contain;margin-bottom:18px;" />
+    <img src="${logoUrl}" alt="${esc(biz.biz_name || "RELIC")}" style="width:88%;max-width:660px;height:auto;object-fit:contain;margin-bottom:18px;" />
     <div style="margin-bottom:18px;">
       <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.16em;color:#bbb;">Proposal</p>
-      <h1 style="margin:6px 0 0;font-size:30px;font-weight:bold;color:#111;letter-spacing:0.02em;">${esc(estimate.project_name || "")}</h1>
+      <p style="margin:4px 0 0;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.18em;color:#8b6914;">Custom Fabrication</p>
+      <h1 style="margin:8px 0 0;font-size:30px;font-weight:bold;color:#111;letter-spacing:0.02em;">${esc(estimate.project_name || "")}</h1>
       <p style="margin:10px 0 0;font-size:17px;color:#555;">Prepared for ${esc(preparedFor)}</p>
       <p style="margin:10px 0 0;font-size:12px;color:#999;font-family:monospace;">${esc(estimate.estimate_number)} &nbsp;·&nbsp; ${dateText}</p>
     </div>
@@ -461,9 +463,10 @@ export function generateEstimateProposalHtml({
 
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
-    <img src="${logoUrl}" alt="Wallflower RELIC" style="width:340px;max-width:55%;height:auto;object-fit:contain;" />
+    <img src="${logoUrl}" alt="Wallflower RELIC" style="width:440px;max-width:64%;height:auto;object-fit:contain;" />
     <div style="text-align:right;">
-      <h1 style="margin:0 0 10px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
+      <h1 style="margin:0 0 6px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
+      <p style="margin:0 0 10px;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.16em;color:#8b6914;">Custom Fabrication</p>
       ${biz.biz_name ? `<p style="margin:0;font-size:13px;font-weight:bold;color:#222;">${esc(biz.biz_name)}</p>` : ""}
       ${biz.biz_address ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(biz.biz_address)}</p>` : ""}
       ${addressLine2 ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(addressLine2)}</p>` : ""}
@@ -496,6 +499,10 @@ export function generateEstimateProposalHtml({
   ${fieldNoteImagesHtml}
   ${costHtml}
   ${termsHtml}
+
+  <p style="margin:36px 0 18px;font-size:13px;color:#444;line-height:1.65;text-align:center;">
+    This is acceptance of the scope and the details provided in this proposal. Once signed and approved, we will add it to your project.
+  </p>
   ${acceptanceSection}
 
   <div style="margin-top:36px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#ccc;text-align:center;">
