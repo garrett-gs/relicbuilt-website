@@ -190,12 +190,14 @@ export default function PurchaseOrdersPage() {
 // ═══════════════════════════════════════════════════════════════
 
 interface SimpleProject { id: string; project_name: string }
+interface SimpleWorkOrder { id: string; item_name: string }
 
 function OrdersTab() {
   const { userEmail } = useAuth();
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [projects, setProjects] = useState<SimpleProject[]>([]);
+  const [workOrders, setWorkOrders] = useState<SimpleWorkOrder[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -214,15 +216,28 @@ function OrdersTab() {
   const [receiveDelivery, setReceiveDelivery] = useState("");
 
   const load = useCallback(async () => {
-    const [p, v, proj] = await Promise.all([
+    const [p, v, proj, wo] = await Promise.all([
       axiom.from("purchase_orders").select("*").order("created_at", { ascending: false }),
       axiom.from("vendors").select("*").eq("status", "active").order("name"),
-      axiom.from("custom_work").select("id,project_name").in("status", ["new", "in_review", "quoted", "in_progress"]).order("project_name"),
+      // All projects (any status) so a derived project's name still resolves in the list.
+      axiom.from("custom_work").select("id,project_name").order("project_name"),
+      // Work orders to assign a PO to (all, so an assigned one always resolves).
+      axiom.from("wallflower_work_orders").select("id,item_name").order("created_at", { ascending: false }),
     ]);
     if (p.data) setPos(p.data);
     if (v.data) setVendors(v.data);
     if (proj.data) setProjects(proj.data as SimpleProject[]);
+    if (wo.data) setWorkOrders(wo.data as SimpleWorkOrder[]);
   }, []);
+
+  // Resolve the project (custom_work) tied to a work order via its estimate, so
+  // PO inventory allocation keeps working while the user only picks a work order.
+  async function projectFromWorkOrder(workOrderId: string): Promise<string | null> {
+    const { data: wo } = await axiom.from("wallflower_work_orders").select("estimate_id").eq("id", workOrderId).single();
+    if (!wo?.estimate_id) return null;
+    const { data: est } = await axiom.from("estimates").select("custom_work_id").eq("id", wo.estimate_id).single();
+    return est?.custom_work_id ?? null;
+  }
 
   useEffect(() => { load(); }, [load]);
 
@@ -241,8 +256,9 @@ function OrdersTab() {
 
   const grandTotal = filtered.reduce((s, p) => s + poTotal(p), 0);
 
-  async function createPO(vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, customWorkId?: string) {
+  async function createPO(vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, workOrderId?: string) {
     const total = lineItems.reduce((s, li) => s + li.quantity * li.unit_price, 0);
+    const customWorkId = workOrderId ? await projectFromWorkOrder(workOrderId) : null;
     const { data } = await axiom.from("purchase_orders").insert({
       po_number: "PO-TEMP",
       vendor_id: vendorId || null,
@@ -257,7 +273,8 @@ function OrdersTab() {
       delivery_method: deliveryMethod || null,
       delivery_date: deliveryDate || null,
       ship_to_address: shipToAddress || null,
-      custom_work_id: customWorkId || null,
+      custom_work_id: customWorkId,
+      work_order_id: workOrderId || null,
       status: "pending",
     }).select().single();
     if (data) {
@@ -288,8 +305,9 @@ function OrdersTab() {
     load();
   }
 
-  async function updatePO(id: string, vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, customWorkId?: string) {
+  async function updatePO(id: string, vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, workOrderId?: string) {
     const total = lineItems.reduce((s, li) => s + li.quantity * li.unit_price, 0);
+    const customWorkId = workOrderId ? await projectFromWorkOrder(workOrderId) : null;
     await axiom.from("purchase_orders").update({
       vendor_id: vendorId || null,
       vendor_name: vendorName,
@@ -303,7 +321,8 @@ function OrdersTab() {
       delivery_method: deliveryMethod || null,
       delivery_date: deliveryDate || null,
       ship_to_address: shipToAddress || null,
-      custom_work_id: customWorkId || null,
+      custom_work_id: customWorkId,
+      work_order_id: workOrderId || null,
     }).eq("id", id);
     await logActivity({ action: "updated", entity: "purchase_order", entity_id: id, label: `Updated PO: ${pos.find((p) => p.id === id)?.po_number} — ${vendorName}`, user_name: userEmail });
     setEditPO(null);
@@ -459,9 +478,13 @@ function OrdersTab() {
                     <span className="text-muted">Est. Tax: {money(total * TAX_RATE)}</span>
                     <span className="font-bold text-accent">Est. Total: {money(total + total * TAX_RATE)}</span>
                     {po.need_by_date && <span className="text-muted">Need by: {po.need_by_date}</span>}
+                    {po.work_order_id && (() => {
+                      const wo = workOrders.find((w) => w.id === po.work_order_id);
+                      return wo ? <span className="text-accent text-xs">Work Order: {wo.item_name}</span> : null;
+                    })()}
                     {po.custom_work_id && (() => {
                       const proj = projects.find((p) => p.id === po.custom_work_id);
-                      return proj ? <span className="text-accent text-xs">Project: {proj.project_name}</span> : null;
+                      return proj ? <span className="text-muted text-xs">Project: {proj.project_name}</span> : null;
                     })()}
                   </div>
                   {po.approved_by && <p className="text-xs text-muted mt-1">Approved by {po.approved_by} on {new Date(po.approved_at!).toLocaleDateString()}</p>}
@@ -635,7 +658,7 @@ function OrdersTab() {
       {showCreate && (
         <CreatePOModal
           vendors={vendors}
-          projects={projects}
+          workOrders={workOrders}
           onSubmit={createPO}
           onClose={() => setShowCreate(false)}
         />
@@ -662,9 +685,9 @@ function OrdersTab() {
         <EditPOModal
           po={editPO}
           vendors={vendors}
-          projects={projects}
-          onSubmit={(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, customWorkId) =>
-            updatePO(editPO.id, vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, customWorkId)
+          workOrders={workOrders}
+          onSubmit={(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, workOrderId) =>
+            updatePO(editPO.id, vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, workOrderId)
           }
           onClose={() => setEditPO(null)}
         />
@@ -739,10 +762,10 @@ function OrdersTab() {
 // CREATE PO MODAL — with vendor selection + catalog auto-populate
 // ═══════════════════════════════════════════════════════════════
 
-function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
+function CreatePOModal({ vendors, workOrders, onSubmit, onClose }: {
   vendors: Vendor[];
-  projects: SimpleProject[];
-  onSubmit: (vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, customWorkId?: string) => void;
+  workOrders: SimpleWorkOrder[];
+  onSubmit: (vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, workOrderId?: string) => void;
   onClose: () => void;
 }) {
   const [vendorId, setVendorId] = useState("");
@@ -756,7 +779,7 @@ function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
   const [deliveryMethod, setDeliveryMethod] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
   const [shipToAddress, setShipToAddress] = useState("");
-  const [projectId, setProjectId] = useState("");
+  const [workOrderId, setWorkOrderId] = useState("");
 
   // Load catalog + inventory items when vendor changes
   useEffect(() => {
@@ -839,16 +862,16 @@ function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
                 )}
               </div>
 
-              {/* Project */}
+              {/* Work Order */}
               <div>
-                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Project (for inventory allocation)</label>
+                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Work Order (project auto-links for inventory)</label>
                 <select
-                  value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
+                  value={workOrderId}
+                  onChange={(e) => setWorkOrderId(e.target.value)}
                   className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
                 >
                   <option value="">None — general purchase</option>
-                  {projects.map((p) => <option key={p.id} value={p.id}>{p.project_name}</option>)}
+                  {workOrders.map((w) => <option key={w.id} value={w.id}>{w.item_name}</option>)}
                 </select>
               </div>
 
@@ -954,7 +977,7 @@ function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
               </div>
 
               <div className="flex gap-3">
-                <Button onClick={() => onSubmit(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, projectId)} disabled={!vendorName || lineItems.length === 0}>Create P.O.</Button>
+                <Button onClick={() => onSubmit(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, workOrderId || undefined)} disabled={!vendorName || lineItems.length === 0}>Create P.O.</Button>
                 <Button variant="outline" onClick={onClose}>Cancel</Button>
               </div>
             </div>
@@ -1018,11 +1041,11 @@ function CreatePOModal({ vendors, projects, onSubmit, onClose }: {
 // EDIT PO MODAL
 // ═══════════════════════════════════════════════════════════════
 
-function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
+function EditPOModal({ po, vendors, workOrders, onSubmit, onClose }: {
   po: PurchaseOrder;
   vendors: Vendor[];
-  projects: SimpleProject[];
-  onSubmit: (vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, customWorkId?: string) => void;
+  workOrders: SimpleWorkOrder[];
+  onSubmit: (vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, workOrderId?: string) => void;
   onClose: () => void;
 }) {
   const [vendorId, setVendorId] = useState(po.vendor_id || "");
@@ -1036,7 +1059,7 @@ function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
   const [deliveryMethod, setDeliveryMethod] = useState(po.delivery_method || "");
   const [deliveryDate, setDeliveryDate] = useState(po.delivery_date || "");
   const [shipToAddress, setShipToAddress] = useState(po.ship_to_address || "");
-  const [projectId, setProjectId] = useState(po.custom_work_id || "");
+  const [workOrderId, setWorkOrderId] = useState(po.work_order_id || "");
 
   useEffect(() => {
     if (!vendorId) { setCatalog([]); return; }
@@ -1103,10 +1126,10 @@ function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
 
               {/* Project */}
               <div>
-                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Project (for inventory allocation)</label>
-                <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">
+                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Work Order (project auto-links for inventory)</label>
+                <select value={workOrderId} onChange={(e) => setWorkOrderId(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">
                   <option value="">None — general purchase</option>
-                  {projects.map((p) => <option key={p.id} value={p.id}>{p.project_name}</option>)}
+                  {workOrders.map((w) => <option key={w.id} value={w.id}>{w.item_name}</option>)}
                 </select>
               </div>
 
@@ -1210,7 +1233,7 @@ function EditPOModal({ po, vendors, projects, onSubmit, onClose }: {
               </div>
 
               <div className="flex gap-3">
-                <Button onClick={() => onSubmit(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, projectId || undefined)} disabled={!vendorName || lineItems.length === 0}>Save Changes</Button>
+                <Button onClick={() => onSubmit(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, workOrderId || undefined)} disabled={!vendorName || lineItems.length === 0}>Save Changes</Button>
                 <Button variant="outline" onClick={onClose}>Cancel</Button>
               </div>
             </div>

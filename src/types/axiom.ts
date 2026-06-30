@@ -394,6 +394,7 @@ export interface PurchaseOrder {
   // can be tagged or staged correctly on the vendor's side.
   sidemark?: string;
   custom_work_id?: string;
+  work_order_id?: string;
   status: "pending" | "approved" | "rejected";
   need_by_date?: string;
   delivery_method?: "pickup" | "will_call" | "ship";
