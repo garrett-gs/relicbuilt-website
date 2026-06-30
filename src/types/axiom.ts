@@ -476,8 +476,18 @@ export interface WallflowerWorkOrder {
   // item_image_url is the item photo; reference_images are inspiration shots.
   item_image_url?: string;
   reference_images?: { url: string; name?: string; uploaded_at?: string }[];
+  // Optional reference to a Nexus order/quote this work order relates to.
+  nexus_ref?: NexusRef | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface NexusRef {
+  type: "order" | "quote";
+  id: string;
+  number: string;
+  client_name?: string;
+  event_date?: string;
 }
 
 // ── Activity ────────────────────────────────────────────────
