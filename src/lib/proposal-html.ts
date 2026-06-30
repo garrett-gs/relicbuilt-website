@@ -47,7 +47,7 @@ export function generateProposalHtml(
   const costSection = project.proposal_cost_section?.included !== false ? project.proposal_cost_section : null;
   const images: string[] = project.proposal_images_included !== false ? (project.proposal_images || []) : [];
   const stripeColor = "#454d23";
-  const logoUrl = "https://relicbuilt.com/wr-logo-black.png";
+  const logoUrl = "https://relicbuilt.com/wr-logo-stack.png";
 
   const quotedAmount = project.quoted_amount || 0;
 
@@ -62,7 +62,7 @@ export function generateProposalHtml(
 
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
-    <img src="${logoUrl}" alt="Wallflower RELIC" style="width:440px;max-width:64%;height:auto;object-fit:contain;" />
+    <img src="${logoUrl}" alt="Wallflower RELIC" style="width:300px;max-width:52%;height:auto;object-fit:contain;" />
     <div style="text-align:right;">
       <h1 style="margin:0 0 6px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
       <p style="margin:0 0 10px;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.16em;color:#454d23;">Custom Fabrication</p>
@@ -272,7 +272,7 @@ export function generateEstimateProposalHtml({
   // the cover. Cover image is filtered out so it doesn't repeat.
   const coverImage = estimate.proposal_cover_image_url || "";
   const projectImages: string[] = (estimate.proposal_images || []).filter((u) => u !== coverImage);
-  const logoUrl = "https://relicbuilt.com/wr-logo-black.png";
+  const logoUrl = "https://relicbuilt.com/wr-logo-stack.png";
 
   const sentDate = estimate.proposal_sent_at
     ? new Date(estimate.proposal_sent_at)
@@ -393,7 +393,7 @@ export function generateEstimateProposalHtml({
   // overflow into a second page before the page-break-after fires.
   const coverPageHtml = coverImage ? `
   <section class="proposal-page proposal-cover" style="${cardBaseStyle}page-break-after:always;display:flex;flex-direction:column;align-items:center;text-align:center;min-height:8.25in;">
-    <img src="${logoUrl}" alt="${esc(biz.biz_name || "RELIC")}" style="width:88%;max-width:660px;height:auto;object-fit:contain;margin-bottom:18px;" />
+    <img src="${logoUrl}" alt="${esc(biz.biz_name || "RELIC")}" style="width:70%;max-width:560px;height:auto;object-fit:contain;margin-bottom:18px;" />
     <div style="margin-bottom:18px;">
       <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.16em;color:#bbb;">Proposal</p>
       <p style="margin:4px 0 0;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.18em;color:#454d23;">Custom Fabrication</p>
@@ -450,7 +450,7 @@ export function generateEstimateProposalHtml({
 
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
-    <img src="${logoUrl}" alt="Wallflower RELIC" style="width:440px;max-width:64%;height:auto;object-fit:contain;" />
+    <img src="${logoUrl}" alt="Wallflower RELIC" style="width:300px;max-width:52%;height:auto;object-fit:contain;" />
     <div style="text-align:right;">
       <h1 style="margin:0 0 6px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
       <p style="margin:0 0 10px;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.16em;color:#454d23;">Custom Fabrication</p>
