@@ -1,10 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Raleway, Geist } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/layout/Navbar";
-import Footer from "@/components/layout/Footer";
+import SiteShell from "@/components/layout/SiteShell";
 import { CartProvider } from "@/components/shop/CartProvider";
-import CartDrawer from "@/components/shop/CartDrawer";
 import PwaRegistrar from "@/components/layout/PwaRegistrar";
 
 const raleway = Raleway({
@@ -76,10 +74,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <CartProvider>
-          <Navbar />
-          <main className="flex-1 pt-16">{children}</main>
-          <Footer />
-          <CartDrawer />
+          <SiteShell>{children}</SiteShell>
           <PwaRegistrar />
         </CartProvider>
       </body>
