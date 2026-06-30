@@ -69,7 +69,7 @@ export default function NexusRefPicker({
               {value.type === "order" ? "Order" : "Quote"} {value.number}
             </p>
             <p className="text-xs text-muted truncate">
-              {value.client_name || ""}{value.event_date ? ` · ${formatDueDate(value.event_date)}` : ""}
+              {value.client_name || ""}{value.event_date ? ` · ${formatDueDate(value.event_date).text}` : ""}
             </p>
           </div>
           <button onClick={() => onChange(null)} className="text-xs text-muted hover:text-red-400 flex items-center gap-1 shrink-0">
@@ -115,7 +115,7 @@ export default function NexusRefPicker({
                 >
                   <p className="text-sm text-foreground font-mono">{r.number}</p>
                   <p className="text-xs text-muted truncate">
-                    {r.client_name}{r.event_date ? ` · ${formatDueDate(r.event_date)}` : ""}{r.event_type ? ` · ${r.event_type}` : ""}
+                    {r.client_name}{r.event_date ? ` · ${formatDueDate(r.event_date).text}` : ""}{r.event_type ? ` · ${r.event_type}` : ""}
                   </p>
                 </button>
               ))}
