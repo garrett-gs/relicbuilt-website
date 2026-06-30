@@ -4,9 +4,8 @@ import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
-import { WallflowerWorkOrder, TeamMember } from "@/types/axiom";
-
-type NexusSearchResult = { id: string; number: string; client_name: string; event_type: string; event_date: string; total: number; };
+import { WallflowerWorkOrder, TeamMember, NexusRef } from "@/types/axiom";
+import NexusRefPicker from "@/components/axiom/NexusRefPicker";
 import Button from "@/components/ui/Button";
 import DateField from "@/components/ui/DateField";
 import EstimateDrawer from "@/components/axiom/EstimateDrawer";
@@ -83,6 +82,7 @@ export default function WallflowerPage() {
       description: form.description || null,
       quantity: form.quantity || 1,
       submitted_by: form.submitted_by || userEmail,
+      nexus_ref: form.nexus_ref || null,
     }).select().single();
     if (data) {
       await logActivity({
@@ -334,6 +334,7 @@ function CreateModal({ teamMembers, onSubmit, onClose }: {
     deadline: "",
     description: "",
     quantity: 1,
+    nexus_ref: null as NexusRef | null,
   });
 
   return (
@@ -402,6 +403,11 @@ function CreateModal({ teamMembers, onSubmit, onClose }: {
             <textarea className={inp + " min-h-[80px] resize-y"} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Describe the work needed..." />
           </div>
 
+          <NexusRefPicker
+            value={form.nexus_ref}
+            onChange={(ref) => setForm((f) => ({ ...f, nexus_ref: ref }))}
+          />
+
           <div className="flex gap-3 pt-2">
             <Button onClick={() => onSubmit(form)} disabled={!form.item_name.trim()}>Create Work Order</Button>
             <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -440,37 +446,6 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   function markDirty() { setDirty(true); setSaved(false); }
-
-  // ── Nexus reference (link this work order to a Nexus order/quote) ──
-  const [nexusType, setNexusType] = useState<"order" | "quote">("order");
-  const [nexusQuery, setNexusQuery] = useState("");
-  const [nexusResults, setNexusResults] = useState<NexusSearchResult[]>([]);
-  const [nexusOpen, setNexusOpen] = useState(false);
-  const [nexusSearching, setNexusSearching] = useState(false);
-
-  async function searchNexus(type: "order" | "quote", q: string) {
-    setNexusSearching(true);
-    setNexusOpen(true);
-    try {
-      const { data: { session } } = await axiom.auth.getSession();
-      const res = await fetch(`/api/axiom/nexus-search?type=${type}&q=${encodeURIComponent(q)}`, {
-        headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
-      });
-      const json = await res.json();
-      setNexusResults(res.ok ? (json.results || []) : []);
-    } catch {
-      setNexusResults([]);
-    } finally {
-      setNexusSearching(false);
-    }
-  }
-
-  function pickNexus(r: NexusSearchResult) {
-    onUpdate({ nexus_ref: { type: nexusType, id: r.id, number: r.number, client_name: r.client_name, event_date: r.event_date } });
-    setNexusOpen(false);
-    setNexusQuery("");
-    setNexusResults([]);
-  }
 
   async function handleFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
@@ -715,66 +690,10 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
       </div>
 
       {/* Nexus reference — link to a Nexus order or quote */}
-      <div className="bg-card border border-border p-4">
-        <p className="text-xs uppercase tracking-wider text-muted mb-2 flex items-center gap-1.5">
-          <Paperclip size={11} /> Nexus Reference
-        </p>
-        {order.nexus_ref ? (
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="text-sm text-accent font-mono">
-                {order.nexus_ref.type === "order" ? "Order" : "Quote"} {order.nexus_ref.number}
-              </p>
-              <p className="text-xs text-muted truncate">
-                {order.nexus_ref.client_name || ""}{order.nexus_ref.event_date ? ` · ${formatDueDate(order.nexus_ref.event_date)}` : ""}
-              </p>
-            </div>
-            <button onClick={() => onUpdate({ nexus_ref: null })} className="text-xs text-muted hover:text-red-400 flex items-center gap-1 shrink-0">
-              <X size={12} /> Remove
-            </button>
-          </div>
-        ) : (
-          <div>
-            <div className="flex gap-2 mb-2">
-              {(["order", "quote"] as const).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => { setNexusType(t); searchNexus(t, nexusQuery); }}
-                  className={cn("text-xs px-3 py-1 border transition-colors", nexusType === t ? "border-accent text-accent" : "border-border text-muted hover:text-foreground")}
-                >
-                  {t === "order" ? "Order" : "Quote"}
-                </button>
-              ))}
-            </div>
-            <div className="relative">
-              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-              <input
-                value={nexusQuery}
-                onChange={(e) => { setNexusQuery(e.target.value); searchNexus(nexusType, e.target.value); }}
-                onFocus={() => { if (!nexusResults.length) searchNexus(nexusType, nexusQuery); }}
-                placeholder={`Search Nexus ${nexusType}s by number or client…`}
-                className="w-full bg-background border border-border pl-9 pr-4 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
-              />
-            </div>
-            {nexusOpen && (
-              <div className="mt-1 border border-border bg-background max-h-60 overflow-y-auto">
-                {nexusSearching ? (
-                  <p className="px-3 py-2 text-xs text-muted">Searching…</p>
-                ) : nexusResults.length === 0 ? (
-                  <p className="px-3 py-2 text-xs text-muted">No matching {nexusType}s.</p>
-                ) : nexusResults.map((r) => (
-                  <button key={r.id} onClick={() => pickNexus(r)} className="w-full text-left px-3 py-2 hover:bg-card border-b border-border/50 last:border-0">
-                    <p className="text-sm text-foreground font-mono">{r.number}</p>
-                    <p className="text-xs text-muted truncate">
-                      {r.client_name}{r.event_date ? ` · ${formatDueDate(r.event_date)}` : ""}{r.event_type ? ` · ${r.event_type}` : ""}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      <NexusRefPicker
+        value={order.nexus_ref ?? null}
+        onChange={(ref) => onUpdate({ nexus_ref: ref })}
+      />
 
       {/* Linked estimate */}
       {order.estimate_id && (
