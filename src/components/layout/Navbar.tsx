@@ -30,12 +30,12 @@ export default function Navbar() {
         <Link href={isAxiom ? "/axiom/dashboard" : "/"} className="flex items-center gap-2">
           {isAxiom ? (
             <Image
-              src="/wr-logo-white.png"
+              src="/wr-logo-stack.png"
               alt="Wallflower RELIC"
-              width={1400}
-              height={114}
+              width={900}
+              height={203}
               priority
-              className="h-8 w-auto"
+              className="h-11 w-auto"
             />
           ) : (
             <>
