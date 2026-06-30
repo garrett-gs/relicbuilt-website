@@ -47,7 +47,7 @@ export function generateProposalHtml(
   const costSection = project.proposal_cost_section?.included !== false ? project.proposal_cost_section : null;
   const images: string[] = project.proposal_images_included !== false ? (project.proposal_images || []) : [];
   const stripeColor = "#8b6914";
-  const logoUrl = "https://relicbuilt.com/logo-full.png";
+  const logoUrl = "https://relicbuilt.com/wr-logo-black.png";
 
   const quotedAmount = project.quoted_amount || 0;
 
@@ -62,7 +62,7 @@ export function generateProposalHtml(
 
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
-    <img src="${logoUrl}" alt="RELIC Custom Fabrications" style="height:72px;object-fit:contain;" />
+    <img src="${logoUrl}" alt="Wallflower RELIC" style="width:340px;max-width:55%;height:auto;object-fit:contain;" />
     <div style="text-align:right;">
       <h1 style="margin:0 0 10px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
       ${biz.biz_name ? `<p style="margin:0;font-size:13px;font-weight:bold;color:#222;">${esc(biz.biz_name)}</p>` : ""}
@@ -270,7 +270,7 @@ export function generateEstimateProposalHtml({
   // the cover. Cover image is filtered out so it doesn't repeat.
   const coverImage = estimate.proposal_cover_image_url || "";
   const projectImages: string[] = (estimate.proposal_images || []).filter((u) => u !== coverImage);
-  const logoUrl = "https://relicbuilt.com/logo-full.png";
+  const logoUrl = "https://relicbuilt.com/wr-logo-black.png";
 
   const payInFull = estimate.pay_in_full === true;
   const depositPct = payInFull ? 100 : (estimate.deposit_percent ?? biz.deposit_percent ?? 50);
@@ -461,7 +461,7 @@ export function generateEstimateProposalHtml({
 
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
-    <img src="${logoUrl}" alt="RELIC Custom Fabrications" style="height:72px;object-fit:contain;" />
+    <img src="${logoUrl}" alt="Wallflower RELIC" style="width:340px;max-width:55%;height:auto;object-fit:contain;" />
     <div style="text-align:right;">
       <h1 style="margin:0 0 10px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
       ${biz.biz_name ? `<p style="margin:0;font-size:13px;font-weight:bold;color:#222;">${esc(biz.biz_name)}</p>` : ""}
