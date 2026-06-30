@@ -16,10 +16,13 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
 
   if (bare) return <>{children}</>;
 
+  // Axiom uses a taller navbar (bigger logo), so its content offset matches.
+  const isAxiom = pathname?.startsWith("/axiom") ?? false;
+
   return (
     <>
       <Navbar />
-      <main className="flex-1 pt-16">{children}</main>
+      <main className={`flex-1 ${isAxiom ? "pt-20" : "pt-16"}`}>{children}</main>
       <Footer />
       <CartDrawer />
     </>
