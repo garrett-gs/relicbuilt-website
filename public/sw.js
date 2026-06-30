@@ -17,7 +17,13 @@
 //   • Other GETs (images, fonts, manifest): stale-while-revalidate.
 //   • Anything else: passthrough.
 
-const CACHE_VERSION = "v2";
+// Stamped with a unique value on every production deploy (see
+// scripts/stamp-sw.mjs, run by the `prebuild` script). Because this line
+// changes per deploy, the browser detects a brand-new service worker each
+// time we ship, installs it, and — via skipWaiting + the registrar's
+// controllerchange reload — swaps the app to the fresh version automatically.
+const BUILD_VERSION = "dev";
+const CACHE_VERSION = BUILD_VERSION;
 const SHELL_CACHE = `relic-shell-${CACHE_VERSION}`;
 const ASSETS_CACHE = `relic-assets-${CACHE_VERSION}`;
 const PAGES_CACHE = `relic-pages-${CACHE_VERSION}`;

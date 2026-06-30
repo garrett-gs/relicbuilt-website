@@ -10,6 +10,8 @@ export default function PwaRegistrar() {
   const [offline, setOffline] = useState(false);
 
   useEffect(() => {
+    let cleanupUpdateListeners: (() => void) | undefined;
+
     // Register the service worker. We skip it in development because
     // Next's dev server doesn't want the cache layer in the way of HMR.
     if (
@@ -17,9 +19,42 @@ export default function PwaRegistrar() {
       "serviceWorker" in navigator &&
       window.location.hostname !== "localhost"
     ) {
-      navigator.serviceWorker.register("/sw.js").catch((err) => {
-        console.warn("[pwa] service worker registration failed:", err);
+      let registration: ServiceWorkerRegistration | undefined;
+
+      // When a new service worker takes control (a fresh deploy installed and
+      // activated), reload once so the app swaps to the new version cleanly
+      // instead of getting stuck on a stale / half-cached shell.
+      let reloading = false;
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (reloading) return;
+        reloading = true;
+        window.location.reload();
       });
+
+      navigator.serviceWorker
+        .register("/sw.js")
+        .then((reg) => {
+          registration = reg;
+          reg.update().catch(() => {});
+        })
+        .catch((err) => {
+          console.warn("[pwa] service worker registration failed:", err);
+        });
+
+      // Check for a newer deploy whenever the app is opened or refocused — this
+      // is what makes the installed PWA pick up updates without a manual hard
+      // refresh. A found update installs, skipWaiting()s, and the
+      // controllerchange handler above reloads into it.
+      const checkForUpdate = () => registration?.update().catch(() => {});
+      const onVisible = () => {
+        if (document.visibilityState === "visible") checkForUpdate();
+      };
+      document.addEventListener("visibilitychange", onVisible);
+      window.addEventListener("focus", checkForUpdate);
+      cleanupUpdateListeners = () => {
+        document.removeEventListener("visibilitychange", onVisible);
+        window.removeEventListener("focus", checkForUpdate);
+      };
     }
 
     // Online/offline indicator
@@ -33,6 +68,7 @@ export default function PwaRegistrar() {
     return () => {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
+      cleanupUpdateListeners?.();
     };
   }, []);
 
