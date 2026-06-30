@@ -304,19 +304,14 @@ export function generateEstimateProposalHtml({
     ? ""
     : `<div class="proposal-page-gap" style="height:32px;background:transparent;"></div>`;
 
-  const acceptanceTermsHtml = payInFull
-    ? `Click below to review and sign electronically. Payment of ${money(totals.total)} is due in full to start the project.`
-    : `Click below to review and sign electronically. A ${depositPct}% deposit will start the project.`;
-  const acceptanceFooterTerms = payInFull
-    ? `By signing below, the client authorizes ${esc(biz.biz_name || "RELIC")} to begin work as outlined in this proposal. Payment of ${money(totals.total)} is due in full to commence work.`
-    : `By signing below, the client authorizes ${esc(biz.biz_name || "RELIC")} to begin work as outlined in this proposal. A ${depositPct}% deposit (${money(depositAmount)}) is due to commence work.`;
+  const acceptanceStatement = "This is acceptance of the scope and the details provided in this proposal. Once signed and approved, we will add it to your project.";
 
   const acceptanceSection = approveUrl
     ? `
   <div style="margin-top:36px;padding:24px;background:#fafafa;border:1px solid #e5e5e5;border-left:3px solid #c4a24d;page-break-inside:avoid;">
     <h2 style="margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:0.16em;color:#111;font-weight:bold;">Accept This Proposal</h2>
     <p style="margin:0 0 16px;font-size:13px;color:#555;line-height:1.6;">
-      ${acceptanceTermsHtml}
+      ${acceptanceStatement}
     </p>
     <a href="${approveUrl}" style="display:inline-block;background:#c4a24d;color:#0a0a0a;padding:14px 28px;text-decoration:none;font-weight:bold;letter-spacing:0.08em;font-size:13px;text-transform:uppercase;">
       Review &amp; Sign
@@ -326,7 +321,7 @@ export function generateEstimateProposalHtml({
   <div style="margin-top:36px;border-top:2px solid #111;padding-top:24px;page-break-inside:avoid;">
     <h2 style="margin:0 0 16px;font-size:13px;text-transform:uppercase;letter-spacing:0.16em;color:#111;font-weight:bold;">Acceptance</h2>
     <p style="margin:0 0 32px;font-size:12px;color:#444;line-height:1.6;">
-      ${acceptanceFooterTerms}
+      ${acceptanceStatement}
     </p>
     <div style="display:flex;gap:32px;">
       <div style="flex:1;">
@@ -499,10 +494,6 @@ export function generateEstimateProposalHtml({
   ${fieldNoteImagesHtml}
   ${costHtml}
   ${termsHtml}
-
-  <p style="margin:36px 0 18px;font-size:13px;color:#444;line-height:1.65;text-align:center;">
-    This is acceptance of the scope and the details provided in this proposal. Once signed and approved, we will add it to your project.
-  </p>
   ${acceptanceSection}
 
   <div style="margin-top:36px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#ccc;text-align:center;">
