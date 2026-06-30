@@ -224,7 +224,9 @@ export function generateProposalHtml(
 
   <!-- Footer -->
   <div style="margin-top:36px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#ccc;text-align:center;">
-    R&ensp;E&ensp;L&ensp;I&ensp;C &nbsp;&middot;&nbsp; Custom Fabrications &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; relicbuilt.com
+    Wallflower RELIC Creative Rentals and Custom Builds &nbsp;&middot;&nbsp; (402) 235-8179
+    <br/>
+    <span style="display:inline-block;margin-top:5px;">relicbuilt.com</span>
   </div>
 
 </div>`;
@@ -497,7 +499,9 @@ export function generateEstimateProposalHtml({
   ${acceptanceSection}
 
   <div style="margin-top:36px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#ccc;text-align:center;">
-    R&ensp;E&ensp;L&ensp;I&ensp;C &nbsp;&middot;&nbsp; Custom Fabrications &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; relicbuilt.com
+    Wallflower RELIC Creative Rentals and Custom Builds &nbsp;&middot;&nbsp; (402) 235-8179
+    <br/>
+    <span style="display:inline-block;margin-top:5px;">relicbuilt.com</span>
   </div>
 
   </section>
