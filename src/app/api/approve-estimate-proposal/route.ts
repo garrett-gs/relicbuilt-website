@@ -25,6 +25,11 @@ function calcTotals(est: { line_items?: EstimateLineItem[]; labor_items?: Estima
   return { materialTotal, laborTotal, subtotal, markup, total };
 }
 
+/**
+ * Proposals are APPROVAL-ONLY. Signing records the client's approval of the
+ * scope — it does NOT create deposit/balance invoices or trigger any payment.
+ * Payment/invoicing is handled in Nexus.
+ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -55,19 +60,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         already_approved: true,
         project_name: estimate.project_name,
-        custom_work_id: estimate.custom_work_id,
       });
     }
 
-    // Compute totals from the live estimate data
+    // Compute the total purely for the internal notification / audit record.
     const totals = calcTotals(estimate);
     const totalAmount = totals.total;
 
-    // Load settings for default deposit % + biz info + team members (for
-    // internal acceptance notification — who gets the "client signed" email).
+    // Load settings for biz info + team members (for the internal
+    // "client signed" notification — who gets the email).
     const { data: settings } = await supabase
       .from("settings")
-      .select("biz_name,biz_phone,biz_email,deposit_percent,team_members")
+      .select("biz_name,biz_phone,biz_email,team_members")
       .limit(1)
       .single();
 
@@ -79,117 +83,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Pay-in-full estimates skip the deposit/balance split and bill the
-    // total as one invoice. The "deposit" record we create in that case
-    // simply carries the full amount so the rest of the flow (which uses
-    // depositInvoice for the receipt email) still works without branching.
-    const payInFull = estimate.pay_in_full === true;
-    const depositPct = payInFull ? 100 : (estimate.deposit_percent ?? settings?.deposit_percent ?? 50);
-    const depositAmount = payInFull ? totalAmount : Math.round(totalAmount * depositPct) / 100;
-    const balanceAmount = payInFull ? 0 : Math.round((totalAmount - depositAmount) * 100) / 100;
-
-    // ── Create deposit and final invoices ────────────────────────────
-    // Note: NO project (custom_work) is created here. Project creation
-    // is deferred until the user marks the deposit paid in Axiom — that
-    // way the projects tab only shows projects with money down.
-    const y = new Date().getFullYear();
-    const today = new Date().toISOString().split("T")[0];
-    const depositInvoiceNum = `INV-${y}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const finalInvoiceNum = `INV-${y}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    // Deposit invoice — due date = proposal expiration (same date)
-    const depositDueDate = estimate.proposal_expires_at
-      ? new Date(estimate.proposal_expires_at).toISOString().split("T")[0]
-      : today;
-
-    const projectLabel = estimate.project_name || estimate.estimate_number;
-
-    // Line items show the work being done (the project, or the
-    // proposal_cost_section breakdown). Payment terminology — "Paid in
-    // Full", "Deposit (50%)", "Balance prior to delivery" — lives in the
-    // notes field below, which the invoice renders as a "Payment Terms"
-    // block. Keeps the line items clean.
-    const proposalCostItems = ((estimate.proposal_cost_section as { items?: { description?: string; cost?: number }[] } | undefined)?.items ?? [])
-      .filter((it) => it && (it.description || it.cost));
-
-    type InvoiceLineItem = { category: string; description: string; quantity: number; unit_price: number };
-
-    let depositLineItems: InvoiceLineItem[];
-    if (payInFull && proposalCostItems.length > 0) {
-      // Pay-in-full: client is paying the full price, so mirror the
-      // curated cost-section breakdown they signed off on.
-      depositLineItems = proposalCostItems.map((it) => ({
-        category: "",
-        description: it.description || projectLabel,
-        quantity: 1,
-        unit_price: Number(it.cost) || 0,
-      }));
-    } else {
-      // Deposit, balance, or pay-in-full without a breakdown:
-      // a single line naming the project. The amount equals what's owed
-      // on this particular invoice (deposit / balance / total).
-      depositLineItems = [{
-        category: "",
-        description: projectLabel,
-        quantity: 1,
-        unit_price: payInFull ? totalAmount : depositAmount,
-      }];
-    }
-
-    const depositPaymentTerms = payInFull
-      ? "Paid in Full."
-      : `Deposit (${depositPct}%) — ${money(depositAmount)} of ${money(totalAmount)} total. Balance of ${money(balanceAmount)} due prior to delivery.`;
-
-    const { data: depositInvoice, error: depErr } = await supabase
-      .from("invoices")
-      .insert({
-        invoice_number: depositInvoiceNum,
-        estimate_id: estimate.id,
-        client_name: estimate.client_name || "",
-        client_email: estimate.client_email || null,
-        client_phone: estimate.client_phone || null,
-        description: projectLabel,
-        line_items: depositLineItems,
-        subtotal: depositAmount > 0 ? depositAmount : totalAmount,
-        issued_date: today,
-        due_date: depositDueDate,
-        tax_rate: 0,
-        status: "unpaid",
-        notes: depositPaymentTerms,
-        invoice_type: payInFull ? "full" : "deposit",
-      })
-      .select()
-      .single();
-    if (depErr) {
-      console.error("[approve-estimate-proposal] deposit invoice failed:", depErr);
-      return NextResponse.json({ error: `Could not create deposit invoice: ${depErr.message}` }, { status: 500 });
-    }
-
-    if (balanceAmount > 0) {
-      const balanceLineItems: InvoiceLineItem[] = [{
-        category: "",
-        description: projectLabel,
-        quantity: 1,
-        unit_price: balanceAmount,
-      }];
-      await supabase.from("invoices").insert({
-        invoice_number: finalInvoiceNum,
-        estimate_id: estimate.id,
-        client_name: estimate.client_name || "",
-        client_email: estimate.client_email || null,
-        client_phone: estimate.client_phone || null,
-        description: projectLabel,
-        line_items: balanceLineItems,
-        subtotal: balanceAmount,
-        issued_date: today,
-        tax_rate: 0,
-        status: "unpaid",
-        notes: `Final balance, due prior to delivery. ${money(depositAmount)} deposit (${depositPct}%) was billed separately on a prior invoice.`,
-        invoice_type: "final",
-      });
-    }
-
-    // ── Mark estimate approved (project NOT created yet) ──────────────
+    // ── Mark estimate approved ────────────────────────────────────────
+    // No invoices, no payment. Just record the approval + signature.
     await supabase
       .from("estimates")
       .update({
@@ -209,8 +104,7 @@ export async function POST(req: NextRequest) {
 
     // ── Internal notification: tell the team the client signed ────────
     // Sends an email to biz_email plus any team member with portal_updates
-    // notifications enabled, so Garrett doesn't have to refresh Axiom to
-    // notice an acceptance. Non-blocking — failures are logged and we still
+    // notifications enabled. Non-blocking — failures are logged and we still
     // return success to the client.
     try {
       const resendKeyInternal = process.env.RESEND_API_KEY;
@@ -238,10 +132,10 @@ export async function POST(req: NextRequest) {
         const internalHtml = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;background:#fff;">
   <div style="padding:18px 28px;border-bottom:3px solid #5b642e;">
-    <img src="https://relicbuilt.com/logo-full.png" alt="${esc(bizNameInternal)}" style="height:42px;display:block;" />
+    <img src="https://relicbuilt.com/wr-logo-black.png" alt="${esc(bizNameInternal)}" style="width:240px;max-width:60%;height:auto;display:block;" />
   </div>
   <div style="padding:28px;">
-    <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:#888;">Proposal Signed</p>
+    <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:#888;">Proposal Approved</p>
     <h2 style="margin:0 0 18px;font-size:20px;color:#111;">${esc(estimate.project_name || estimate.estimate_number)}</h2>
     <table style="width:100%;font-size:14px;border-collapse:collapse;margin-bottom:20px;">
       <tr><td style="padding:6px 0;color:#666;">Signed by:</td><td style="padding:6px 0;text-align:right;font-weight:600;">${esc(signatureName.trim())}</td></tr>
@@ -249,11 +143,10 @@ export async function POST(req: NextRequest) {
       ${estimate.client_email ? `<tr><td style="padding:6px 0;color:#666;">Email:</td><td style="padding:6px 0;text-align:right;">${esc(estimate.client_email)}</td></tr>` : ""}
       <tr><td style="padding:6px 0;color:#666;">Estimate:</td><td style="padding:6px 0;text-align:right;font-family:monospace;">${esc(estimate.estimate_number)}</td></tr>
       <tr><td style="padding:6px 0;color:#666;">Total:</td><td style="padding:6px 0;text-align:right;font-weight:600;font-family:monospace;">${money(totalAmount)}</td></tr>
-      <tr><td style="padding:6px 0;color:#666;">${payInFull ? "Paid in full:" : `Deposit (${depositPct}%):`}</td><td style="padding:6px 0;text-align:right;font-family:monospace;">${money(depositAmount)}</td></tr>
       <tr><td style="padding:6px 0;color:#666;">Signed at:</td><td style="padding:6px 0;text-align:right;">${esc(acceptedAt)}</td></tr>
     </table>
     <p style="margin:0 0 20px;font-size:13px;color:#555;">
-      The deposit invoice has been created and emailed to the client. Once they pay, mark the deposit paid in Axiom to spin up the project.
+      The client approved this proposal. Open it in Axiom to proceed — payment is handled in Nexus.
     </p>
     <a href="${origin}/axiom/estimator" style="display:inline-block;background:#5b642e;color:#0a0a0a;padding:12px 24px;text-decoration:none;font-weight:bold;letter-spacing:0.06em;font-size:13px;text-transform:uppercase;">
       Open in Axiom →
@@ -270,7 +163,7 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({
             from: `${bizNameInternal} <notifications@relicbuilt.com>`,
             to: Array.from(recipients),
-            subject: `Proposal Signed — ${estimate.project_name || estimate.estimate_number}`,
+            subject: `Proposal Approved — ${estimate.project_name || estimate.estimate_number}`,
             html: internalHtml,
             reply_to: estimate.client_email || settings?.biz_email || "garrett@relicbuilt.com",
           }),
@@ -342,29 +235,13 @@ export async function POST(req: NextRequest) {
       metadata: {
         proposal_token: estimate.proposal_token,
         total_amount: totalAmount,
-        deposit_amount: depositAmount,
-        deposit_percent: depositPct,
-        deposit_invoice_id: depositInvoice.id,
-        deposit_invoice_number: depositInvoice.invoice_number,
       },
     });
-
-    // No client-facing email at this point. We deliberately want the
-    // client to flow straight from "I signed" → "I'm on the Pay page"
-    // without a detour through their inbox — captures their attention
-    // while the deal is freshest. The internal team email above still
-    // fires so Garrett knows the signature landed.
 
     return NextResponse.json({
       success: true,
       project_name: estimate.project_name || estimate.estimate_number,
-      deposit_invoice_id: depositInvoice.id,
-      deposit_invoice_number: depositInvoice.invoice_number,
-      deposit_amount: depositAmount,
-      balance_amount: balanceAmount,
       total_amount: totalAmount,
-      deposit_percent: depositPct,
-      deposit_due_date: depositDueDate,
       biz_name: settings?.biz_name || "RELIC",
     });
   } catch (err) {

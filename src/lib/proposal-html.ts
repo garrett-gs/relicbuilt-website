@@ -275,11 +275,6 @@ export function generateEstimateProposalHtml({
   const projectImages: string[] = (estimate.proposal_images || []).filter((u) => u !== coverImage);
   const logoUrl = "https://relicbuilt.com/wr-logo-black.png";
 
-  const payInFull = estimate.pay_in_full === true;
-  const depositPct = payInFull ? 100 : (estimate.deposit_percent ?? biz.deposit_percent ?? 50);
-  const depositAmount = payInFull ? totals.total : Math.round((totals.total * depositPct)) / 100;
-  const balanceDue = payInFull ? 0 : Math.round((totals.total - depositAmount) * 100) / 100;
-
   const sentDate = estimate.proposal_sent_at
     ? new Date(estimate.proposal_sent_at)
     : new Date();
@@ -424,10 +419,6 @@ export function generateEstimateProposalHtml({
         <td style="padding:14px 0;font-size:18px;font-weight:bold;color:#111;">Project Total</td>
         <td style="padding:14px 0;text-align:right;font-size:22px;font-family:monospace;font-weight:bold;color:#111;">${money(totals.total)}</td>
       </tr>
-      ${payInFull
-        ? `<tr><td style="padding:8px 0 4px;font-size:12px;color:#888;">Paid in Full</td><td style="padding:8px 0 4px;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(totals.total)}</td></tr>`
-        : `<tr><td style="padding:8px 0 4px;font-size:12px;color:#888;">Deposit (${depositPct}%) due to start</td><td style="padding:8px 0 4px;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(depositAmount)}</td></tr>
-      <tr><td style="padding:4px 0;font-size:12px;color:#888;">Balance prior to delivery</td><td style="padding:4px 0;text-align:right;font-size:12px;font-family:monospace;color:#555;">${money(balanceDue)}</td></tr>`}
     </table>
     <p style="margin:14px 0 0;font-size:11px;color:#999;font-style:italic;line-height:1.5;">
       This proposal is valid through <strong style="color:#555;font-style:normal;">${expiresText}</strong>.
