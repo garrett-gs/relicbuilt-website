@@ -70,6 +70,9 @@ export async function POST(req: NextRequest) {
     for (const c of axCompanies ?? []) axCompanyByName.set(norm(c.name), c);
 
     const nexusToAxiomCompany = new Map<string, string>();
+    // Nexus company id -> name, for the denormalized customers.company_name.
+    const nexusCompanyName = new Map<string, string>();
+    for (const co of wrCompanies ?? []) nexusCompanyName.set(co.id, co.name);
 
     for (const co of wrCompanies ?? []) {
       const fields = { address: co.address ?? null, industry: co.industry ?? null };
@@ -114,6 +117,7 @@ export async function POST(req: NextRequest) {
         website: cu.website ?? null,
         industry: cu.industry ?? null,
         company_id: companyId,
+        company_name: cu.company_id ? nexusCompanyName.get(cu.company_id) ?? null : null,
       };
 
       const match =

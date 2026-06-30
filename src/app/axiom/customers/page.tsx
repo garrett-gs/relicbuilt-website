@@ -186,7 +186,7 @@ export default function CustomersPage() {
     const co = companies.find((c) => c.id === companyId);
     const { data } = await axiom.from("customers").insert({
       name: form.name, email: form.email, phone: form.phone,
-      title: form.title, company_id: companyId,
+      title: form.title, company_id: companyId, company_name: co?.name ?? null,
       type: "Contact",
     }).select().single();
     if (data) {
@@ -200,11 +200,23 @@ export default function CustomersPage() {
 
   async function updateCompany(id: string, fields: Partial<Company>) {
     await axiom.from("companies").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id);
+    // Keep the denormalized company_name on this company's contacts in sync so
+    // the estimator customer search keeps finding them after a rename.
+    if (typeof fields.name === "string") {
+      await axiom.from("customers").update({ company_name: fields.name }).eq("company_id", id);
+    }
     await loadAll();
   }
 
   async function updateCustomer(id: string, fields: Partial<Customer>) {
-    await axiom.from("customers").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id);
+    // If the contact's company link changes, refresh the cached company_name.
+    const patch: Record<string, unknown> = { ...fields, updated_at: new Date().toISOString() };
+    if ("company_id" in fields) {
+      patch.company_name = fields.company_id
+        ? companies.find((c) => c.id === fields.company_id)?.name ?? null
+        : null;
+    }
+    await axiom.from("customers").update(patch).eq("id", id);
     await loadAll();
   }
 
