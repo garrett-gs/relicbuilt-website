@@ -28,21 +28,29 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         {/* Logo */}
         <Link href={isAxiom ? "/axiom/dashboard" : "/"} className="flex items-center gap-2">
-          <Image
-            src="/logo-emblem.png"
-            alt="Relic"
-            width={36}
-            height={36}
-            className="h-9 w-9"
-          />
-          <span
-            className={cn(
-              "font-bold text-foreground font-heading",
-              isAxiom ? "text-2xl tracking-wide" : "text-2xl tracking-widest"
-            )}
-          >
-            {isAxiom ? "Wallflower RELIC" : <>R&ensp;E&ensp;L&ensp;I&ensp;C</>}
-          </span>
+          {isAxiom ? (
+            <Image
+              src="/wr-logo-green.png"
+              alt="Wallflower RELIC"
+              width={1400}
+              height={121}
+              priority
+              className="h-9 w-auto"
+            />
+          ) : (
+            <>
+              <Image
+                src="/logo-emblem.png"
+                alt="Relic"
+                width={36}
+                height={36}
+                className="h-9 w-9"
+              />
+              <span className="text-2xl font-bold text-foreground font-heading tracking-widest">
+                R&ensp;E&ensp;L&ensp;I&ensp;C
+              </span>
+            </>
+          )}
         </Link>
 
         {/* Desktop nav */}
