@@ -63,7 +63,7 @@ export default function ApprovePage() {
     setApproving(false);
   }
 
-  const stripeColor = "#8b6914";
+  const stripeColor = "#454d23";
 
   // Loading state
   if (loading) {
@@ -163,7 +163,7 @@ export default function ApprovePage() {
 
         {/* Client info */}
         <div className="px-8 py-6">
-          <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "#c4a24d" }}>Prepared For</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider mb-2" style={{ color: "#5b642e" }}>Prepared For</p>
           <p className="font-bold text-gray-900 text-lg">{project.client_name}</p>
           {project.client_email && <p className="text-sm text-gray-500 mt-0.5">{project.client_email}</p>}
         </div>
@@ -200,7 +200,7 @@ export default function ApprovePage() {
             <div className="px-8 py-5 border-b border-gray-100">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {highlights.map((h, i) => (
-                  <div key={i} className="border-l-4 pl-4 py-1" style={{ borderColor: "#c4a24d" }}>
+                  <div key={i} className="border-l-4 pl-4 py-1" style={{ borderColor: "#5b642e" }}>
                     <p className="font-semibold text-gray-900 text-sm mb-1">{h.title}</p>
                     <p className="text-sm text-gray-600 leading-relaxed">{h.body}</p>
                   </div>
@@ -269,7 +269,7 @@ export default function ApprovePage() {
               onClick={handleApprove}
               disabled={approving}
               className="inline-flex items-center justify-center gap-2 px-8 py-3 text-white font-bold text-base disabled:opacity-60 hover:opacity-90 transition-opacity"
-              style={{ background: "#c4a24d" }}
+              style={{ background: "#5b642e" }}
             >
               {approving ? (
                 <>

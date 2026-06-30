@@ -43,7 +43,7 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
 
   const bizName = biz?.biz_name || "RELIC LLC";
   const logoUrl = "https://relicbuilt.com/logo-full.png";
-  const stripeColor = "#8b6914";
+  const stripeColor = "#454d23";
 
   const wrap = forEmail
     ? `style="max-width:680px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;background:#fff;"`
@@ -74,7 +74,7 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
   <!-- Bill To / Invoice Meta — no boxes -->
   <div style="display:flex;gap:40px;margin-bottom:28px;">
     <div style="flex:1;">
-      <p style="margin:0 0 10px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.14em;color:#c4a24d;">Bill To</p>
+      <p style="margin:0 0 10px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.14em;color:#5b642e;">Bill To</p>
       <p style="margin:0;font-size:15px;font-weight:bold;color:#111;">${esc(inv.client_name)}</p>
       ${inv.client_phone ? `<p style="margin:4px 0 0;font-size:13px;color:#555;">${esc(inv.client_phone)}</p>` : ""}
       ${inv.client_email ? `<p style="margin:2px 0 0;font-size:13px;color:#555;">${esc(inv.client_email)}</p>` : ""}

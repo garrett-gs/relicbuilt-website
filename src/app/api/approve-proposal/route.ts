@@ -18,7 +18,7 @@ function depositEmailHtml(opts: {
   const { clientName, projectName, depositAmount, balanceAmount, invoiceNumber, bizName, bizPhone, payUrl } = opts;
   return `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
-  <div style="padding:20px 32px;border-bottom:3px solid #c4a24d;margin-bottom:0;">
+  <div style="padding:20px 32px;border-bottom:3px solid #5b642e;margin-bottom:0;">
     <img src="https://relicbuilt.com/logo-full.png" alt="RELIC Custom Fabrications" style="height:56px;object-fit:contain;display:block;" />
   </div>
   <div style="padding:32px;">
@@ -39,7 +39,7 @@ function depositEmailHtml(opts: {
         </tr>
         <tr style="border-top:1px solid #e5e0d8;">
           <td style="padding:10px 0 6px;font-size:15px;font-weight:bold;color:#111;">Deposit Due:</td>
-          <td style="padding:10px 0 6px;text-align:right;font-size:18px;font-weight:bold;color:#c4a24d;font-family:monospace;">${money(depositAmount)}</td>
+          <td style="padding:10px 0 6px;text-align:right;font-size:18px;font-weight:bold;color:#5b642e;font-family:monospace;">${money(depositAmount)}</td>
         </tr>
         ${balanceAmount > 0 ? `
         <tr>
@@ -51,7 +51,7 @@ function depositEmailHtml(opts: {
 
     ${payUrl ? `
     <div style="margin:24px 0;text-align:center;">
-      <a href="${payUrl}" style="display:inline-block;background:#c4a24d;color:#fff;text-decoration:none;padding:14px 36px;font-size:15px;font-weight:bold;">Pay Deposit Online &rarr;</a>
+      <a href="${payUrl}" style="display:inline-block;background:#5b642e;color:#fff;text-decoration:none;padding:14px 36px;font-size:15px;font-weight:bold;">Pay Deposit Online &rarr;</a>
     </div>` : ""}
 
     <p style="font-size:14px;color:#555;margin:0 0 24px;line-height:1.6;">
@@ -78,7 +78,7 @@ function adminNotifyHtml(opts: {
   const { clientName, projectName, depositAmount, depositInvoiceNum, finalInvoiceNum, approvedAt } = opts;
   return `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#222;">
-  <div style="padding:16px 24px;border-bottom:3px solid #c4a24d;margin-bottom:0;">
+  <div style="padding:16px 24px;border-bottom:3px solid #5b642e;margin-bottom:0;">
     <img src="https://relicbuilt.com/logo-full.png" alt="RELIC" style="height:40px;object-fit:contain;display:block;" />
   </div>
   <div style="padding:24px;">

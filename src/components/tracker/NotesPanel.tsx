@@ -191,13 +191,13 @@ export default function NotesPanel() {
       editorRef.current?.querySelectorAll(`a[href="${url}"]`).forEach((a) => {
         a.setAttribute("target", "_blank");
         a.setAttribute("rel", "noopener noreferrer");
-        (a as HTMLElement).style.color = "#c4a24d";
+        (a as HTMLElement).style.color = "#5b642e";
         (a as HTMLElement).style.textDecoration = "underline";
       });
     } else {
       const text = linkText.trim() || url;
       document.execCommand("insertHTML", false,
-        `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#c4a24d;text-decoration:underline;">${text}</a>`
+        `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#5b642e;text-decoration:underline;">${text}</a>`
       );
     }
     setLinkUrl(""); setLinkText(""); setShowLinkInput(false);
@@ -225,10 +225,10 @@ export default function NotesPanel() {
         .notes-editor ol ol ol ol, .note-view ol ol ol ol { list-style-type: decimal; }
         .notes-editor li, .note-view li { margin: 1px 0; }
         .notes-editor img, .note-view img { max-width: 100%; height: auto; display: block; margin: 4px 0; border-radius: 2px; }
-        .notes-editor a, .note-view a { color: #c4a24d; text-decoration: underline; }
+        .notes-editor a, .note-view a { color: #5b642e; text-decoration: underline; }
         .note-view a { cursor: pointer; }
-        .notes-editor input[type="checkbox"] { accent-color: #c4a24d; cursor: pointer; margin-right: 4px; }
-        .note-view input[type="checkbox"] { accent-color: #c4a24d; margin-right: 4px; }
+        .notes-editor input[type="checkbox"] { accent-color: #5b642e; cursor: pointer; margin-right: 4px; }
+        .note-view input[type="checkbox"] { accent-color: #5b642e; margin-right: 4px; }
       `}</style>
 
       <div className="flex items-center justify-between pb-3 mb-2 border-b border-border shrink-0">

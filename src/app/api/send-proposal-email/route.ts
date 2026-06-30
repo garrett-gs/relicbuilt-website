@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
 
     const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
-  <div style="padding:20px 32px;border-bottom:3px solid #c4a24d;">
+  <div style="padding:20px 32px;border-bottom:3px solid #5b642e;">
     <img src="https://relicbuilt.com/logo-full.png" alt="${bizName}" style="height:56px;display:block;" />
   </div>
   <div style="padding:32px;">
@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
     ` : ""}
 
     <div style="text-align:center;margin:32px 0;">
-      <a href="${proposalUrl}" style="display:inline-block;background:#c4a24d;color:#0a0a0a;padding:16px 32px;text-decoration:none;font-weight:bold;letter-spacing:0.08em;font-size:14px;text-transform:uppercase;">
+      <a href="${proposalUrl}" style="display:inline-block;background:#5b642e;color:#0a0a0a;padding:16px 32px;text-decoration:none;font-weight:bold;letter-spacing:0.08em;font-size:14px;text-transform:uppercase;">
         Review &amp; Sign Proposal
       </a>
     </div>

@@ -237,7 +237,7 @@ export async function POST(req: NextRequest) {
 
         const internalHtml = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;background:#fff;">
-  <div style="padding:18px 28px;border-bottom:3px solid #c4a24d;">
+  <div style="padding:18px 28px;border-bottom:3px solid #5b642e;">
     <img src="https://relicbuilt.com/logo-full.png" alt="${esc(bizNameInternal)}" style="height:42px;display:block;" />
   </div>
   <div style="padding:28px;">
@@ -255,7 +255,7 @@ export async function POST(req: NextRequest) {
     <p style="margin:0 0 20px;font-size:13px;color:#555;">
       The deposit invoice has been created and emailed to the client. Once they pay, mark the deposit paid in Axiom to spin up the project.
     </p>
-    <a href="${origin}/axiom/estimator" style="display:inline-block;background:#c4a24d;color:#0a0a0a;padding:12px 24px;text-decoration:none;font-weight:bold;letter-spacing:0.06em;font-size:13px;text-transform:uppercase;">
+    <a href="${origin}/axiom/estimator" style="display:inline-block;background:#5b642e;color:#0a0a0a;padding:12px 24px;text-decoration:none;font-weight:bold;letter-spacing:0.06em;font-size:13px;text-transform:uppercase;">
       Open in Axiom →
     </a>
   </div>

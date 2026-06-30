@@ -98,7 +98,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ estimate_id
                 ${e.ip_address ? `<p style="margin:2px 0 0;font-size:11px;color:#666;font-family:monospace;"><strong style="font-family:Arial,sans-serif;">IP:</strong> ${esc(e.ip_address)}</p>` : ""}
                 ${e.user_agent ? `<p style="margin:2px 0 0;font-size:10px;color:#888;word-break:break-all;"><strong style="font-family:Arial,sans-serif;font-size:11px;">User Agent:</strong> ${esc(e.user_agent)}</p>` : ""}
                 ${e.document_hash ? `<p style="margin:6px 0 0;font-size:10px;color:#666;font-family:monospace;word-break:break-all;"><strong style="font-family:Arial,sans-serif;font-size:11px;">Document SHA-256:</strong> ${esc(e.document_hash)}</p>` : ""}
-                ${e.document_snapshot_url ? `<p style="margin:4px 0 0;font-size:11px;"><a href="${esc(e.document_snapshot_url)}" style="color:#c4a24d;">View signed document snapshot ↗</a></p>` : ""}
+                ${e.document_snapshot_url ? `<p style="margin:4px 0 0;font-size:11px;"><a href="${esc(e.document_snapshot_url)}" style="color:#5b642e;">View signed document snapshot ↗</a></p>` : ""}
               </td>
             </tr>
           `;
@@ -129,7 +129,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ estimate_id
   <div style="max-width: 720px; margin: 0 auto; padding: 32px 40px;">
 
     <!-- Header -->
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #c4a24d;padding-bottom:20px;margin-bottom:32px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #5b642e;padding-bottom:20px;margin-bottom:32px;">
       <div>
         <img src="https://relicbuilt.com/logo-full.png" alt="${esc(bizName)}" style="height:60px;display:block;margin-bottom:8px;" />
         <p style="margin:0;font-size:11px;color:#666;line-height:1.5;">

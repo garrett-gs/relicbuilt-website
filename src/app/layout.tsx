@@ -58,7 +58,7 @@ export const metadata: Metadata = {
 // Pinned theme color matches the manifest accent so installed PWAs render
 // the status bar / title bar in RELIC gold instead of the default white.
 export const viewport: Viewport = {
-  themeColor: "#c4a24d",
+  themeColor: "#5b642e",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",

@@ -115,7 +115,7 @@ export default function SettingsPage() {
           </div>
           <Field label="Accent Color" value={settings.accent_color} onChange={(v) => updateField("accent_color", v)} />
           <div className="flex gap-2 mt-2">
-            {["#c4a24d", "#1e3a5f", "#3d5a3e", "#5a2d5a", "#8b1a1a", "#1a5a5a", "#2d3a6b", "#1a1a1a"].map((c) => (
+            {["#5b642e", "#1e3a5f", "#3d5a3e", "#5a2d5a", "#8b1a1a", "#1a5a5a", "#2d3a6b", "#1a1a1a"].map((c) => (
               <button
                 key={c}
                 onClick={() => updateField("accent_color", c)}

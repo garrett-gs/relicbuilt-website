@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       const photoCount = (inspiration_photos || []).length;
       const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#222;">
-  <div style="padding:16px 24px;border-bottom:3px solid #c4a24d;">
+  <div style="padding:16px 24px;border-bottom:3px solid #5b642e;">
     <img src="https://relicbuilt.com/logo-full.png" alt="RELIC" style="height:40px;object-fit:contain;display:block;" />
   </div>
   <div style="padding:24px;">
@@ -53,8 +53,8 @@ export async function POST(req: NextRequest) {
       ${budget_range ? `<tr><td style="padding:4px 0;color:#777;">Budget:</td><td style="padding:4px 0;">${budget_range}</td></tr>` : ""}
       ${photoCount > 0 ? `<tr><td style="padding:4px 0;color:#777;">Photos:</td><td style="padding:4px 0;">${photoCount} uploaded</td></tr>` : ""}
     </table>
-    ${description ? `<p style="margin:16px 0 0;font-size:14px;color:#555;line-height:1.6;border-left:3px solid #c4a24d;padding-left:12px;">${description}</p>` : ""}
-    <p style="margin-top:24px;"><a href="https://relicbuilt.com/axiom/leads" style="background:#c4a24d;color:#fff;text-decoration:none;padding:10px 24px;font-size:14px;font-weight:bold;">View in Axiom →</a></p>
+    ${description ? `<p style="margin:16px 0 0;font-size:14px;color:#555;line-height:1.6;border-left:3px solid #5b642e;padding-left:12px;">${description}</p>` : ""}
+    <p style="margin-top:24px;"><a href="https://relicbuilt.com/axiom/leads" style="background:#5b642e;color:#fff;text-decoration:none;padding:10px 24px;font-size:14px;font-weight:bold;">View in Axiom →</a></p>
   </div>
 </div>`;
 

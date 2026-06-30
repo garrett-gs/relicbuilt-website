@@ -144,7 +144,7 @@ export default function CrewPage() {
         ) : (
           <div className="grid gap-3">
             {active.map((entry) => {
-              const color = colorMap[entry.member_name] || "#c4a24d";
+              const color = colorMap[entry.member_name] || "#5b642e";
               return (
                 <div
                   key={entry.id}

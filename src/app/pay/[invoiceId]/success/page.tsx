@@ -80,7 +80,7 @@ export default function PaySuccessPage() {
   };
   const headerStyle: React.CSSProperties = {
     padding: "20px 28px",
-    borderBottom: "3px solid #c4a24d",
+    borderBottom: "3px solid #5b642e",
   };
   const bodyStyle: React.CSSProperties = {
     padding: "36px 28px 40px",
@@ -114,7 +114,7 @@ export default function PaySuccessPage() {
             <p style={{ fontSize: 14, color: "#888", margin: "0 0 16px" }}>{state.message}</p>
             <p style={{ fontSize: 13, color: "#aaa" }}>
               Please call us at{" "}
-              <a href="tel:4022358179" style={{ color: "#c4a24d", textDecoration: "none" }}>
+              <a href="tel:4022358179" style={{ color: "#5b642e", textDecoration: "none" }}>
                 (402) 235-8179
               </a>{" "}
               and we will confirm your payment manually.
@@ -149,7 +149,7 @@ export default function PaySuccessPage() {
           </h1>
           <p style={{ fontSize: 15, color: "#555", margin: "0 0 6px", lineHeight: "1.6" }}>
             Thank you, <strong>{state.clientName}</strong>! Your payment of{" "}
-            <strong style={{ color: "#c4a24d" }}>{money(state.amountPaid)}</strong> has been received.
+            <strong style={{ color: "#5b642e" }}>{money(state.amountPaid)}</strong> has been received.
           </p>
 
           {state.clientEmail && (
@@ -171,14 +171,14 @@ export default function PaySuccessPage() {
           }}>
             <p style={{ fontSize: 13, color: "#aaa", margin: "0 0 16px" }}>
               Redirecting to relicbuilt.com in{" "}
-              <strong style={{ color: "#c4a24d" }}>{countdown}</strong>{" "}
+              <strong style={{ color: "#5b642e" }}>{countdown}</strong>{" "}
               second{countdown !== 1 ? "s" : ""}&hellip;
             </p>
             <a
               href="https://relicbuilt.com"
               style={{
                 display: "inline-block",
-                background: "#c4a24d",
+                background: "#5b642e",
                 color: "#fff",
                 textDecoration: "none",
                 padding: "12px 32px",

@@ -1007,7 +1007,7 @@ export default function LeadsPage() {
               onClick={() => setStatusFilter("all")}
               className="text-xs px-2 py-0.5 transition-colors"
               style={statusFilter === "all"
-                ? { background: "#c4a24d", color: "#fff" }
+                ? { background: "#5b642e", color: "#fff" }
                 : { background: "rgba(128,128,128,0.12)", color: "#9ca3af" }
               }
             >

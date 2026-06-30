@@ -21,7 +21,7 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
 
   return `
     <div ${wrapper}>
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;border-bottom:2px solid #c4a24d;padding-bottom:20px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;border-bottom:2px solid #5b642e;padding-bottom:20px;">
         <div>
           <img src="${logoSrc}" alt="RELIC Custom Fabrications" style="height:64px;width:auto;display:block;" />
         </div>
@@ -47,7 +47,7 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
       </div>
 
       ${po.sidemark ? `
-        <div style="margin-bottom:24px;padding:14px 18px;background:#fff9e6;border:2px solid #c4a24d;">
+        <div style="margin-bottom:24px;padding:14px 18px;background:#fff9e6;border:2px solid #5b642e;">
           <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.15em;color:#8a6a1f;">⚑ Mark all shipments with</p>
           <p style="margin:6px 0 0;font-size:20px;font-weight:bold;color:#111;letter-spacing:0.02em;">${po.sidemark}</p>
         </div>
@@ -85,7 +85,7 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
       </table>
 
       ${(po.delivery_method || po.delivery_date) ? `
-        <div style="margin-bottom:24px;padding:16px;background:#f9f9f9;border-left:3px solid #c4a24d;">
+        <div style="margin-bottom:24px;padding:16px;background:#f9f9f9;border-left:3px solid #5b642e;">
           <p style="margin:0 0 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#888;">Delivery</p>
           <div style="display:flex;flex-wrap:wrap;gap:32px;">
             ${po.delivery_method ? `
@@ -111,7 +111,7 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
       ` : ""}
 
       ${po.notes ? `
-        <div style="margin-bottom:24px;padding:12px;background:#f9f9f9;border-left:3px solid #c4a24d;">
+        <div style="margin-bottom:24px;padding:12px;background:#f9f9f9;border-left:3px solid #5b642e;">
           <p style="margin:0;font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:#888;margin-bottom:4px;">Notes</p>
           <p style="margin:0;font-size:13px;color:#444;white-space:pre-wrap;">${po.notes}</p>
         </div>

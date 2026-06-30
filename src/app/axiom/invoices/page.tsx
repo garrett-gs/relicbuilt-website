@@ -657,11 +657,11 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
             <input
               type="email" value={sendTo} onChange={(e) => setSendTo(e.target.value)}
               placeholder="client@email.com"
-              className="border border-gray-300 px-3 py-1.5 text-sm rounded focus:outline-none focus:border-[#c4a24d] w-52"
+              className="border border-gray-300 px-3 py-1.5 text-sm rounded focus:outline-none focus:border-[#5b642e] w-52"
             />
             <button
               onClick={handleSend} disabled={!sendTo || sending}
-              className="bg-[#c4a24d] text-white px-3 py-1.5 text-sm rounded disabled:opacity-50 hover:bg-[#b3913c]"
+              className="bg-[#5b642e] text-white px-3 py-1.5 text-sm rounded disabled:opacity-50 hover:bg-[#b3913c]"
             >{sending ? "Sending…" : "Send"}</button>
             <button onClick={() => { setShowEmailForm(false); setSendResult(null); }} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
           </div>
@@ -715,7 +715,7 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
         {/* Bill To / Invoice meta — no box */}
         <div className="grid grid-cols-2 gap-10 px-10 py-8 print:px-8">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "#c4a24d" }}>Bill To</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "#5b642e" }}>Bill To</p>
             <p className="font-bold text-gray-900 text-base">{invoice.client_name}</p>
             {invoice.client_phone && <p className="text-sm text-gray-600 mt-1">{invoice.client_phone}</p>}
             {invoice.client_email && <p className="text-sm text-gray-600 mt-0.5">{invoice.client_email}</p>}
@@ -736,7 +736,7 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
         </div>
 
         {/* Gold Items bar — full width */}
-        <div className="px-10 py-3 print:px-8" style={{ background: "#8b6914" }}>
+        <div className="px-10 py-3 print:px-8" style={{ background: "#454d23" }}>
           <p className="text-sm font-bold text-white uppercase tracking-widest">Items</p>
         </div>
 

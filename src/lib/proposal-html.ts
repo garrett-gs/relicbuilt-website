@@ -46,7 +46,7 @@ export function generateProposalHtml(
   const scope = project.proposal_scope?.included !== false ? (project.proposal_scope?.body || "") : "";
   const costSection = project.proposal_cost_section?.included !== false ? project.proposal_cost_section : null;
   const images: string[] = project.proposal_images_included !== false ? (project.proposal_images || []) : [];
-  const stripeColor = "#8b6914";
+  const stripeColor = "#454d23";
   const logoUrl = "https://relicbuilt.com/wr-logo-black.png";
 
   const quotedAmount = project.quoted_amount || 0;
@@ -65,7 +65,7 @@ export function generateProposalHtml(
     <img src="${logoUrl}" alt="Wallflower RELIC" style="width:440px;max-width:64%;height:auto;object-fit:contain;" />
     <div style="text-align:right;">
       <h1 style="margin:0 0 6px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
-      <p style="margin:0 0 10px;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.16em;color:#8b6914;">Custom Fabrication</p>
+      <p style="margin:0 0 10px;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.16em;color:#454d23;">Custom Fabrication</p>
       ${biz.biz_name ? `<p style="margin:0;font-size:13px;font-weight:bold;color:#222;">${esc(biz.biz_name)}</p>` : ""}
       ${biz.biz_address ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(biz.biz_address)}</p>` : ""}
       ${addressLine2 ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(addressLine2)}</p>` : ""}
@@ -82,7 +82,7 @@ export function generateProposalHtml(
   <table style="width:100%;border-collapse:collapse;margin-bottom:28px;">
     <tr>
       <td style="width:50%;vertical-align:top;padding-right:24px;">
-        <p style="margin:0 0 10px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.14em;color:#c4a24d;">Prepared For</p>
+        <p style="margin:0 0 10px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.14em;color:#5b642e;">Prepared For</p>
         <p style="margin:0;font-size:15px;font-weight:bold;color:#111;">${esc(project.client_name)}</p>
         ${project.company_name ? `<p style="margin:4px 0 0;font-size:13px;color:#555;">${esc(project.company_name)}</p>` : ""}
         ${project.client_phone ? `<p style="margin:4px 0 0;font-size:13px;color:#555;">${esc(project.client_phone)}</p>` : ""}
@@ -165,7 +165,7 @@ export function generateProposalHtml(
       <tr>
         ${highlights.map((h) => `
         <td style="width:50%;vertical-align:top;padding:0 10px 0 0;">
-          <div style="border-left:3px solid #c4a24d;padding-left:12px;margin-bottom:16px;">
+          <div style="border-left:3px solid #5b642e;padding-left:12px;margin-bottom:16px;">
             <p style="margin:0 0 4px;font-size:13px;font-weight:bold;color:#111;">${esc(h.title)}</p>
             <p style="margin:0;font-size:12px;color:#555;line-height:1.6;white-space:pre-wrap;">${esc(h.body)}</p>
           </div>
@@ -174,7 +174,7 @@ export function generateProposalHtml(
       ${highlights.length > 2 ? `<tr>
         ${highlights.slice(2).map((h) => `
         <td style="width:50%;vertical-align:top;padding:10px 10px 0 0;">
-          <div style="border-left:3px solid #c4a24d;padding-left:12px;margin-bottom:16px;">
+          <div style="border-left:3px solid #5b642e;padding-left:12px;margin-bottom:16px;">
             <p style="margin:0 0 4px;font-size:13px;font-weight:bold;color:#111;">${esc(h.title)}</p>
             <p style="margin:0;font-size:12px;color:#555;line-height:1.6;white-space:pre-wrap;">${esc(h.body)}</p>
           </div>
@@ -208,10 +208,10 @@ export function generateProposalHtml(
 
   <!-- Approve CTA at bottom (email only) -->
   ${forEmail && approveUrl ? `
-  <div style="padding:28px 20px;background:#faf8f3;border-top:3px solid #c4a24d;border-bottom:3px solid #c4a24d;text-align:center;">
+  <div style="padding:28px 20px;background:#faf8f3;border-top:3px solid #5b642e;border-bottom:3px solid #5b642e;text-align:center;">
     <p style="margin:0 0 6px;font-size:15px;font-weight:bold;color:#111;">Ready to move forward?</p>
     <p style="margin:0 0 20px;font-size:13px;color:#555;">Click the button below to approve this proposal.</p>
-    <a href="${approveUrl}" style="display:inline-block;background:#c4a24d;color:#fff;text-decoration:none;padding:16px 40px;font-size:16px;font-weight:bold;letter-spacing:0.04em;">✓ &nbsp;Approve This Proposal</a>
+    <a href="${approveUrl}" style="display:inline-block;background:#5b642e;color:#fff;text-decoration:none;padding:16px 40px;font-size:16px;font-weight:bold;letter-spacing:0.04em;">✓ &nbsp;Approve This Proposal</a>
     <p style="margin:14px 0 0;font-size:11px;color:#aaa;">By approving, you agree to the terms of this proposal.</p>
   </div>` : ""}
 
@@ -308,12 +308,12 @@ export function generateEstimateProposalHtml({
 
   const acceptanceSection = approveUrl
     ? `
-  <div style="margin-top:36px;padding:24px;background:#fafafa;border:1px solid #e5e5e5;border-left:3px solid #c4a24d;page-break-inside:avoid;">
+  <div style="margin-top:36px;padding:24px;background:#fafafa;border:1px solid #e5e5e5;border-left:3px solid #5b642e;page-break-inside:avoid;">
     <h2 style="margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:0.16em;color:#111;font-weight:bold;">Accept This Proposal</h2>
     <p style="margin:0 0 16px;font-size:13px;color:#555;line-height:1.6;">
       ${acceptanceStatement}
     </p>
-    <a href="${approveUrl}" style="display:inline-block;background:#c4a24d;color:#0a0a0a;padding:14px 28px;text-decoration:none;font-weight:bold;letter-spacing:0.08em;font-size:13px;text-transform:uppercase;">
+    <a href="${approveUrl}" style="display:inline-block;background:#5b642e;color:#0a0a0a;padding:14px 28px;text-decoration:none;font-weight:bold;letter-spacing:0.08em;font-size:13px;text-transform:uppercase;">
       Review &amp; Sign
     </a>
   </div>`
@@ -400,7 +400,7 @@ export function generateEstimateProposalHtml({
     <img src="${logoUrl}" alt="${esc(biz.biz_name || "RELIC")}" style="width:88%;max-width:660px;height:auto;object-fit:contain;margin-bottom:18px;" />
     <div style="margin-bottom:18px;">
       <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.16em;color:#bbb;">Proposal</p>
-      <p style="margin:4px 0 0;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.18em;color:#8b6914;">Custom Fabrication</p>
+      <p style="margin:4px 0 0;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.18em;color:#454d23;">Custom Fabrication</p>
       <h1 style="margin:8px 0 0;font-size:30px;font-weight:bold;color:#111;letter-spacing:0.02em;">${esc(estimate.project_name || "")}</h1>
       <p style="margin:10px 0 0;font-size:17px;color:#555;">Prepared for ${esc(preparedFor)}</p>
       <p style="margin:10px 0 0;font-size:12px;color:#999;font-family:monospace;">${esc(estimate.estimate_number)} &nbsp;·&nbsp; ${dateText}</p>
@@ -418,7 +418,7 @@ export function generateEstimateProposalHtml({
   <section style="margin-bottom:32px;page-break-inside:avoid;">
     <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Investment</p>
     <table style="width:100%;border-collapse:collapse;">
-      <tr style="border-top:2px solid #c4a24d;border-bottom:2px solid #c4a24d;">
+      <tr style="border-top:2px solid #5b642e;border-bottom:2px solid #5b642e;">
         <td style="padding:14px 0;font-size:18px;font-weight:bold;color:#111;">Project Total</td>
         <td style="padding:14px 0;text-align:right;font-size:22px;font-family:monospace;font-weight:bold;color:#111;">${money(totals.total)}</td>
       </tr>
@@ -461,7 +461,7 @@ export function generateEstimateProposalHtml({
     <img src="${logoUrl}" alt="Wallflower RELIC" style="width:440px;max-width:64%;height:auto;object-fit:contain;" />
     <div style="text-align:right;">
       <h1 style="margin:0 0 6px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
-      <p style="margin:0 0 10px;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.16em;color:#8b6914;">Custom Fabrication</p>
+      <p style="margin:0 0 10px;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.16em;color:#454d23;">Custom Fabrication</p>
       ${biz.biz_name ? `<p style="margin:0;font-size:13px;font-weight:bold;color:#222;">${esc(biz.biz_name)}</p>` : ""}
       ${biz.biz_address ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(biz.biz_address)}</p>` : ""}
       ${addressLine2 ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(addressLine2)}</p>` : ""}

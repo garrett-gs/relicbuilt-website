@@ -162,7 +162,7 @@ export default function ProposalPage() {
       : null;
     return (
       <div style={{ minHeight: "100vh", background: "#f5f5f5", padding: "48px 16px", fontFamily: "Arial,Helvetica,sans-serif" }}>
-        <div style={{ maxWidth: 600, margin: "0 auto", background: "#fff", padding: 48, textAlign: "center", borderTop: "4px solid #c4a24d" }}>
+        <div style={{ maxWidth: 600, margin: "0 auto", background: "#fff", padding: 48, textAlign: "center", borderTop: "4px solid #5b642e" }}>
           <div style={{
             width: 72, height: 72, borderRadius: "50%",
             border: "3px solid #22c55e", color: "#22c55e",
@@ -182,7 +182,7 @@ export default function ProposalPage() {
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid #e5e0d8" }}>
               <span style={{ fontSize: 15, fontWeight: 600, color: "#111" }}>Deposit Due</span>
-              <span style={{ fontSize: 18, fontWeight: 700, fontFamily: "monospace", color: "#c4a24d" }}>{money(result.deposit_amount)}</span>
+              <span style={{ fontSize: 18, fontWeight: 700, fontFamily: "monospace", color: "#5b642e" }}>{money(result.deposit_amount)}</span>
             </div>
             {dueByText && (
               <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #e5e0d8" }}>
@@ -205,7 +205,7 @@ export default function ProposalPage() {
                 href={`/pay/${result.deposit_invoice_id}`}
                 style={{
                   display: "block",
-                  background: "#c4a24d",
+                  background: "#5b642e",
                   color: "#0a0a0a",
                   padding: "18px 24px",
                   textDecoration: "none",
@@ -313,7 +313,7 @@ export default function ProposalPage() {
                 href={`/pay/${depositInvoice.id}`}
                 style={{
                   display: "block",
-                  background: "#c4a24d",
+                  background: "#5b642e",
                   color: "#0a0a0a",
                   padding: "16px 24px",
                   textDecoration: "none",
@@ -365,7 +365,7 @@ export default function ProposalPage() {
       />
 
       {/* Acceptance form — sticky at the bottom of the document */}
-      <div style={{ maxWidth: 760, margin: "0 auto", background: "#fff", padding: 48, borderTop: "3px solid #c4a24d" }}>
+      <div style={{ maxWidth: 760, margin: "0 auto", background: "#fff", padding: 48, borderTop: "3px solid #5b642e" }}>
         <h2 style={{ margin: "0 0 8px", fontSize: 16, textTransform: "uppercase", letterSpacing: "0.12em", color: "#111" }}>
           Accept This Proposal
         </h2>
@@ -396,7 +396,7 @@ export default function ProposalPage() {
               outline: "none",
               boxSizing: "border-box",
             }}
-            onFocus={(e) => (e.target.style.border = "1px solid #c4a24d")}
+            onFocus={(e) => (e.target.style.border = "1px solid #5b642e")}
             onBlur={(e) => (e.target.style.border = "1px solid #ccc")}
           />
         </div>
@@ -413,7 +413,7 @@ export default function ProposalPage() {
           style={{
             width: "100%",
             padding: "16px",
-            background: submitting || !signatureName.trim() ? "#ccc" : "#c4a24d",
+            background: submitting || !signatureName.trim() ? "#ccc" : "#5b642e",
             color: "#0a0a0a",
             border: "none",
             fontSize: 15,

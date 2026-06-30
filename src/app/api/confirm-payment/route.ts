@@ -25,7 +25,7 @@ function receiptEmailHtml(opts: {
   const { clientName, invoiceNumber, description, amountPaid, method, date } = opts;
   return `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
-  <div style="padding:20px 32px;border-bottom:3px solid #c4a24d;margin-bottom:0;">
+  <div style="padding:20px 32px;border-bottom:3px solid #5b642e;margin-bottom:0;">
     <img src="https://relicbuilt.com/logo-full.png" alt="RELIC Custom Fabrications" style="height:56px;object-fit:contain;display:block;" />
   </div>
   <div style="padding:32px;">
@@ -55,9 +55,9 @@ function receiptEmailHtml(opts: {
           <td style="padding:8px 0 6px;color:#666;">Date:</td>
           <td style="padding:8px 0 6px;text-align:right;color:#111;">${date}</td>
         </tr>
-        <tr style="border-top:2px solid #c4a24d;">
+        <tr style="border-top:2px solid #5b642e;">
           <td style="padding:10px 0 6px;font-size:15px;font-weight:bold;color:#111;">Amount Paid:</td>
-          <td style="padding:10px 0 6px;text-align:right;font-size:18px;font-weight:bold;color:#c4a24d;font-family:monospace;">${money(amountPaid)}</td>
+          <td style="padding:10px 0 6px;text-align:right;font-size:18px;font-weight:bold;color:#5b642e;font-family:monospace;">${money(amountPaid)}</td>
         </tr>
       </table>
     </div>
@@ -67,7 +67,7 @@ function receiptEmailHtml(opts: {
     </p>
 
     <p style="font-size:14px;color:#555;margin:0 0 8px;">Phone: <strong>(402) 235-8179</strong></p>
-    <p style="font-size:14px;color:#555;margin:0 0 8px;">Web: <a href="https://relicbuilt.com" style="color:#c4a24d;">relicbuilt.com</a></p>
+    <p style="font-size:14px;color:#555;margin:0 0 8px;">Web: <a href="https://relicbuilt.com" style="color:#5b642e;">relicbuilt.com</a></p>
 
     <p style="margin-top:32px;font-size:11px;color:#aaa;">
       RELIC Custom Fabrications &nbsp;&middot;&nbsp; relicbuilt.com

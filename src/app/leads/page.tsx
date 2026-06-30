@@ -17,7 +17,7 @@ const BUDGET_RANGES = [
 ];
 
 const inp =
-  "w-full bg-white border border-gray-200 px-4 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#c4a24d] transition-colors placeholder:text-gray-400";
+  "w-full bg-white border border-gray-200 px-4 py-3 text-gray-900 text-sm focus:outline-none focus:border-[#5b642e] transition-colors placeholder:text-gray-400";
 const lbl = "block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5";
 
 function PhotoUpload({
@@ -63,7 +63,7 @@ function PhotoUpload({
         type="button"
         onClick={() => inputRef.current?.click()}
         disabled={uploading}
-        className="flex items-center gap-2 text-sm text-gray-500 hover:text-[#8b6914] border border-dashed border-gray-300 hover:border-[#c4a24d] px-4 py-3 w-full transition-colors disabled:opacity-50"
+        className="flex items-center gap-2 text-sm text-gray-500 hover:text-[#454d23] border border-dashed border-gray-300 hover:border-[#5b642e] px-4 py-3 w-full transition-colors disabled:opacity-50"
       >
         {uploading ? (
           <>
@@ -144,7 +144,7 @@ export default function LeadsPage() {
           animate={{ opacity: 1, y: 0 }}
           className="text-center max-w-md"
         >
-          <CheckCircle className="mx-auto mb-6 text-[#c4a24d]" size={56} />
+          <CheckCircle className="mx-auto mb-6 text-[#5b642e]" size={56} />
           <h1 className="text-3xl font-bold text-gray-900 mb-3">
             We&apos;ll be in touch!
           </h1>
@@ -153,7 +153,7 @@ export default function LeadsPage() {
           </p>
           <a
             href="/"
-            className="inline-block bg-[#c4a24d] text-white px-8 py-3 text-sm font-bold uppercase tracking-wider hover:bg-[#8b6914] transition-colors"
+            className="inline-block bg-[#5b642e] text-white px-8 py-3 text-sm font-bold uppercase tracking-wider hover:bg-[#454d23] transition-colors"
           >
             Back to Home
           </a>
@@ -170,7 +170,7 @@ export default function LeadsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <p className="text-[#c4a24d] text-xs font-bold uppercase tracking-widest mb-3">
+          <p className="text-[#5b642e] text-xs font-bold uppercase tracking-widest mb-3">
             Get Started
           </p>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900 mb-4">
@@ -292,7 +292,7 @@ export default function LeadsPage() {
             <button
               type="submit"
               disabled={status === "submitting" || !form.name.trim()}
-              className="w-full bg-[#c4a24d] text-white py-4 text-sm font-bold uppercase tracking-wider hover:bg-[#8b6914] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full bg-[#5b642e] text-white py-4 text-sm font-bold uppercase tracking-wider hover:bg-[#454d23] transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {status === "submitting" ? (
                 <>

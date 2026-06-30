@@ -14,7 +14,7 @@ const supabase = createClient(
 const WORK_TYPES = ["Repair", "Fabrication", "Refinish", "Install", "Custom Build", "Modification", "Other"];
 const SCOPES = ["Internal", "External", "Client-Facing", "Warranty"];
 
-const inp = "w-full bg-[#111] border border-[#333] px-4 py-3 text-white text-sm focus:outline-none focus:border-[#c4a24d] rounded-none";
+const inp = "w-full bg-[#111] border border-[#333] px-4 py-3 text-white text-sm focus:outline-none focus:border-[#5b642e] rounded-none";
 
 export default function WallflowerSubmit() {
   const [form, setForm] = useState({
@@ -73,11 +73,11 @@ export default function WallflowerSubmit() {
           <CheckCircle2 size={64} className="text-green-500 mx-auto" />
           <h1 className="text-2xl font-bold text-white">Work Order Submitted</h1>
           <p className="text-[#888] text-sm">
-            Your work order for <span className="text-[#c4a24d]">{form.item_name}</span> has been received. The RELIC team will review it shortly.
+            Your work order for <span className="text-[#5b642e]">{form.item_name}</span> has been received. The RELIC team will review it shortly.
           </p>
           <button
             onClick={reset}
-            className="bg-[#c4a24d] text-black px-6 py-3 text-sm font-semibold hover:bg-[#d4b25d] transition-colors"
+            className="bg-[#5b642e] text-black px-6 py-3 text-sm font-semibold hover:bg-[#d4b25d] transition-colors"
           >
             Submit Another
           </button>
@@ -95,10 +95,10 @@ export default function WallflowerSubmit() {
             <Image src="/logo-emblem.png" alt="Relic" width={28} height={28} className="h-7 w-7" />
             <div>
               <span className="text-white text-lg font-bold tracking-widest">RELIC</span>
-              <span className="text-[#c4a24d] text-xs ml-2 uppercase tracking-wider">Wallflower Portal</span>
+              <span className="text-[#5b642e] text-xs ml-2 uppercase tracking-wider">Wallflower Portal</span>
             </div>
           </div>
-          <ClipboardList size={20} className="text-[#c4a24d]" />
+          <ClipboardList size={20} className="text-[#5b642e]" />
         </div>
       </header>
 
@@ -119,7 +119,7 @@ export default function WallflowerSubmit() {
           {/* Item */}
           <div>
             <label className="text-xs uppercase tracking-wider text-[#888] block mb-1.5">
-              Item <span className="text-[#c4a24d]">*</span>
+              Item <span className="text-[#5b642e]">*</span>
             </label>
             <input className={inp} value={form.item_name} onChange={(e) => setForm((f) => ({ ...f, item_name: e.target.value }))} placeholder="e.g. Oak conference table, Custom shelving unit..." required />
           </div>
@@ -181,7 +181,7 @@ export default function WallflowerSubmit() {
           <button
             type="submit"
             disabled={saving || !form.item_name.trim()}
-            className="w-full bg-[#c4a24d] text-black py-4 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-[#d4b25d] disabled:opacity-40 transition-colors"
+            className="w-full bg-[#5b642e] text-black py-4 text-sm font-semibold flex items-center justify-center gap-2 hover:bg-[#d4b25d] disabled:opacity-40 transition-colors"
           >
             {saving ? "Submitting..." : <><Send size={16} /> Submit Work Order</>}
           </button>

@@ -74,7 +74,7 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
 
     const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;background:#fff;">
-  <div style="padding:18px 28px;border-bottom:3px solid #c4a24d;">
+  <div style="padding:18px 28px;border-bottom:3px solid #5b642e;">
     <img src="https://relicbuilt.com/logo-full.png" alt="${bizName}" style="height:42px;display:block;" />
   </div>
   <div style="padding:28px;">
@@ -92,7 +92,7 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
     <p style="margin:0 0 16px;padding:10px 14px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:12px;line-height:1.5;">
       ACH transfers take 3–5 business days to fully clear. The invoice is marked paid in Axiom, but the funds may not appear in your bank until settlement.
     </p>` : ""}
-    <a href="${invoiceUrl}" style="display:inline-block;background:#c4a24d;color:#0a0a0a;padding:12px 24px;text-decoration:none;font-weight:bold;letter-spacing:0.06em;font-size:13px;text-transform:uppercase;">
+    <a href="${invoiceUrl}" style="display:inline-block;background:#5b642e;color:#0a0a0a;padding:12px 24px;text-decoration:none;font-weight:bold;letter-spacing:0.06em;font-size:13px;text-transform:uppercase;">
       Open in Axiom →
     </a>
   </div>

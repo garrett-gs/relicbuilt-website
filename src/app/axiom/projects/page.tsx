@@ -2757,7 +2757,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
   }
 
   const addressLine2 = [biz.biz_city, biz.biz_state, biz.biz_zip].filter(Boolean).join(", ");
-  const stripeColor = "#8b6914";
+  const stripeColor = "#454d23";
 
   return (
     <div className="fixed inset-0 bg-gray-100 z-[100] overflow-auto">
@@ -2775,7 +2775,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
             <DateField
               value={validUntil}
               onChange={setValidUntil}
-              inputClassName="border border-gray-300 bg-white text-gray-800 px-2 py-1 text-sm focus:outline-none focus:border-[#c4a24d] hover:border-[#c4a24d] transition-colors text-left"
+              inputClassName="border border-gray-300 bg-white text-gray-800 px-2 py-1 text-sm focus:outline-none focus:border-[#5b642e] hover:border-[#5b642e] transition-colors text-left"
             />
           </div>
         </div>
@@ -2788,11 +2788,11 @@ function ProposalPreview({ project, onClose, userEmail }: {
             <input
               type="email" value={sendTo} onChange={(e) => setSendTo(e.target.value)}
               placeholder="client@email.com"
-              className="border border-gray-300 px-3 py-1.5 text-sm rounded focus:outline-none focus:border-[#c4a24d] w-52"
+              className="border border-gray-300 px-3 py-1.5 text-sm rounded focus:outline-none focus:border-[#5b642e] w-52"
             />
             <button
               onClick={handleSend} disabled={!sendTo || sending}
-              className="bg-[#c4a24d] text-white px-3 py-1.5 text-sm rounded disabled:opacity-50 hover:bg-[#b3913c]"
+              className="bg-[#5b642e] text-white px-3 py-1.5 text-sm rounded disabled:opacity-50 hover:bg-[#b3913c]"
             >{sending ? "Sending…" : "Send"}</button>
             <button onClick={() => { setShowEmailForm(false); setSendResult(null); }} className="text-gray-400 hover:text-gray-600"><X size={16} /></button>
           </div>
@@ -2846,7 +2846,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
         {/* Prepared For / Proposal meta */}
         <div className="grid grid-cols-2 gap-10 px-10 py-8 print:px-8">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "#c4a24d" }}>Prepared For</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "#5b642e" }}>Prepared For</p>
             <p className="font-bold text-gray-900 text-base">{project.client_name}</p>
             {project.company_name && <p className="text-sm text-gray-600 mt-0.5">{project.company_name}</p>}
             {project.client_phone && <p className="text-sm text-gray-600 mt-1">{project.client_phone}</p>}
@@ -2888,7 +2888,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
             <div className="px-10 py-6 border-b border-gray-100 print:px-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
                 {highlights.map((h, i) => (
-                  <div key={i} className="border-l-4 pl-4 py-1" style={{ borderColor: "#c4a24d" }}>
+                  <div key={i} className="border-l-4 pl-4 py-1" style={{ borderColor: "#5b642e" }}>
                     <p className="font-semibold text-gray-900 text-sm mb-1">{h.title}</p>
                     <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{h.body}</p>
                   </div>

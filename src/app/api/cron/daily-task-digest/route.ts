@@ -60,7 +60,7 @@ function buildEmailHtml(opts: {
 
   return `
     <div style="font-family:sans-serif;max-width:640px;margin:0 auto;color:#111">
-      <div style="background:#fff;padding:20px 32px;border-bottom:3px solid #c4a24d;margin-bottom:24px">
+      <div style="background:#fff;padding:20px 32px;border-bottom:3px solid #5b642e;margin-bottom:24px">
         <img src="https://relicbuilt.com/logo-full.png" alt="RELIC" style="height:48px;width:auto;display:block;" />
       </div>
       <div style="padding:0 32px 32px">
@@ -78,7 +78,7 @@ function buildEmailHtml(opts: {
           <tbody>${rows}</tbody>
         </table>
         <p style="margin:24px 0 0">
-          <a href="${siteUrl}/axiom/my-tasks" style="display:inline-block;background:#c4a24d;color:#fff;text-decoration:none;padding:10px 24px;font-size:14px">Open my tasks →</a>
+          <a href="${siteUrl}/axiom/my-tasks" style="display:inline-block;background:#5b642e;color:#fff;text-decoration:none;padding:10px 24px;font-size:14px">Open my tasks →</a>
         </p>
         <p style="margin-top:32px;font-size:11px;color:#aaa">${escapeHtml(bizName)} &nbsp;·&nbsp; relicbuilt.com</p>
       </div>
