@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { Phone } from "lucide-react";
 
 function InstagramIcon({ size = 20 }: { size?: number }) {
@@ -47,20 +50,36 @@ const socialLinks = [
 ];
 
 export default function Footer() {
+  const pathname = usePathname();
+  const isAxiom = pathname?.startsWith("/axiom") ?? false;
   return (
     <footer className="bg-card border-t border-border">
       <div className="max-w-7xl mx-auto px-6 py-12">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {/* Brand */}
           <div>
-            <div className="flex items-center gap-3 mb-4">
-              <Image src="/logo-emblem.png" alt="Relic" width={32} height={32} className="h-8 w-8" />
-              <h3 className="text-2xl font-bold tracking-widest font-heading">R&ensp;E&ensp;L&ensp;I&ensp;C</h3>
-            </div>
-            <p className="text-muted text-sm leading-relaxed">
-              Custom woodworking and metalworks. Built with dedication to
-              craftsmanship, purpose, and care.
-            </p>
+            {isAxiom ? (
+              <>
+                <div className="flex items-center gap-3 mb-4">
+                  <Image src="/wr-logo-white.png" alt="Wallflower RELIC" width={1400} height={114} className="h-8 w-auto" />
+                </div>
+                <p className="text-muted text-sm leading-relaxed">
+                  Creative rentals and custom builds — crafted with dedication to
+                  craftsmanship, purpose, and care.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-3 mb-4">
+                  <Image src="/logo-emblem.png" alt="Relic" width={32} height={32} className="h-8 w-8" />
+                  <h3 className="text-2xl font-bold tracking-widest font-heading">R&ensp;E&ensp;L&ensp;I&ensp;C</h3>
+                </div>
+                <p className="text-muted text-sm leading-relaxed">
+                  Custom woodworking and metalworks. Built with dedication to
+                  craftsmanship, purpose, and care.
+                </p>
+              </>
+            )}
           </div>
 
           {/* Navigation */}
