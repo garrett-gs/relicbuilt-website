@@ -30,8 +30,8 @@ export default function AxiomLogin() {
         <div className="text-center mb-10">
           <div className="flex justify-center mb-4">
             <Image
-              src="/logo-emblem.png"
-              alt="Relic"
+              src="/wr-emblem.png"
+              alt="Wallflower RELIC"
               width={64}
               height={64}
               className="h-16 w-16"

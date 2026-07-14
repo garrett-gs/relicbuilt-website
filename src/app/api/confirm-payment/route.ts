@@ -26,7 +26,7 @@ function receiptEmailHtml(opts: {
   return `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
   <div style="padding:20px 32px;border-bottom:3px solid #5b642e;margin-bottom:0;">
-    <img src="https://relicbuilt.com/logo-full.png" alt="RELIC Custom Fabrications" style="height:56px;object-fit:contain;display:block;" />
+    <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style="height:36px;object-fit:contain;display:block;" />
   </div>
   <div style="padding:32px;">
     <h2 style="margin:0 0 6px;font-size:22px;color:#111;">Payment Received</h2>
@@ -70,7 +70,7 @@ function receiptEmailHtml(opts: {
     <p style="font-size:14px;color:#555;margin:0 0 8px;">Web: <a href="https://relicbuilt.com" style="color:#5b642e;">relicbuilt.com</a></p>
 
     <p style="margin-top:32px;font-size:11px;color:#aaa;">
-      RELIC Custom Fabrications &nbsp;&middot;&nbsp; relicbuilt.com
+      Wallflower RELIC &nbsp;&middot;&nbsp; relicbuilt.com
     </p>
   </div>
 </div>`;
@@ -282,7 +282,7 @@ export async function POST(req: NextRequest) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "RELIC Custom Fabrications <notifications@relicbuilt.com>",
+          from: "Wallflower RELIC <notifications@relicbuilt.com>",
           to: [invoice.client_email],
           subject: `Payment Receipt — ${invoice.invoice_number}`,
           html,

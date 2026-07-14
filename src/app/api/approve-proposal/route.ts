@@ -95,7 +95,7 @@ function adminNotifyHtml(opts: {
 </div>`;
 }
 
-async function sendEmail(resendKey: string, to: string, subject: string, html: string, fromName = "RELIC Custom Fabrications") {
+async function sendEmail(resendKey: string, to: string, subject: string, html: string, fromName = "Wallflower RELIC") {
   return fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
@@ -217,7 +217,7 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .single();
 
-    const bizName = settings?.biz_name || "RELIC Custom Fabrications";
+    const bizName = settings?.biz_name || "Wallflower RELIC";
     const bizPhone = settings?.biz_phone;
     const teamMembers: Array<{ name: string; email: string; notifications?: { portal_updates?: boolean } }> =
       settings?.team_members || [];

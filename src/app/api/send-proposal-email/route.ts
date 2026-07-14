@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .single();
 
-    const bizName = settings?.biz_name || "RELIC Custom Fabrications";
+    const bizName = settings?.biz_name || "Wallflower RELIC";
     const bizPhone = settings?.biz_phone || "";
 
     const totals = calcTotals(estimate);
@@ -129,7 +129,7 @@ export async function POST(req: NextRequest) {
     const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
   <div style="padding:20px 32px;border-bottom:3px solid #5b642e;">
-    <img src="https://relicbuilt.com/logo-full.png" alt="${bizName}" style="height:56px;display:block;" />
+    <img src="https://relicbuilt.com/wr-logo-black.png" alt="${bizName}" style="height:36px;display:block;" />
   </div>
   <div style="padding:32px;">
     <h2 style="margin:0 0 6px;font-size:22px;color:#111;">Your Proposal Is Ready</h2>

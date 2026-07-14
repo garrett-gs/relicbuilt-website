@@ -18,8 +18,8 @@ const geistSans = Geist({
 
 export const metadata: Metadata = {
   title: {
-    default: "RELIC | Custom Woodworking & Metalworks",
-    template: "%s | RELIC",
+    default: "Wallflower RELIC | Custom Woodworking & Metalworks",
+    template: "%s | Wallflower RELIC",
   },
   description:
     "Custom woodworking and metalworks shop. We build with dedication to craftsmanship, purpose, and care. Residential and commercial projects.",
@@ -33,7 +33,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    title: "RELIC",
+    title: "Wallflower RELIC",
     statusBarStyle: "black-translucent",
     // Pinned to the larger 180x180 apple-touch-icon so iPad/iPhone home
     // screen icons render crisp rather than scaling the Next-generated
@@ -44,11 +44,11 @@ export const metadata: Metadata = {
     apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
   },
   openGraph: {
-    title: "RELIC | Custom Woodworking & Metalworks",
+    title: "Wallflower RELIC | Custom Woodworking & Metalworks",
     description:
       "Custom woodworking and metalworks shop built on craftsmanship and care.",
     url: "https://www.relicbuilt.com",
-    siteName: "RELIC",
+    siteName: "Wallflower RELIC",
     type: "website",
   },
 };

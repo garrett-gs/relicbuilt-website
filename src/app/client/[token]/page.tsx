@@ -163,7 +163,7 @@ export default function ClientPortalPage() {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#e2e4e8" }}>
         <div className="text-center">
-          <Image src="/logo-emblem.png" alt="Relic" width={48} height={48} className="mx-auto mb-4" />
+          <Image src="/wr-emblem.png" alt="Wallflower RELIC" width={48} height={48} className="mx-auto mb-4" />
           <h1 className="text-xl font-heading font-bold mb-2">Portal Not Found</h1>
           <p className="text-gray-700 text-sm">This portal link is invalid or has been disabled.</p>
         </div>
@@ -185,9 +185,9 @@ export default function ClientPortalPage() {
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Image src="/logo-emblem.png" alt="Relic" width={32} height={32} />
+            <Image src="/wr-emblem.png" alt="Wallflower RELIC" width={32} height={32} />
             <div>
-              <p className="font-heading font-bold tracking-widest text-sm text-gray-900">R&ensp;E&ensp;L&ensp;I&ensp;C</p>
+              <p className="font-heading font-bold tracking-[0.15em] text-sm text-gray-900">WALLFLOWER RELIC</p>
               <p className="text-xs text-gray-600">Client Portal</p>
             </div>
           </div>
@@ -577,7 +577,7 @@ export default function ClientPortalPage() {
       {/* Footer */}
       <footer className="border-t border-gray-200 bg-white px-6 py-5 mt-16">
         <p className="text-center text-xs text-gray-500">
-          R&ensp;E&ensp;L&ensp;I&ensp;C &middot; Custom Fabrications &middot; (402) 235-8179
+          Wallflower RELIC &middot; (402) 235-8179
         </p>
       </footer>
     </div>

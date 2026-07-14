@@ -61,7 +61,7 @@ function buildEmailHtml(opts: {
   return `
     <div style="font-family:sans-serif;max-width:640px;margin:0 auto;color:#111">
       <div style="background:#fff;padding:20px 32px;border-bottom:3px solid #5b642e;margin-bottom:24px">
-        <img src="https://relicbuilt.com/logo-full.png" alt="RELIC" style="height:48px;width:auto;display:block;" />
+        <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style="height:36px;width:auto;display:block;" />
       </div>
       <div style="padding:0 32px 32px">
         <h2 style="font-size:18px;margin:0 0 8px">Good morning${recipientName ? `, ${escapeHtml(recipientName)}` : ""}</h2>

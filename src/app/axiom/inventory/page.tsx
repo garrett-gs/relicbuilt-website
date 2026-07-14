@@ -309,7 +309,7 @@ function InventoryTab({
 
     <!-- Footer -->
     <div style="margin-top:32px;padding-top:16px;border-top:2px solid #111;display:flex;justify-content:space-between;">
-      <p style="margin:0;font-size:11px;color:#666;">Relic Built — Inventory Take Sheet</p>
+      <p style="margin:0;font-size:11px;color:#666;">Wallflower RELIC — Inventory Take Sheet</p>
       <p style="margin:0;font-size:11px;color:#666;">Printed: ${today}</p>
     </div>
   </div>

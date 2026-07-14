@@ -24,7 +24,7 @@ function buildHtml(opts: {
   return `
     <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111">
       <div style="background:#fff;padding:20px 32px;border-bottom:3px solid #5b642e;margin-bottom:24px">
-        <img src="https://relicbuilt.com/logo-full.png" alt="RELIC" style="height:48px;width:auto;display:block;" />
+        <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style="height:36px;width:auto;display:block;" />
       </div>
       <div style="padding:0 32px 32px">
         <h2 style="font-size:18px;margin:0 0 8px">${project_name}</h2>
@@ -32,7 +32,7 @@ function buildHtml(opts: {
         ${message ? `<div style="background:#f5f5f5;border-left:3px solid #5b642e;padding:12px 16px;margin-bottom:20px;font-size:14px;color:#333">${message}</div>` : ""}
         ${extra ? `<p style="font-size:14px;color:#555;margin-bottom:20px">${extra}</p>` : ""}
         <a href="${portal_url}" style="display:inline-block;background:#5b642e;color:#fff;text-decoration:none;padding:10px 24px;font-size:14px">View in Portal →</a>
-        <p style="margin-top:32px;font-size:11px;color:#aaa">RELIC Custom Fabrications &nbsp;·&nbsp; relicbuilt.com</p>
+        <p style="margin-top:32px;font-size:11px;color:#aaa">Wallflower RELIC &nbsp;·&nbsp; relicbuilt.com</p>
       </div>
     </div>
   `;

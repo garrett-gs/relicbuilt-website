@@ -1,6 +1,6 @@
 {
-  "name": "RELIC Axiom",
-  "short_name": "RELIC",
+  "name": "Wallflower RELIC Axiom",
+  "short_name": "Axiom",
   "description": "RELIC custom fabrication management",
   "start_url": "/axiom/dashboard",
   "scope": "/",

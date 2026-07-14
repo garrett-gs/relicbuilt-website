@@ -127,8 +127,8 @@ export default function Sidebar() {
       <div className="px-5 py-6 border-b border-border">
         <Link href="/axiom/dashboard" className="flex items-center gap-3">
           <Image
-            src="/logo-emblem.png"
-            alt="Relic"
+            src="/wr-emblem.png"
+            alt="Wallflower RELIC"
             width={28}
             height={28}
             className="h-7 w-7"

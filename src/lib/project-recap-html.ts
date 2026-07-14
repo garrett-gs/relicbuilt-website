@@ -37,7 +37,7 @@ interface RecapData {
 
 export function generateProjectRecapHtml({ project, receipts, invoices, biz }: RecapData): string {
   const stripeColor = "#454d23";
-  const logoUrl = "https://relicbuilt.com/logo-full.png";
+  const logoUrl = "https://relicbuilt.com/wr-logo-black.png";
   const addressLine2 = [biz.biz_city, biz.biz_state, biz.biz_zip].filter(Boolean).join(", ");
 
   const materials: Material[] = project.materials || [];
@@ -127,7 +127,7 @@ export function generateProjectRecapHtml({ project, receipts, invoices, biz }: R
 
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding:36px 28px 24px;">
-    <img src="${logoUrl}" alt="RELIC Custom Fabrications" style="height:64px;object-fit:contain;" />
+    <img src="${logoUrl}" alt="Wallflower RELIC" style="height:36px;object-fit:contain;" />
     <div style="text-align:right;">
       <h1 style="margin:0 0 8px;font-size:28px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROJECT RECAP</h1>
       ${biz.biz_name ? `<p style="margin:0;font-size:13px;font-weight:bold;color:#222;">${esc(biz.biz_name)}</p>` : ""}

@@ -92,9 +92,9 @@ export default function WallflowerSubmit() {
       <header className="border-b border-[#222] px-6 py-4">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Image src="/logo-emblem.png" alt="Relic" width={28} height={28} className="h-7 w-7" />
+            <Image src="/wr-emblem.png" alt="Wallflower RELIC" width={28} height={28} className="h-7 w-7" />
             <div>
-              <span className="text-white text-lg font-bold tracking-widest">RELIC</span>
+              <span className="text-white text-lg font-bold tracking-[0.15em] whitespace-nowrap">WALLFLOWER RELIC</span>
               <span className="text-[#5b642e] text-xs ml-2 uppercase tracking-wider">Wallflower Portal</span>
             </div>
           </div>
@@ -190,7 +190,7 @@ export default function WallflowerSubmit() {
 
       {/* Footer */}
       <footer className="border-t border-[#222] px-6 py-4 text-center">
-        <p className="text-[#555] text-xs">Powered by RELIC Built · Axiom</p>
+        <p className="text-[#555] text-xs">Powered by Wallflower RELIC · Axiom</p>
       </footer>
     </div>
   );

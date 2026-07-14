@@ -75,7 +75,7 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
     const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;background:#fff;">
   <div style="padding:18px 28px;border-bottom:3px solid #5b642e;">
-    <img src="https://relicbuilt.com/logo-full.png" alt="${bizName}" style="height:42px;display:block;" />
+    <img src="https://relicbuilt.com/wr-logo-black.png" alt="${bizName}" style="height:36px;display:block;" />
   </div>
   <div style="padding:28px;">
     <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:#888;">Payment Received</p>

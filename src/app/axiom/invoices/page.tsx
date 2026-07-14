@@ -626,7 +626,7 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
       const res = await fetch("/api/send-po", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: sendTo, subject: `Invoice ${invoice.invoice_number} from RELIC Custom Fabrications`, html, from_name: "RELIC Custom Fabrications" }),
+        body: JSON.stringify({ to: sendTo, subject: `Invoice ${invoice.invoice_number} from Wallflower RELIC`, html, from_name: "Wallflower RELIC" }),
       });
       setSendResult(res.ok ? "success" : "error");
       if (res.ok) { setShowEmailForm(false); }
@@ -696,7 +696,7 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
         <div className="flex justify-between items-start px-10 pt-10 pb-8 print:px-8 print:pt-8">
           <div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo-full.png" alt="RELIC Custom Fabrications" className="h-20 object-contain object-left print:h-16" />
+            <img src="/wr-logo-black.png" alt="Wallflower RELIC" className="h-10 object-contain object-left print:h-10" />
           </div>
           <div className="text-right">
             <h1 className="text-4xl font-bold text-gray-900 mb-3 tracking-wide">INVOICE</h1>

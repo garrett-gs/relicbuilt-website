@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#222;">
   <div style="padding:16px 24px;border-bottom:3px solid #5b642e;">
-    <img src="https://relicbuilt.com/logo-full.png" alt="RELIC" style="height:40px;object-fit:contain;display:block;" />
+    <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style="height:36px;object-fit:contain;display:block;" />
   </div>
   <div style="padding:24px;">
     <h2 style="margin:0 0 16px;font-size:18px;color:#111;">New Lead Submitted</h2>
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
           method: "POST",
           headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            from: "RELIC Custom Fabrications <notifications@relicbuilt.com>",
+            from: "Wallflower RELIC <notifications@relicbuilt.com>",
             to: [to],
             subject: `New Lead: ${name}`,
             html,

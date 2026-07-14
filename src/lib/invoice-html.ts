@@ -42,7 +42,7 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
   const amountDue = balance > 0 ? balance : total;
 
   const bizName = biz?.biz_name || "RELIC LLC";
-  const logoUrl = "https://relicbuilt.com/logo-full.png";
+  const logoUrl = "https://relicbuilt.com/wr-logo-black.png";
   const stripeColor = "#454d23";
 
   const wrap = forEmail
@@ -56,7 +56,7 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
 
   <!-- Header: full logo left, INVOICE + address right -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
-    <img src="${logoUrl}" alt="RELIC Custom Fabrications" style="height:72px;object-fit:contain;" />
+    <img src="${logoUrl}" alt="Wallflower RELIC" style="height:36px;object-fit:contain;" />
     <div style="text-align:right;">
       <h1 style="margin:0 0 10px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">INVOICE</h1>
       <p style="margin:0;font-size:13px;font-weight:bold;color:#222;">${esc(bizName)}</p>

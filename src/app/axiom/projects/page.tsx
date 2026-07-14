@@ -2741,9 +2741,9 @@ function ProposalPreview({ project, onClose, userEmail }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: sendTo,
-          subject: `Proposal from RELIC Custom Fabrications — ${project.project_name}`,
+          subject: `Proposal from Wallflower RELIC — ${project.project_name}`,
           html,
-          from_name: "RELIC Custom Fabrications",
+          from_name: "Wallflower RELIC",
         }),
       });
       setSendResult(res.ok ? "success" : "error");
@@ -2829,7 +2829,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
         {/* Header */}
         <div className="flex justify-between items-start px-10 pt-10 pb-8 print:px-8 print:pt-8">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-full.png" alt="RELIC Custom Fabrications" className="h-20 object-contain object-left print:h-16" />
+          <img src="/wr-logo-black.png" alt="Wallflower RELIC" className="h-10 object-contain object-left print:h-10" />
           <div className="text-right">
             <h1 className="text-4xl font-bold text-gray-900 mb-3 tracking-wide">PROPOSAL</h1>
             {biz.biz_name && <p className="text-sm font-semibold text-gray-800">{biz.biz_name}</p>}

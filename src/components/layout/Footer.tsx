@@ -71,8 +71,8 @@ export default function Footer() {
             ) : (
               <>
                 <div className="flex items-center gap-3 mb-4">
-                  <Image src="/logo-emblem.png" alt="Relic" width={32} height={32} className="h-8 w-8" />
-                  <h3 className="text-2xl font-bold tracking-widest font-heading">R&ensp;E&ensp;L&ensp;I&ensp;C</h3>
+                  <Image src="/wr-emblem.png" alt="Wallflower RELIC" width={32} height={32} className="h-8 w-8" />
+                  <h3 className="text-xl font-bold tracking-[0.2em] font-heading">WALLFLOWER&ensp;RELIC</h3>
                 </div>
                 <p className="text-muted text-sm leading-relaxed">
                   Custom woodworking and metalworks. Built with dedication to
@@ -127,7 +127,7 @@ export default function Footer() {
         </div>
 
         <div className="mt-12 pt-8 border-t border-border text-center text-muted text-xs">
-          &copy; {new Date().getFullYear()} Relic Built. All rights reserved.
+          &copy; {new Date().getFullYear()} Wallflower RELIC. All rights reserved.
         </div>
       </div>
     </footer>

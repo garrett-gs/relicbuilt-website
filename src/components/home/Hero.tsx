@@ -24,8 +24,8 @@ export default function Hero() {
           >
             <Link href="/axiom">
               <Image
-                src="/logo-emblem.png"
-                alt="Relic emblem"
+                src="/wr-emblem.png"
+                alt="Wallflower RELIC emblem"
                 width={200}
                 height={200}
                 className="h-36 w-36 md:h-44 md:w-44 cursor-pointer hover:scale-105 transition-transform"
@@ -34,10 +34,18 @@ export default function Hero() {
             </Link>
           </motion.div>
 
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.12 }}
+            className="text-lg md:text-2xl font-bold tracking-[0.4em] mb-2 text-foreground"
+          >
+            W&ensp;A&ensp;L&ensp;L&ensp;F&ensp;L&ensp;O&ensp;W&ensp;E&ensp;R
+          </motion.p>
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.15 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
             className="text-5xl md:text-7xl font-extrabold tracking-[0.25em] mb-2"
           >
             R&ensp;E&ensp;L&ensp;I&ensp;C

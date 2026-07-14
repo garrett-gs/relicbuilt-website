@@ -40,14 +40,14 @@ export default function Navbar() {
           ) : (
             <>
               <Image
-                src="/logo-emblem.png"
-                alt="Relic"
+                src="/wr-emblem.png"
+                alt="Wallflower RELIC"
                 width={36}
                 height={36}
                 className="h-9 w-9"
               />
-              <span className="text-2xl font-bold text-foreground font-heading tracking-widest">
-                R&ensp;E&ensp;L&ensp;I&ensp;C
+              <span className="text-base sm:text-lg font-bold text-foreground font-heading tracking-[0.2em] whitespace-nowrap">
+                WALLFLOWER&ensp;RELIC
               </span>
             </>
           )}
