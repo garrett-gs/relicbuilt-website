@@ -118,7 +118,7 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
       ` : ""}
 
       <div style="margin-top:40px;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center;">
-        R&ensp;E&ensp;L&ensp;I&ensp;C &nbsp;&middot;&nbsp; Custom Fabrications &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; relicbuilt.com
+        Wallflower RELIC &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; wallflower-relic.com
       </div>
     </div>
   `;

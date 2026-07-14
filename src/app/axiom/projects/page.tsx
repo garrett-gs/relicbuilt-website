@@ -2837,7 +2837,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
             {addressLine2 && <p className="text-xs text-gray-500">{addressLine2}</p>}
             {(biz.biz_state || biz.biz_city) && <p className="text-xs text-gray-500">United States</p>}
             {biz.biz_phone && <p className="text-xs text-gray-500 mt-1">{biz.biz_phone}</p>}
-            <p className="text-xs text-gray-500">relicbuilt.com</p>
+            <p className="text-xs text-gray-500">wallflower-relic.com</p>
           </div>
         </div>
 
@@ -2985,7 +2985,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
         {/* Footer */}
         <div className="px-10 pb-10 print:px-8 print:pb-8">
           <p className="text-xs text-gray-300 text-center">
-            RELIC &middot; Custom Fabrications &middot; (402) 235-8179 &middot; relicbuilt.com
+            Wallflower RELIC &middot; (402) 235-8179 &middot; wallflower-relic.com
           </p>
         </div>
 

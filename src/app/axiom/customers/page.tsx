@@ -888,7 +888,7 @@ function CompanyForm({ onSubmit, onCancel }: { onSubmit: (f: Record<string, stri
       <div><label className={lbl}>Address</label><AddressAutocomplete value={form.address} onChange={(v) => set("address", v)} onSelect={(r) => set("address", r.formatted)} className={inp} /></div>
       <div className="grid grid-cols-2 gap-4">
         <div><label className={lbl}>Phone</label><input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>
-        <div><label className={lbl}>Website</label><input value={form.website} onChange={(e) => set("website", e.target.value)} placeholder="relicbuilt.com" className={inp} /></div>
+        <div><label className={lbl}>Website</label><input value={form.website} onChange={(e) => set("website", e.target.value)} placeholder="wallflower-relic.com" className={inp} /></div>
       </div>
       <div className="flex gap-3">
         <Button onClick={() => onSubmit(form)} disabled={!form.name}>Add Company</Button>

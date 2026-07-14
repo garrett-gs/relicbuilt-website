@@ -67,10 +67,10 @@ function receiptEmailHtml(opts: {
     </p>
 
     <p style="font-size:14px;color:#555;margin:0 0 8px;">Phone: <strong>(402) 235-8179</strong></p>
-    <p style="font-size:14px;color:#555;margin:0 0 8px;">Web: <a href="https://relicbuilt.com" style="color:#5b642e;">relicbuilt.com</a></p>
+    <p style="font-size:14px;color:#555;margin:0 0 8px;">Web: <a href="https://www.wallflower-relic.com" style="color:#5b642e;">wallflower-relic.com</a></p>
 
     <p style="margin-top:32px;font-size:11px;color:#aaa;">
-      Wallflower RELIC &nbsp;&middot;&nbsp; relicbuilt.com
+      Wallflower RELIC &nbsp;&middot;&nbsp; wallflower-relic.com
     </p>
   </div>
 </div>`;

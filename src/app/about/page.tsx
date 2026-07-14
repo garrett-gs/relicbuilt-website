@@ -38,12 +38,12 @@ export default function AboutPage() {
                 when I was young.
               </p>
               <p>
-                That inspiration directly shaped R&ensp;E&ensp;L&ensp;I&ensp;C&apos;s philosophy —
+                That inspiration directly shaped Wallflower RELIC&apos;s philosophy —
                 building with dedication to craftsmanship, purpose, and care.
                 Every piece we create is intended to endure across generations.
               </p>
               <p>
-                Today, R&ensp;E&ensp;L&ensp;I&ensp;C serves both residential and commercial clients,
+                Today, Wallflower RELIC serves both residential and commercial clients,
                 crafting everything from custom furniture and cabinetry to
                 large-scale millwork and specialty items. No project is too big
                 or too small.

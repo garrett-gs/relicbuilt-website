@@ -32,7 +32,7 @@ function buildHtml(opts: {
         ${message ? `<div style="background:#f5f5f5;border-left:3px solid #5b642e;padding:12px 16px;margin-bottom:20px;font-size:14px;color:#333">${message}</div>` : ""}
         ${extra ? `<p style="font-size:14px;color:#555;margin-bottom:20px">${extra}</p>` : ""}
         <a href="${portal_url}" style="display:inline-block;background:#5b642e;color:#fff;text-decoration:none;padding:10px 24px;font-size:14px">View in Portal →</a>
-        <p style="margin-top:32px;font-size:11px;color:#aaa">Wallflower RELIC &nbsp;·&nbsp; relicbuilt.com</p>
+        <p style="margin-top:32px;font-size:11px;color:#aaa">Wallflower RELIC &nbsp;·&nbsp; wallflower-relic.com</p>
       </div>
     </div>
   `;

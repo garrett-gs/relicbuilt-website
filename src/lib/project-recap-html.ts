@@ -134,7 +134,7 @@ export function generateProjectRecapHtml({ project, receipts, invoices, biz }: R
       ${biz.biz_address ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(biz.biz_address)}</p>` : ""}
       ${addressLine2 ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(addressLine2)}</p>` : ""}
       ${biz.biz_phone ? `<p style="margin:4px 0 0;font-size:12px;color:#666;">${esc(biz.biz_phone)}</p>` : ""}
-      <p style="margin:2px 0;font-size:12px;color:#666;">relicbuilt.com</p>
+      <p style="margin:2px 0;font-size:12px;color:#666;">wallflower-relic.com</p>
     </div>
   </div>
 
@@ -383,7 +383,7 @@ export function generateProjectRecapHtml({ project, receipts, invoices, biz }: R
 
   <!-- Footer -->
   <div style="margin-top:24px;padding:14px 28px;border-top:1px solid #eee;font-size:11px;color:#ccc;text-align:center;">
-    R&ensp;E&ensp;L&ensp;I&ensp;C &nbsp;&middot;&nbsp; Custom Fabrications &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; relicbuilt.com
+    Wallflower RELIC &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; wallflower-relic.com
     <br><span style="font-size:10px;">Generated ${today}</span>
   </div>
 
