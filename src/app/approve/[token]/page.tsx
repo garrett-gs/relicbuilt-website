@@ -21,6 +21,8 @@ export default function ApprovePage() {
   const [approved, setApproved] = useState(false);
   const [alreadyApproved, setAlreadyApproved] = useState(false);
   const [error, setError] = useState("");
+  // Deposit invoice to pay right after approval (or on a return visit).
+  const [payInfo, setPayInfo] = useState<{ id: string; amount: number; status?: string } | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -29,11 +31,26 @@ export default function ApprovePage() {
       .select("id,project_name,client_name,client_email,quoted_amount,proposal_status,proposal_approved_at,proposal_scope,proposal_cost_section,proposal_highlights,project_description,start_date,due_date")
       .eq("proposal_token", token)
       .single()
-      .then(({ data }) => {
+      .then(async ({ data }) => {
         setLoading(false);
         if (!data) { setNotFound(true); return; }
         setProject(data as CustomWork);
-        if (data.proposal_status === "approved") setAlreadyApproved(true);
+        if (data.proposal_status === "approved") {
+          setAlreadyApproved(true);
+          // Returning visitor who approved earlier but may not have paid yet —
+          // pull the deposit invoice so we can still surface a "Pay Now" button.
+          try {
+            const res = await fetch("/api/approve-proposal", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ token }),
+            });
+            const d = await res.json();
+            if (d.deposit_invoice_id) {
+              setPayInfo({ id: d.deposit_invoice_id, amount: d.deposit_amount ?? 0, status: d.deposit_status });
+            }
+          } catch { /* non-fatal — they can still use the emailed link */ }
+        }
       });
   }, [token]);
 
@@ -51,6 +68,9 @@ export default function ApprovePage() {
         setError(data.error || "Something went wrong. Please try again or contact us.");
         setApproving(false);
         return;
+      }
+      if (data.deposit_invoice_id) {
+        setPayInfo({ id: data.deposit_invoice_id, amount: data.deposit_amount ?? 0, status: data.deposit_status });
       }
       if (data.already_approved) {
         setAlreadyApproved(true);
@@ -79,10 +99,10 @@ export default function ApprovePage() {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
         <div className="bg-white max-w-md w-full p-10 text-center shadow-sm">
-          <img src="/logo-full.png" alt="RELIC" className="h-14 object-contain mx-auto mb-8" />
+          <img src="/wr-logo-black.png" alt="Wallflower RELIC" className="h-9 object-contain mx-auto mb-8 max-w-full" />
           <p className="text-gray-500 text-sm">This proposal link is invalid or has expired.</p>
           <p className="mt-2 text-xs text-gray-400">Please contact us if you believe this is an error.</p>
-          <p className="mt-6 text-xs text-gray-400">RELIC Custom Fabrications &nbsp;&middot;&nbsp; (402) 235-8179</p>
+          <p className="mt-6 text-xs text-gray-400">Wallflower RELIC &nbsp;&middot;&nbsp; (402) 235-8179</p>
         </div>
       </div>
     );
@@ -93,15 +113,36 @@ export default function ApprovePage() {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
         <div className="bg-white max-w-md w-full p-10 text-center shadow-sm">
-          <img src="/logo-full.png" alt="RELIC" className="h-14 object-contain mx-auto mb-8" />
+          <img src="/wr-logo-black.png" alt="Wallflower RELIC" className="h-9 object-contain mx-auto mb-8 max-w-full" />
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
             <CheckCircle size={32} className="text-green-500" />
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-3">Proposal Approved</h2>
-          <p className="text-gray-500 text-sm">
-            This proposal for <strong>{project?.project_name}</strong> has already been approved.
-            You should receive a deposit invoice by email.
-          </p>
+          {payInfo && payInfo.status !== "paid" ? (
+            <>
+              <p className="text-gray-600 text-sm mb-5">
+                This proposal for <strong>{project?.project_name}</strong> is approved.
+                Your deposit is still outstanding — pay it now to get started.
+              </p>
+              <a
+                href={`/pay/${payInfo.id}`}
+                className="block w-full text-center text-white font-bold py-4 px-6 rounded shadow-sm hover:opacity-90 transition-opacity"
+                style={{ background: "#5b642e" }}
+              >
+                Pay Deposit{payInfo.amount ? ` — ${money(payInfo.amount)}` : ""} &rarr;
+              </a>
+            </>
+          ) : payInfo && payInfo.status === "paid" ? (
+            <p className="text-gray-500 text-sm">
+              This proposal for <strong>{project?.project_name}</strong> is approved and your
+              deposit has been paid. We&apos;ll be in touch with next steps.
+            </p>
+          ) : (
+            <p className="text-gray-500 text-sm">
+              This proposal for <strong>{project?.project_name}</strong> has already been approved.
+              You should receive a deposit invoice by email.
+            </p>
+          )}
           <p className="mt-6 text-xs text-gray-400">
             Questions? Call us at (402) 235-8179
           </p>
@@ -115,22 +156,40 @@ export default function ApprovePage() {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
         <div className="bg-white max-w-md w-full p-10 text-center shadow-sm">
-          <img src="/logo-full.png" alt="RELIC" className="h-14 object-contain mx-auto mb-8" />
+          <img src="/wr-logo-black.png" alt="Wallflower RELIC" className="h-9 object-contain mx-auto mb-8 max-w-full" />
           <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
             <CheckCircle size={32} className="text-green-500" />
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-3">Proposal Approved!</h2>
-          <p className="text-gray-700 text-sm mb-4">
+          <p className="text-gray-700 text-sm mb-6">
             Thank you, <strong>{project.client_name}</strong>! Your proposal for{" "}
             <strong>{project.project_name}</strong> has been approved.
           </p>
-          <p className="text-gray-500 text-sm mb-6">
-            A deposit invoice has been sent to <strong>{project.client_email}</strong>.
-            We&apos;ll be in touch shortly to get started.
-          </p>
+          {payInfo && payInfo.status !== "paid" ? (
+            <div className="mb-6">
+              <p className="text-sm text-gray-600 mb-4">
+                Secure your spot and get started right away by paying your deposit now.
+              </p>
+              <a
+                href={`/pay/${payInfo.id}`}
+                className="block w-full text-center text-white font-bold py-4 px-6 rounded shadow-sm hover:opacity-90 transition-opacity"
+                style={{ background: "#5b642e" }}
+              >
+                Pay Deposit{payInfo.amount ? ` — ${money(payInfo.amount)}` : ""} &rarr;
+              </a>
+              <p className="mt-3 text-xs text-gray-400">
+                A copy of this invoice was also emailed to {project.client_email}.
+              </p>
+            </div>
+          ) : (
+            <p className="text-gray-500 text-sm mb-6">
+              A deposit invoice has been sent to <strong>{project.client_email}</strong>.
+              We&apos;ll be in touch shortly to get started.
+            </p>
+          )}
           <div className="border-t border-gray-100 pt-6">
-            <p className="text-xs text-gray-400">RELIC Custom Fabrications</p>
-            <p className="text-xs text-gray-400">(402) 235-8179 &nbsp;&middot;&nbsp; relicbuilt.com</p>
+            <p className="text-xs text-gray-400">Wallflower RELIC</p>
+            <p className="text-xs text-gray-400">(402) 235-8179 &nbsp;&middot;&nbsp; wallflower-relic.com</p>
           </div>
         </div>
       </div>
@@ -150,12 +209,12 @@ export default function ApprovePage() {
       <div className="max-w-2xl mx-auto bg-white shadow-sm">
 
         {/* Header */}
-        <div className="flex justify-between items-start px-8 pt-8 pb-6">
+        <div className="px-8 pt-8 pb-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-full.png" alt="RELIC Custom Fabrications" className="h-16 object-contain object-left" />
-          <div className="text-right">
+          <img src="/wr-logo-black.png" alt="Wallflower RELIC" className="h-10 object-contain object-left" />
+          <div className="flex justify-between items-baseline mt-6">
             <h1 className="text-2xl font-bold text-gray-900 tracking-wide">PROPOSAL</h1>
-            <p className="text-xs text-gray-400 mt-1">relicbuilt.com</p>
+            <p className="text-xs text-gray-400">wallflower-relic.com</p>
           </div>
         </div>
 
@@ -290,7 +349,7 @@ export default function ApprovePage() {
         {/* Footer */}
         <div className="px-8 pb-8">
           <p className="text-xs text-gray-300 text-center">
-            RELIC &middot; Custom Fabrications &middot; (402) 235-8179 &middot; relicbuilt.com
+            Wallflower RELIC &middot; (402) 235-8179 &middot; wallflower-relic.com
           </p>
         </div>
 

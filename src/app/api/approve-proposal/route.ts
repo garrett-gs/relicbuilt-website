@@ -19,7 +19,7 @@ function depositEmailHtml(opts: {
   return `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
   <div style="padding:20px 32px;border-bottom:3px solid #5b642e;margin-bottom:0;">
-    <img src="https://relicbuilt.com/logo-full.png" alt="RELIC Custom Fabrications" style="height:56px;object-fit:contain;display:block;" />
+    <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style="height:40px;object-fit:contain;display:block;" />
   </div>
   <div style="padding:32px;">
     <h2 style="margin:0 0 6px;font-size:22px;color:#111;">Deposit Invoice</h2>
@@ -61,7 +61,7 @@ function depositEmailHtml(opts: {
     ${bizPhone ? `<p style="font-size:14px;color:#555;margin:0 0 8px;">Phone: <strong>${bizPhone}</strong></p>` : ""}
 
     <p style="margin-top:32px;font-size:11px;color:#aaa;">
-      ${bizName} &nbsp;&middot;&nbsp; relicbuilt.com
+      ${bizName} &nbsp;&middot;&nbsp; wallflower-relic.com
     </p>
   </div>
 </div>`;
@@ -79,7 +79,7 @@ function adminNotifyHtml(opts: {
   return `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#222;">
   <div style="padding:16px 24px;border-bottom:3px solid #5b642e;margin-bottom:0;">
-    <img src="https://relicbuilt.com/logo-full.png" alt="RELIC" style="height:40px;object-fit:contain;display:block;" />
+    <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style="height:32px;object-fit:contain;display:block;" />
   </div>
   <div style="padding:24px;">
     <h2 style="margin:0 0 16px;font-size:18px;color:#111;">Proposal Approved</h2>
@@ -133,9 +133,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Proposal not found" }, { status: 404 });
     }
 
-    // Already approved?
+    // Already approved? Return the existing deposit invoice so the page can
+    // still nudge an unpaid client toward paying (idempotent — no new rows).
     if (project.proposal_status === "approved") {
-      return NextResponse.json({ already_approved: true, project_name: project.project_name });
+      const { data: dep } = await supabase
+        .from("invoices")
+        .select("id,subtotal,status")
+        .eq("custom_work_id", project.id)
+        .eq("invoice_type", "deposit")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return NextResponse.json({
+        already_approved: true,
+        project_name: project.project_name,
+        deposit_invoice_id: dep?.id,
+        deposit_amount: dep?.subtotal,
+        deposit_status: dep?.status,
+      });
     }
 
     // Calculate amounts
@@ -256,6 +271,7 @@ export async function POST(req: NextRequest) {
       deposit_invoice_id: depositInvoice?.id,
       final_invoice_id: finalInvoice?.id,
       deposit_amount: depositAmount > 0 ? depositAmount : totalAmount,
+      deposit_status: depositInvoice?.status,
     });
   } catch (err) {
     console.error("approve-proposal error:", err);

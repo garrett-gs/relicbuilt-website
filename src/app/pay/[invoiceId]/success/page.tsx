@@ -55,7 +55,7 @@ export default function PaySuccessPage() {
   useEffect(() => {
     if (state.status !== "success") return;
     if (countdown <= 0) {
-      window.location.href = "https://relicbuilt.com";
+      window.location.href = "https://www.wallflower-relic.com";
       return;
     }
     const timer = setTimeout(() => setCountdown((c) => c - 1), 1000);
@@ -92,7 +92,7 @@ export default function PaySuccessPage() {
       <div style={pageStyle}>
         <div style={cardStyle}>
           <div style={headerStyle}>
-            <img src="https://relicbuilt.com/logo-full.png" alt="RELIC Custom Fabrications" style={{ height: 48, objectFit: "contain", display: "block" }} />
+            <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style={{ height: 32, objectFit: "contain", display: "block" }} />
           </div>
           <div style={{ ...bodyStyle, color: "#888" }}>
             <p style={{ fontSize: 16, margin: 0 }}>Confirming your payment&hellip;</p>
@@ -107,7 +107,7 @@ export default function PaySuccessPage() {
       <div style={pageStyle}>
         <div style={cardStyle}>
           <div style={headerStyle}>
-            <img src="https://relicbuilt.com/logo-full.png" alt="RELIC Custom Fabrications" style={{ height: 48, objectFit: "contain", display: "block" }} />
+            <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style={{ height: 32, objectFit: "contain", display: "block" }} />
           </div>
           <div style={bodyStyle}>
             <p style={{ fontSize: 16, color: "#c0392b", margin: "0 0 12px" }}>Unable to confirm payment</p>
@@ -130,7 +130,7 @@ export default function PaySuccessPage() {
     <div style={pageStyle}>
       <div style={cardStyle}>
         <div style={headerStyle}>
-          <img src="https://relicbuilt.com/logo-full.png" alt="RELIC Custom Fabrications" style={{ height: 48, objectFit: "contain", display: "block" }} />
+          <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style={{ height: 32, objectFit: "contain", display: "block" }} />
         </div>
         <div style={bodyStyle}>
           {/* Green checkmark */}
@@ -170,12 +170,12 @@ export default function PaySuccessPage() {
             marginTop: 4,
           }}>
             <p style={{ fontSize: 13, color: "#aaa", margin: "0 0 16px" }}>
-              Redirecting to relicbuilt.com in{" "}
+              Redirecting to www.wallflower-relic.com in{" "}
               <strong style={{ color: "#5b642e" }}>{countdown}</strong>{" "}
               second{countdown !== 1 ? "s" : ""}&hellip;
             </p>
             <a
-              href="https://relicbuilt.com"
+              href="https://www.wallflower-relic.com"
               style={{
                 display: "inline-block",
                 background: "#5b642e",
@@ -187,7 +187,7 @@ export default function PaySuccessPage() {
                 letterSpacing: "0.02em",
               }}
             >
-              Visit RELIC &rarr;
+              Visit Wallflower RELIC &rarr;
             </a>
           </div>
         </div>

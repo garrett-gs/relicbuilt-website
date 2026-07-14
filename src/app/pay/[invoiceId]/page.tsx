@@ -149,7 +149,7 @@ export default function PayInvoicePage() {
       <div style={pageStyle}>
         <div style={cardStyle}>
           <div style={headerStyle}>
-            <img src="https://relicbuilt.com/logo-full.png" alt="RELIC Custom Fabrications" style={{ height: 48, objectFit: "contain", display: "block" }} />
+            <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style={{ height: 32, objectFit: "contain", display: "block" }} />
             <span style={{ fontSize: 15, color: "#888", fontWeight: 600 }}>Invoice Payment</span>
           </div>
           <div style={{ ...bodyStyle, textAlign: "center", padding: "48px 28px", color: "#888" }}>
@@ -165,7 +165,7 @@ export default function PayInvoicePage() {
       <div style={pageStyle}>
         <div style={cardStyle}>
           <div style={headerStyle}>
-            <img src="https://relicbuilt.com/logo-full.png" alt="RELIC Custom Fabrications" style={{ height: 48, objectFit: "contain", display: "block" }} />
+            <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style={{ height: 32, objectFit: "contain", display: "block" }} />
             <span style={{ fontSize: 15, color: "#888", fontWeight: 600 }}>Invoice Payment</span>
           </div>
           <div style={bodyStyle}>
@@ -184,7 +184,7 @@ export default function PayInvoicePage() {
       <div style={pageStyle}>
         <div style={cardStyle}>
           <div style={headerStyle}>
-            <img src="https://relicbuilt.com/logo-full.png" alt="RELIC Custom Fabrications" style={{ height: 48, objectFit: "contain", display: "block" }} />
+            <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style={{ height: 32, objectFit: "contain", display: "block" }} />
             <span style={{ fontSize: 15, color: "#888", fontWeight: 600 }}>Invoice Payment</span>
           </div>
           <div style={bodyStyle}>
@@ -219,7 +219,7 @@ export default function PayInvoicePage() {
       <div style={cardStyle}>
         {/* Header */}
         <div style={headerStyle}>
-          <img src="https://relicbuilt.com/logo-full.png" alt="RELIC Custom Fabrications" style={{ height: 48, objectFit: "contain", display: "block" }} />
+          <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style={{ height: 32, objectFit: "contain", display: "block" }} />
           <span style={{ fontSize: 15, color: "#888", fontWeight: 600 }}>Invoice Payment</span>
         </div>
 
