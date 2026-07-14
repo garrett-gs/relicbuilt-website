@@ -382,6 +382,13 @@ export default function PayInvoicePage() {
                 Call us at (402) 235-8179
               </a>
             </p>
+
+            <p style={{ fontSize: 12, color: "#aaa", textAlign: "center", marginTop: 8, marginBottom: 0, lineHeight: "1.6" }}>
+              Need our W-9 for your records?{" "}
+              <a href="/api/w9" target="_blank" rel="noopener noreferrer" style={{ color: "#5b642e", textDecoration: "none", fontWeight: 600 }}>
+                Download it &rarr;
+              </a>
+            </p>
           </div>
         </div>
       </div>
