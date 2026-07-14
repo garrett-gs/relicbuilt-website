@@ -56,7 +56,7 @@ export default function Hero() {
             transition={{ duration: 0.8, delay: 0.25 }}
             className="text-base md:text-lg tracking-[0.8em] text-foreground mb-3 font-bold"
           >
-            ·-·&emsp;·&emsp;·-··&emsp;··&emsp;-·-·
+            ·-&emsp;-··-&emsp;··&emsp;---&emsp;--
           </motion.p>
           <motion.p
             initial={{ opacity: 0, y: 20 }}

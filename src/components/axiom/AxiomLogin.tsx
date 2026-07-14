@@ -43,6 +43,10 @@ export default function AxiomLogin() {
           <p className="text-muted text-sm mt-2 tracking-wide">
             Project Management
           </p>
+          {/* AXIOM in Morse code: ·- -··- ·· --- -- */}
+          <p className="text-xs mt-3 tracking-[0.5em] font-bold" style={{ color: "#5b642e" }} aria-label="AXIOM in Morse code">
+            ·-&emsp;-··-&emsp;··&emsp;---&emsp;--
+          </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
