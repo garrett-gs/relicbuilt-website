@@ -38,10 +38,10 @@ export const metadata: Metadata = {
     // Pinned to the larger 180x180 apple-touch-icon so iPad/iPhone home
     // screen icons render crisp rather than scaling the Next-generated
     // 32px icon up to 180px and looking pixelated.
-    startupImage: ["/apple-touch-icon-wr.png"],
+    startupImage: ["/apple-touch-icon-wr2.png"],
   },
   icons: {
-    apple: [{ url: "/apple-touch-icon-wr.png", sizes: "180x180" }],
+    apple: [{ url: "/apple-touch-icon-wr2.png", sizes: "180x180" }],
   },
   openGraph: {
     title: "Wallflower RELIC | Custom Woodworking & Metalworks",

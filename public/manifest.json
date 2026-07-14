@@ -10,9 +10,9 @@
   "orientation": "any",
   "categories": ["business", "productivity"],
   "icons": [
-    { "src": "/icon-192-wr.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512-wr.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-192-wr.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "/icon-512-wr.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    { "src": "/icon-192-wr2.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512-wr2.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192-wr2.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-512-wr2.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
