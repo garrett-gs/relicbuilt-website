@@ -1,27 +1,18 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Menu, X, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCart } from "@/components/shop/CartProvider";
 
-const navLinks = [
-  { href: "/work", label: "Work" },
-  { href: "/about", label: "About" },
-  { href: "/shop", label: "Shop" },
-  { href: "/contact", label: "Contact" },
-  { href: "/new-client", label: "New Client" },
-];
+// The public-facing marketing site now lives at wallflower-relic.com. This app
+// hosts the Axiom portal + client/payment flows, so the top bar just points
+// visitors back to the main Wallflower RELIC website.
+const MAIN_SITE = "https://www.wallflower-relic.com";
 
 export default function Navbar() {
-  const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = usePathname();
   const isAxiom = pathname.startsWith("/axiom");
-  const { items, setCartOpen } = useCart();
-  const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
@@ -53,75 +44,16 @@ export default function Navbar() {
           )}
         </Link>
 
-        {/* Desktop nav */}
-        <div className="hidden md:flex items-center gap-8">
-          {navLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className={cn(
-                "text-sm uppercase tracking-wider transition-colors hover:text-accent",
-                pathname === link.href ? "text-accent" : "text-muted"
-              )}
-            >
-              {link.label}
-            </Link>
-          ))}
-          <button
-            onClick={() => setCartOpen(true)}
-            className="relative text-muted hover:text-accent transition-colors"
+        {/* Main-site link — public pages only (Axiom uses the Sidebar for nav) */}
+        {!isAxiom && (
+          <a
+            href={MAIN_SITE}
+            className="text-xs sm:text-sm uppercase tracking-wider font-bold text-muted hover:text-accent transition-colors whitespace-nowrap"
           >
-            <ShoppingCart size={20} />
-            {itemCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-accent text-background text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
-                {itemCount}
-              </span>
-            )}
-          </button>
-        </div>
-
-        {/* Mobile menu button */}
-        <div className="flex items-center gap-4 md:hidden">
-          <button
-            onClick={() => setCartOpen(true)}
-            className="relative text-muted hover:text-accent transition-colors"
-          >
-            <ShoppingCart size={20} />
-            {itemCount > 0 && (
-              <span className="absolute -top-2 -right-2 bg-accent text-background text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
-                {itemCount}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setMobileOpen(!mobileOpen)}
-            className="text-foreground"
-          >
-            {mobileOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
+            Visit Wallflower RELIC <span aria-hidden="true">&rarr;</span>
+          </a>
+        )}
       </div>
-
-      {/* Mobile menu */}
-      {mobileOpen && (
-        <div className="md:hidden bg-background border-b border-border">
-          <div className="px-6 py-4 flex flex-col gap-4">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                onClick={() => setMobileOpen(false)}
-                className={cn(
-                  "text-sm uppercase tracking-wider transition-colors hover:text-accent",
-                  pathname === link.href ? "text-accent" : "text-muted"
-                )}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
     </nav>
   );
 }
