@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
+import { syncInventoryUnitCost } from "@/lib/inventory-price-sync";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { Invoice, InvoiceLineItem, Payment, Settings } from "@/types/axiom";
@@ -380,6 +381,8 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
   async function save() {
     const updated: Invoice = { ...inv, subtotal, updated_at: new Date().toISOString() };
     await axiom.from("invoices").update(updated).eq("id", inv.id);
+    // Newest price wins: sync any changed material prices to inventory.
+    await syncInventoryUnitCost(inv.line_items || []);
     setInv(updated); setDirty(false); setSaved(true); onUpdate(updated);
   }
 

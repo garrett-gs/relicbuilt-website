@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { axiom } from "@/lib/axiom-supabase";
+import { syncInventoryUnitCost } from "@/lib/inventory-price-sync";
 import { PurchaseOrder, Vendor } from "@/types/axiom";
 import { X, Check, Plus, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -89,6 +90,7 @@ export default function AddToPOModal({ item, onClose, onAdded }: Props) {
       if (data) {
         const poNum = `PO-${new Date().getFullYear()}-${String(data.id).slice(0, 4).toUpperCase()}`;
         await axiom.from("purchase_orders").update({ po_number: poNum }).eq("id", data.id);
+        await syncInventoryUnitCost([lineItem]);
         setSaving(false);
         setDone(poNum);
         onAdded?.(poNum);
@@ -104,6 +106,7 @@ export default function AddToPOModal({ item, onClose, onAdded }: Props) {
         item_description: updatedItems.map((li) => li.description).join(", "),
         unit_price: newTotal,
       }).eq("id", selectedPOId);
+      await syncInventoryUnitCost([lineItem]);
       setSaving(false);
       setDone(po.po_number);
       onAdded?.(po.po_number);

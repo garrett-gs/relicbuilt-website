@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
+import { syncInventoryUnitCost } from "@/lib/inventory-price-sync";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { PurchaseOrder, POLineItem, Vendor, CatalogItem } from "@/types/axiom";
 import DateField from "@/components/ui/DateField";
@@ -280,6 +281,8 @@ function OrdersTab() {
     if (data) {
       const poNum = `PO-${new Date().getFullYear()}-${String(data.id).slice(0, 4).toUpperCase()}`;
       await axiom.from("purchase_orders").update({ po_number: poNum }).eq("id", data.id);
+      // Newest price wins: sync any changed material prices to inventory.
+      await syncInventoryUnitCost(lineItems);
       await logActivity({ action: "created", entity: "purchase_order", entity_id: data.id, label: `Created PO: ${poNum} — ${vendorName} (${lineItems.length} items, ${money(total)})`, user_name: userEmail });
       load();
       setShowCreate(false);
@@ -324,6 +327,8 @@ function OrdersTab() {
       custom_work_id: customWorkId,
       work_order_id: workOrderId || null,
     }).eq("id", id);
+    // Newest price wins: sync any changed material prices to inventory.
+    await syncInventoryUnitCost(lineItems);
     await logActivity({ action: "updated", entity: "purchase_order", entity_id: id, label: `Updated PO: ${pos.find((p) => p.id === id)?.po_number} — ${vendorName}`, user_name: userEmail });
     setEditPO(null);
     load();
