@@ -23,7 +23,7 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
     <div ${wrapper}>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;border-bottom:2px solid #5b642e;padding-bottom:20px;">
         <div>
-          <img src="${logoSrc}" alt="Wallflower RELIC" style="width:300px;max-width:60%;height:auto;display:block;" />
+          <img src="${logoSrc}" alt="Wallflower RELIC" style="width:440px;max-width:78%;height:auto;display:block;" />
         </div>
         <div style="text-align:right;">
           <h2 style="margin:0;font-size:20px;color:#111;">PURCHASE ORDER</h2>
