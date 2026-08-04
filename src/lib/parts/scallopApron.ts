@@ -4,6 +4,7 @@ import type { PartGenerator } from "./types";
 const scallopApron: PartGenerator = {
   id: "scallop-apron",
   version: 1,
+  category: "Edges & profiles",
   label: "Scalloped apron",
   blurb: "Evenly distributed scallop or wave along the bottom edge.",
   defaults: {

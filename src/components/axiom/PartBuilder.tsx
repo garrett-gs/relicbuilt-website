@@ -10,7 +10,7 @@ import type {
   SolveOk,
 } from "@/lib/parts";
 
-export interface PartStudioExport {
+export interface PartBuilderExport {
   format: "dxf" | "svg";
   text: string;
   spec: PartSpec;
@@ -19,19 +19,19 @@ export interface PartStudioExport {
   generatorVersion: number;
 }
 
-interface PartStudioProps {
+interface PartBuilderProps {
   generator: PartGenerator;
   initial?: Partial<PartSpec>;
   context?: SolveContext;
-  onExport?: (payload: PartStudioExport) => void;
+  onExport?: (payload: PartBuilderExport) => void;
 }
 
-export default function PartStudio({
+export default function PartBuilder({
   generator,
   initial = {},
   context = {},
   onExport,
-}: PartStudioProps) {
+}: PartBuilderProps) {
   const [spec, setSpec] = useState<PartSpec>(
     () => ({ ...generator.defaults, ...initial }) as PartSpec
   );

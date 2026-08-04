@@ -1,4 +1,4 @@
-// Contract that every part generator implements. PartStudio builds its
+// Contract that every part generator implements. PartBuilder builds its
 // entire UI from `fields`, and stores `spec` and `id` on the build record
 // (change orders are edits to five numbers, not regenerated files).
 
@@ -47,12 +47,18 @@ export interface ChoiceField {
 export type PartField = NumberField | ChoiceField;
 
 export interface PartGenerator {
+  // Kebab-case, immutable. Saved rows reference this — renaming orphans them
+  // silently (the lookup fails and the spec becomes unopenable with no
+  // write-time error).
   id: string;
   // Bump whenever solve() output changes — bug fix, rounding tweak, anything.
   // Stored on the saved row at export time so old specs re-solve to their
   // original geometry (or you can tell they need re-checking against the
   // current version).
   version: number;
+  // Groups the picker via <optgroup>. Sentence-case, freely editable.
+  category: string;
+  // Sentence case, freely editable (display only — not referenced by rows).
   label: string;
   blurb?: string;
   defaults: PartSpec;

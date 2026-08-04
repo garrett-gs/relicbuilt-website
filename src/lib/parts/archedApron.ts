@@ -4,6 +4,7 @@ import type { PartGenerator } from "./types";
 const archedApron: PartGenerator = {
   id: "arched-apron",
   version: 1,
+  category: "Edges & profiles",
   label: "Arched apron",
   blurb: "Single sprung arc between two flat ears.",
   defaults: { width: 48, height: 6, ear: 3, rise: 1.75 },

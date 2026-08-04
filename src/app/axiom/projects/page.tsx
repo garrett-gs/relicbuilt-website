@@ -8,6 +8,7 @@ import { useAxiomRole } from "@/components/axiom/useAxiomRole";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, ProposalScope, ProposalCostSection, ProposalCostItem, BuildComment, ApprovalRequest, ProjectChecklist, Invoice, InventoryItem, TeamMember, EstimateLineItem, EstimateLaborItem } from "@/types/axiom";
 import ChecklistPanel from "@/components/axiom/ChecklistPanel";
+import ProjectPartsSection from "@/components/axiom/ProjectPartsSection";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import ImageUpload from "@/components/ui/ImageUpload";
@@ -2082,6 +2083,10 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       <ChangeOrdersPanel projectId={project.id} />
 
       <ChecklistPanel projectId={project.id} initial={project.checklist || { sections: [] }} />
+
+      <div className="bg-card border border-border p-4">
+        <ProjectPartsSection customWorkId={project.id} userEmail={userEmail} />
+      </div>
 
       {/* Proposal & Invoices */}
       <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">

@@ -55,11 +55,16 @@ const navSections = [
     label: "Projects",
     items: [
       { href: "/axiom/estimator", icon: Calculator, label: "Estimator" },
-      { href: "/axiom/parts", icon: Ruler, label: "Parts" },
       { href: "/axiom/projects", icon: Hammer, label: "Projects" },
       { href: "/axiom/timeclock", icon: Clock, label: "Time Clock" },
       { href: "/axiom/calendar", icon: CalendarDays, label: "Build Calendar" },
       { href: "/axiom/inventory", icon: Warehouse, label: "Inventory" },
+    ],
+  },
+  {
+    label: "Parts Studio",
+    items: [
+      { href: "/axiom/parts-studio", icon: Ruler, label: "Parts Studio" },
     ],
   },
   {
