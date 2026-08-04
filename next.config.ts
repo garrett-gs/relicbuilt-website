@@ -17,6 +17,17 @@ const nextConfig: NextConfig = {
     "/api/approve-estimate-proposal": ["./node_modules/@sparticuz/chromium/bin/**/*"],
     "/api/audit-trail/[estimate_id]": ["./node_modules/@sparticuz/chromium/bin/**/*"],
   },
+  // /axiom/parts moved to /axiom/parts-studio when the tool got its own
+  // top-level nav section. Redirect old bookmarks so nobody hits a 404.
+  async redirects() {
+    return [
+      {
+        source: "/axiom/parts",
+        destination: "/axiom/parts-studio",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
