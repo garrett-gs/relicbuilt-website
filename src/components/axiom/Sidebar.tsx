@@ -30,6 +30,7 @@ import {
   ExternalLink,
   HardHat,
   ClipboardList,
+  Ruler,
 } from "lucide-react";
 
 const navSections = [
@@ -54,6 +55,7 @@ const navSections = [
     label: "Projects",
     items: [
       { href: "/axiom/estimator", icon: Calculator, label: "Estimator" },
+      { href: "/axiom/parts", icon: Ruler, label: "Parts" },
       { href: "/axiom/projects", icon: Hammer, label: "Projects" },
       { href: "/axiom/timeclock", icon: Clock, label: "Time Clock" },
       { href: "/axiom/calendar", icon: CalendarDays, label: "Build Calendar" },
