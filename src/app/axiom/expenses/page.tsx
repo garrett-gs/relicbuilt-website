@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useAutosave } from "@/components/axiom/useAutosave";
 import { Expense } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import DateField from "@/components/ui/DateField";
-import { Plus, X, Trash2 } from "lucide-react";
+import { Plus, X, Trash2, Loader2, Check } from "lucide-react";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -62,6 +63,11 @@ export default function ExpensesPage() {
     load();
   }
 
+  async function updateExpense(id: string, patch: Partial<Expense>) {
+    await axiom.from("expenses").update(patch).eq("id", id);
+    setExpenses((prev) => prev.map((e) => e.id === id ? { ...e, ...patch } : e));
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -93,24 +99,18 @@ export default function ExpensesPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wider text-muted border-b border-border">
-              <th className="px-4 py-3">Date</th>
+              <th className="px-4 py-3 w-40">Date</th>
               <th className="px-4 py-3">Description</th>
-              <th className="px-4 py-3">Category</th>
-              <th className="px-4 py-3">Vendor</th>
-              <th className="px-4 py-3 text-right">Amount</th>
-              <th className="px-4 py-3 w-10"></th>
+              <th className="px-4 py-3 w-44">Category</th>
+              <th className="px-4 py-3 w-48">Vendor</th>
+              <th className="px-4 py-3 text-right w-32">Amount</th>
+              <th className="px-4 py-3 w-12"></th>
+              <th className="px-4 py-3 w-24"></th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((e) => (
-              <tr key={e.id} className="border-b border-border/50">
-                <td className="px-4 py-3 text-muted">{e.date}</td>
-                <td className="px-4 py-3">{e.description || "—"}</td>
-                <td className="px-4 py-3 text-muted">{e.category || "—"}</td>
-                <td className="px-4 py-3 text-muted">{e.vendor_name || "—"}</td>
-                <td className="px-4 py-3 text-right font-mono">{money(e.amount)}</td>
-                <td className="px-4 py-3"><button onClick={() => deleteExpense(e.id)} className="text-muted hover:text-red-500"><Trash2 size={14} /></button></td>
-              </tr>
+              <ExpenseRow key={e.id} expense={e} onUpdate={updateExpense} onDelete={() => deleteExpense(e.id)} />
             ))}
           </tbody>
         </table>
@@ -164,5 +164,93 @@ function ExpenseForm({ onSubmit, onCancel }: { onSubmit: (f: Record<string, stri
         <Button variant="outline" onClick={onCancel}>Cancel</Button>
       </div>
     </div>
+  );
+}
+
+// Inline-editable table row. Autosaves ~900ms after the last edit and on
+// unmount so navigating away or filtering can't drop pending changes.
+function ExpenseRow({ expense, onUpdate, onDelete }: {
+  expense: Expense;
+  onUpdate: (id: string, patch: Partial<Expense>) => Promise<void>;
+  onDelete: () => void;
+}) {
+  const [date, setDate] = useState(expense.date || "");
+  const [description, setDescription] = useState(expense.description || "");
+  const [category, setCategory] = useState(expense.category || "");
+  const [vendor, setVendor] = useState(expense.vendor_name || "");
+  const [amount, setAmount] = useState(String(expense.amount ?? ""));
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [rev, setRev] = useState(0);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const initialMount = useRef(true);
+  useEffect(() => {
+    if (initialMount.current) { initialMount.current = false; return; }
+    setDirty(true);
+    setSaved(false);
+    setRev((r) => r + 1);
+  }, [date, description, category, vendor, amount]);
+
+  async function save() {
+    await onUpdate(expense.id, {
+      date: date || undefined,
+      description: description || undefined,
+      category: category || undefined,
+      vendor_name: vendor || undefined,
+      amount: Number(amount) || 0,
+    });
+    setDirty(false);
+    setSaved(true);
+  }
+
+  useAutosave(dirty, rev, save);
+
+  const cellInp = "w-full bg-transparent border border-transparent hover:border-border/60 focus:border-accent focus:outline-none px-2 py-1.5 text-sm text-foreground";
+
+  return (
+    <tr className="border-b border-border/50">
+      <td className="px-2 py-2">
+        <DateField value={date} onChange={setDate} inputClassName={`${cellInp} text-left`} />
+      </td>
+      <td className="px-2 py-2">
+        <input value={description} onChange={(e) => setDescription(e.target.value)} className={cellInp} placeholder="—" />
+      </td>
+      <td className="px-2 py-2">
+        <select value={category} onChange={(e) => setCategory(e.target.value)} className={cellInp}>
+          <option value="">—</option>
+          {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </td>
+      <td className="px-2 py-2">
+        <input value={vendor} onChange={(e) => setVendor(e.target.value)} className={cellInp} placeholder="—" />
+      </td>
+      <td className="px-2 py-2 text-right">
+        <input
+          type="number"
+          step="0.01"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          className={cellInp + " text-right font-mono"}
+        />
+      </td>
+      <td className="px-2 py-2 text-center">
+        {dirty ? (
+          <Loader2 size={14} className="text-muted animate-spin inline" />
+        ) : saved ? (
+          <Check size={14} className="text-green-500 inline" />
+        ) : null}
+      </td>
+      <td className="px-4 py-2 text-right">
+        {confirmDelete ? (
+          <span className="inline-flex items-center gap-1.5">
+            <button onClick={onDelete} className="text-xs bg-red-500 text-white px-2 py-1 hover:bg-red-600">Yes</button>
+            <button onClick={() => setConfirmDelete(false)} className="text-xs border border-border px-2 py-1 text-muted hover:text-foreground">No</button>
+          </span>
+        ) : (
+          <button onClick={() => setConfirmDelete(true)} className="text-muted hover:text-red-500"><Trash2 size={14} /></button>
+        )}
+      </td>
+    </tr>
   );
 }

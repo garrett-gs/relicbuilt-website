@@ -1509,6 +1509,9 @@ function CategoryModal({
   const [subs, setSubs] = useState<string[]>(category?.subcategories ?? []);
   const [newSub, setNewSub] = useState("");
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [rev, setRev] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   function addSub() {
@@ -1517,6 +1520,17 @@ function CategoryModal({
       setNewSub("");
     }
   }
+
+  // Autosave applies to edit mode only. Create mode still requires clicking
+  // Create so the record isn't inserted while the user is still typing.
+  const initialMount = React.useRef(true);
+  useEffect(() => {
+    if (initialMount.current) { initialMount.current = false; return; }
+    if (!category) return;
+    setDirty(true);
+    setSaved(false);
+    setRev((r) => r + 1);
+  }, [name, desc, color, subs, category]);
 
   async function save() {
     if (!name.trim()) return;
@@ -1529,13 +1543,19 @@ function CategoryModal({
     };
     if (category) {
       await axiom.from("inventory_categories").update(payload).eq("id", category.id);
+      setDirty(false);
+      setSaved(true);
+      onSaved();
+      setSaving(false);
     } else {
       const maxOrder = Math.max(0, ...((await axiom.from("inventory_categories").select("sort_order")).data ?? []).map((c: { sort_order: number }) => c.sort_order));
       await axiom.from("inventory_categories").insert({ ...payload, sort_order: maxOrder + 1 });
+      onSaved();
+      onClose();
     }
-    onSaved();
-    onClose();
   }
+
+  useAutosave(dirty, rev, save);
 
   async function handleDelete() {
     if (!category) return;
@@ -1592,11 +1612,15 @@ function CategoryModal({
           </div>
         </div>
       </div>
-      <div className="flex gap-3 mt-6">
-        <button onClick={save} disabled={saving || !name.trim()} className="flex-1 bg-accent text-background px-4 py-2.5 text-sm font-semibold hover:bg-accent/90 disabled:opacity-50">
-          {saving ? "Saving…" : category ? "Save" : "Create"}
-        </button>
-        <button onClick={onClose} className="flex-1 border border-border px-4 py-2.5 text-sm text-muted hover:text-foreground">Cancel</button>
+      <div className="flex gap-3 mt-6 items-center">
+        {category ? (
+          <div className="flex-1"><SaveButton dirty={dirty} saved={saved} onClick={save} /></div>
+        ) : (
+          <button onClick={save} disabled={saving || !name.trim()} className="flex-1 bg-accent text-background px-4 py-2.5 text-sm font-semibold hover:bg-accent/90 disabled:opacity-50">
+            {saving ? "Saving…" : "Create"}
+          </button>
+        )}
+        <button onClick={onClose} className="flex-1 border border-border px-4 py-2.5 text-sm text-muted hover:text-foreground">{category ? "Close" : "Cancel"}</button>
       </div>
       {category && (
         <div className="mt-4 pt-4 border-t border-border">
