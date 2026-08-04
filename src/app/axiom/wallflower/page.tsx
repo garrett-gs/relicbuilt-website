@@ -4,15 +4,17 @@ import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useAutosave } from "@/components/axiom/useAutosave";
 import { WallflowerWorkOrder, TeamMember, NexusRef } from "@/types/axiom";
 import NexusRefPicker from "@/components/axiom/NexusRefPicker";
 import Button from "@/components/ui/Button";
+import SaveButton from "@/components/ui/SaveButton";
 import DateField from "@/components/ui/DateField";
 import EstimateDrawer from "@/components/axiom/EstimateDrawer";
 import { cn, formatDueDate } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2, Calculator, ClipboardList,
-  Check, Image as ImageIcon, Loader2, Upload, Paperclip,
+  Image as ImageIcon, Loader2, Upload, Paperclip,
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -443,9 +445,10 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
   const [uploadError, setUploadError] = useState("");
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [rev, setRev] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  function markDirty() { setDirty(true); setSaved(false); }
+  function markDirty() { setDirty(true); setSaved(false); setRev((r) => r + 1); }
 
   async function handleFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
@@ -501,6 +504,8 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
     setDirty(false);
     setSaved(true);
   }
+
+  useAutosave(dirty, rev, save);
 
   return (
     <div className="space-y-6 pb-12">
@@ -710,9 +715,7 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
 
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t border-border flex-wrap items-center">
-        <Button onClick={save} disabled={!dirty}>
-          {saved ? <><Check size={14} className="mr-1" /> Saved</> : "Save Changes"}
-        </Button>
+        <SaveButton dirty={dirty} saved={saved} onClick={save} />
 
         {!order.estimate_id && (
           <Button variant="outline" onClick={onCreateEstimate}>
