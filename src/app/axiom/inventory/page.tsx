@@ -3,7 +3,9 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useAutosave } from "@/components/axiom/useAutosave";
 import { logActivity } from "@/lib/activity";
+import SaveButton from "@/components/ui/SaveButton";
 import { InventoryCategory, InventoryItem, InventoryTransaction } from "@/types/axiom";
 import { cn } from "@/lib/utils";
 import {
@@ -779,11 +781,22 @@ function EditItemModal({
   const [unitCost, setUnitCost] = useState(String(item.unit_cost || ""));
   const [unit, setUnit] = useState(item.unit);
   const [notes, setNotes] = useState(item.notes ?? "");
-  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [rev, setRev] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // Skip the initial mount snapshot so opening the modal doesn't save.
+  const initialMount = React.useRef(true);
+  useEffect(() => {
+    if (initialMount.current) { initialMount.current = false; return; }
+    setDirty(true);
+    setSaved(false);
+    setRev((r) => r + 1);
+  }, [catId, vendorId, location, minStock, desc, itemNum, unitCost, unit, notes]);
+
   async function save() {
-    setSaving(true);
+    if (!desc.trim()) return;
     await axiom.from("inventory_items").update({
       description: desc.trim(),
       item_number: itemNum.trim() || null,
@@ -796,9 +809,12 @@ function EditItemModal({
       notes: notes.trim() || null,
       updated_at: new Date().toISOString(),
     }).eq("id", item.id);
+    setDirty(false);
+    setSaved(true);
     onSaved();
-    onClose();
   }
+
+  useAutosave(dirty, rev, save);
 
   async function handleDelete() {
     await axiom.from("inventory_items").update({ active: false, updated_at: new Date().toISOString() }).eq("id", item.id);
@@ -863,11 +879,9 @@ function EditItemModal({
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className={inp + " min-h-[60px] resize-y"} />
         </div>
       </div>
-      <div className="flex gap-3 mt-6">
-        <button onClick={save} disabled={saving} className="flex-1 bg-accent text-background px-4 py-2.5 text-sm font-semibold hover:bg-accent/90 disabled:opacity-50">
-          {saving ? "Saving…" : "Save"}
-        </button>
-        <button onClick={onClose} className="flex-1 border border-border px-4 py-2.5 text-sm text-muted hover:text-foreground">Cancel</button>
+      <div className="flex gap-3 mt-6 items-center">
+        <div className="flex-1"><SaveButton dirty={dirty} saved={saved} onClick={save} /></div>
+        <button onClick={onClose} className="flex-1 border border-border px-4 py-2.5 text-sm text-muted hover:text-foreground">Close</button>
       </div>
       <div className="mt-4 pt-4 border-t border-border">
         {!confirmDelete ? (

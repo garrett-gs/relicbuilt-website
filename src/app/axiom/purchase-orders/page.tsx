@@ -5,9 +5,11 @@ import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { syncInventoryUnitCost } from "@/lib/inventory-price-sync";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useAutosave } from "@/components/axiom/useAutosave";
 import { PurchaseOrder, POLineItem, Vendor, CatalogItem } from "@/types/axiom";
 import DateField from "@/components/ui/DateField";
 import Button from "@/components/ui/Button";
+import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 import {
@@ -330,7 +332,6 @@ function OrdersTab() {
     // Newest price wins: sync any changed material prices to inventory.
     await syncInventoryUnitCost(lineItems);
     await logActivity({ action: "updated", entity: "purchase_order", entity_id: id, label: `Updated PO: ${pos.find((p) => p.id === id)?.po_number} — ${vendorName}`, user_name: userEmail });
-    setEditPO(null);
     load();
   }
 
@@ -1065,6 +1066,9 @@ function EditPOModal({ po, vendors, workOrders, onSubmit, onClose }: {
   const [deliveryDate, setDeliveryDate] = useState(po.delivery_date || "");
   const [shipToAddress, setShipToAddress] = useState(po.ship_to_address || "");
   const [workOrderId, setWorkOrderId] = useState(po.work_order_id || "");
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [rev, setRev] = useState(0);
 
   useEffect(() => {
     if (!vendorId) { setCatalog([]); return; }
@@ -1077,6 +1081,26 @@ function EditPOModal({ po, vendors, workOrders, onSubmit, onClose }: {
     const v = vendors.find((v) => v.id === vendorId);
     if (v) setVendorName(v.name);
   }, [vendorId, vendors]);
+
+  // Any change to the tracked fields marks the modal dirty so autosave fires.
+  // Skip the first render (mount snapshot) so opening the modal doesn't
+  // trigger a spurious save.
+  const initialMount = React.useRef(true);
+  useEffect(() => {
+    if (initialMount.current) { initialMount.current = false; return; }
+    setDirty(true);
+    setSaved(false);
+    setRev((r) => r + 1);
+  }, [vendorId, vendorName, lineItems, notes, sidemark, needByDate, deliveryMethod, deliveryDate, shipToAddress, workOrderId]);
+
+  async function save() {
+    if (!vendorName || lineItems.length === 0) return;
+    await onSubmit(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, workOrderId || undefined);
+    setDirty(false);
+    setSaved(true);
+  }
+
+  useAutosave(dirty, rev, save);
 
   function addFromCatalog(item: CatalogItem) {
     const existing = lineItems.findIndex((li) => li.item_number === item.item_number && li.description === item.description);
@@ -1237,9 +1261,9 @@ function EditPOModal({ po, vendors, workOrders, onSubmit, onClose }: {
                 <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
               </div>
 
-              <div className="flex gap-3">
-                <Button onClick={() => onSubmit(vendorId, vendorName, lineItems, notes, needByDate, deliveryMethod, deliveryDate, shipToAddress, sidemark, workOrderId || undefined)} disabled={!vendorName || lineItems.length === 0}>Save Changes</Button>
-                <Button variant="outline" onClick={onClose}>Cancel</Button>
+              <div className="flex gap-3 items-center">
+                <SaveButton dirty={dirty} saved={saved} onClick={save} />
+                <Button variant="outline" onClick={onClose}>Close</Button>
               </div>
             </div>
 
@@ -1361,15 +1385,17 @@ function VendorsTab() {
   }
 
   const [catalogDirty, setCatalogDirty] = useState(false);
-  const [catalogSaving, setCatalogSaving] = useState(false);
+  const [catalogSaved, setCatalogSaved] = useState(false);
+  const [catalogRev, setCatalogRev] = useState(0);
 
   function updateCatalogItem(id: string, field: string, value: string | number | boolean) {
     setCatalog((prev) => prev.map((c) => c.id === id ? { ...c, [field]: value } : c));
     setCatalogDirty(true);
+    setCatalogSaved(false);
+    setCatalogRev((r) => r + 1);
   }
 
   async function saveCatalog() {
-    setCatalogSaving(true);
     await Promise.all(catalog.map((item) =>
       axiom.from("vendor_catalog").update({
         item_number: item.item_number,
@@ -1380,8 +1406,10 @@ function VendorsTab() {
       }).eq("id", item.id)
     ));
     setCatalogDirty(false);
-    setCatalogSaving(false);
+    setCatalogSaved(true);
   }
+
+  useAutosave(catalogDirty, catalogRev, saveCatalog);
 
   async function deleteCatalogItem(id: string) {
     await axiom.from("vendor_catalog").delete().eq("id", id);
@@ -1389,16 +1417,18 @@ function VendorsTab() {
   }
 
   const [vendorDirty, setVendorDirty] = useState(false);
-  const [vendorSaving, setVendorSaving] = useState(false);
+  const [vendorSaved, setVendorSaved] = useState(false);
+  const [vendorRev, setVendorRev] = useState(0);
 
   function updateVendorField(field: string, value: string) {
     setSelected((prev) => prev ? { ...prev, [field]: value } : prev);
     setVendorDirty(true);
+    setVendorSaved(false);
+    setVendorRev((r) => r + 1);
   }
 
   async function saveVendor() {
     if (!selected) return;
-    setVendorSaving(true);
     await axiom.from("vendors").update({
       name: selected.name,
       contact_name: selected.contact_name,
@@ -1409,9 +1439,11 @@ function VendorsTab() {
       notes: selected.notes,
     }).eq("id", selected.id);
     setVendorDirty(false);
-    setVendorSaving(false);
+    setVendorSaved(true);
     loadVendors();
   }
+
+  useAutosave(vendorDirty, vendorRev, saveVendor);
 
   return (
     <div className="flex gap-6 h-[calc(100vh-10rem)]">
@@ -1454,11 +1486,7 @@ function VendorsTab() {
                 <p className="text-muted text-sm">{selected.status}</p>
               </div>
               <div className="flex items-center gap-2">
-                {vendorDirty && (
-                  <Button size="sm" onClick={saveVendor} disabled={vendorSaving}>
-                    {vendorSaving ? "Saving..." : "Save"}
-                  </Button>
-                )}
+                <SaveButton dirty={vendorDirty} saved={vendorSaved} onClick={saveVendor} size="sm" />
                 <button onClick={() => deleteVendor(selected.id)} className="text-muted hover:text-red-500"><Trash2 size={16} /></button>
               </div>
             </div>
@@ -1503,11 +1531,7 @@ function VendorsTab() {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm uppercase tracking-wider text-muted">Material Catalog ({catalog.length} items)</h3>
                 <div className="flex items-center gap-3">
-                  {catalogDirty && (
-                    <Button size="sm" onClick={saveCatalog} disabled={catalogSaving}>
-                      {catalogSaving ? "Saving..." : "Save Changes"}
-                    </Button>
-                  )}
+                  <SaveButton dirty={catalogDirty} saved={catalogSaved} onClick={saveCatalog} size="sm" />
                   <button onClick={() => addCatalogItem(selected.id)} className="text-accent text-xs flex items-center gap-1"><Plus size={12} /> Add Item</button>
                 </div>
               </div>

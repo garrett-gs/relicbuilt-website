@@ -4,14 +4,16 @@ import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useAutosave } from "@/components/axiom/useAutosave";
 import { Customer, CustomerNote, Company, CustomWork, Invoice } from "@/types/axiom";
 import Button from "@/components/ui/Button";
+import SaveButton from "@/components/ui/SaveButton";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 import { cn, formatPhone } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2,
   ChevronRight, ChevronDown,
-  Building2, User, UserPlus, ExternalLink, Pencil, Check, RefreshCw,
+  Building2, User, UserPlus, ExternalLink, RefreshCw,
 } from "lucide-react";
 
 function money(n: number) {
@@ -389,6 +391,7 @@ export default function CustomersPage() {
       <div className="flex-1 overflow-y-auto border-l border-border pl-6">
         {selectedCustomer ? (
           <CustomerDetail
+            key={selectedCustomer.id}
             customer={selectedCustomer}
             company={selectedCustomerCompany}
             companies={companies}
@@ -400,6 +403,7 @@ export default function CustomersPage() {
           />
         ) : selectedCompany ? (
           <CompanyDetail
+            key={selectedCompany.id}
             company={selectedCompany}
             contacts={contactsForCompany(selectedCompany.id)}
             projects={detailProjects}
@@ -451,19 +455,22 @@ function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact,
   onUpdate: (fields: Partial<Company>) => void;
 }) {
   const [confirmDel, setConfirmDel] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: company.name, industry: company.industry ?? "", address: company.address ?? "", phone: company.phone ?? "", website: company.website ?? "" });
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [rev, setRev] = useState(0);
+  function markDirty() { setDirty(true); setSaved(false); setRev((r) => r + 1); }
+  const set = (k: string, v: string) => { setForm((f) => ({ ...f, [k]: v })); markDirty(); };
   const totalQuoted = projects.reduce((s, p) => s + (p.quoted_amount || 0), 0);
 
-  // Sync form if company prop changes (e.g. after another company selected)
-  const companyId = company.id;
-  useState(() => { setForm({ name: company.name, industry: company.industry ?? "", address: company.address ?? "", phone: company.phone ?? "", website: company.website ?? "" }); setEditing(false); });
-
-  function saveEdit() {
+  function save() {
+    if (!form.name) return;
     onUpdate({ name: form.name, industry: form.industry || undefined, address: form.address || undefined, phone: form.phone || undefined, website: form.website || undefined });
-    setEditing(false);
+    setDirty(false);
+    setSaved(true);
   }
+
+  useAutosave(dirty, rev, save);
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -472,72 +479,51 @@ function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact,
         <div>
           <div className="flex items-center gap-2 mb-0.5">
             <Building2 size={16} className="text-accent" />
-            <h2 className="text-xl font-heading font-bold">{company.name}</h2>
+            <h2 className="text-xl font-heading font-bold">{form.name || company.name}</h2>
           </div>
-          {company.industry && !editing && <p className="text-muted text-sm">{company.industry}</p>}
         </div>
         <div className="flex items-center gap-2">
-          {!editing && !confirmDel && (
-            <button onClick={() => { setForm({ name: company.name, industry: company.industry ?? "", address: company.address ?? "", phone: company.phone ?? "", website: company.website ?? "" }); setEditing(true); }} className="text-muted hover:text-accent flex items-center gap-1 text-xs border border-border px-2 py-1">
-              <Pencil size={11} /> Edit
-            </button>
-          )}
+          <SaveButton dirty={dirty} saved={saved} onClick={save} size="sm" />
           {confirmDel ? (
             <div className="flex items-center gap-2">
               <span className="text-red-500 text-sm">Delete company?</span>
               <button onClick={onDelete} className="text-xs border border-red-400 text-red-500 px-2 py-1 hover:bg-red-50/10">Yes</button>
               <button onClick={() => setConfirmDel(false)} className="text-xs border border-border text-muted px-2 py-1">No</button>
             </div>
-          ) : !editing && (
+          ) : (
             <button onClick={() => setConfirmDel(true)} className="text-muted hover:text-red-500"><Trash2 size={16} /></button>
           )}
         </div>
       </div>
 
-      {/* Inline edit form */}
-      {editing ? (
-        <div className="bg-card border border-border p-4 space-y-3">
-          <div><label className={lbl}>Company Name</label><input value={form.name} onChange={(e) => set("name", e.target.value)} className={inp} /></div>
-          <div><label className={lbl}>Industry</label><input value={form.industry} onChange={(e) => set("industry", e.target.value)} className={inp} /></div>
+      {/* Always-editable form */}
+      <div className="bg-card border border-border p-4 space-y-3">
+        <div><label className={lbl}>Company Name</label><input value={form.name} onChange={(e) => set("name", e.target.value)} className={inp} /></div>
+        <div><label className={lbl}>Industry</label><input value={form.industry} onChange={(e) => set("industry", e.target.value)} className={inp} /></div>
+        <div>
+          <label className={lbl}>Address</label>
+          <AddressAutocomplete
+            value={form.address}
+            onChange={(v) => set("address", v)}
+            onSelect={(r) => set("address", r.formatted)}
+            className={inp}
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className={lbl}>Phone</label><input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>
           <div>
-            <label className={lbl}>Address</label>
-            <AddressAutocomplete
-              value={form.address}
-              onChange={(v) => set("address", v)}
-              onSelect={(r) => set("address", r.formatted)}
-              className={inp}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className={lbl}>Phone</label><input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>
-            <div><label className={lbl}>Website</label><input value={form.website} onChange={(e) => set("website", e.target.value)} placeholder="example.com" className={inp} /></div>
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button onClick={saveEdit} disabled={!form.name} className="flex items-center gap-1 bg-accent text-white text-sm px-4 py-2 hover:bg-accent/80 disabled:opacity-40"><Check size={13} /> Save</button>
-            <button onClick={() => setEditing(false)} className="text-sm border border-border text-muted px-4 py-2 hover:text-foreground">Cancel</button>
-          </div>
-        </div>
-      ) : (
-        /* Info read-only */
-        <div className="bg-card border border-border p-4 grid grid-cols-2 gap-4 text-sm">
-          {company.address && <div><span className="text-xs text-muted block">Address</span>{company.address}</div>}
-          {company.phone && <div><span className="text-xs text-muted block">Phone</span>{company.phone}</div>}
-          {company.website && (
-            <div className="col-span-2">
-              <span className="text-xs text-muted block">Website</span>
-              <a href={company.website.startsWith("http") ? company.website : `https://${company.website}`}
+            <label className={lbl}>Website</label>
+            <input value={form.website} onChange={(e) => set("website", e.target.value)} placeholder="example.com" className={inp} />
+            {form.website && (
+              <a href={form.website.startsWith("http") ? form.website : `https://${form.website}`}
                 target="_blank" rel="noopener noreferrer"
-                className="text-accent hover:underline flex items-center gap-1"
-              >
-                {company.website} <ExternalLink size={12} />
+                className="text-accent hover:underline flex items-center gap-1 text-xs mt-1">
+                Open <ExternalLink size={11} />
               </a>
-            </div>
-          )}
-          {!company.address && !company.phone && !company.website && (
-            <p className="col-span-2 text-muted text-xs">No details — click Edit to add.</p>
-          )}
+            )}
+          </div>
         </div>
-      )}
+      </div>
 
 
       {/* Stats */}
@@ -708,7 +694,6 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
   onUpdate: (fields: Partial<Customer>) => void;
 }) {
   const [confirmDel, setConfirmDel] = useState(false);
-  const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: customer.name,
     title: customer.title ?? "",
@@ -717,10 +702,15 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
     address: customer.address ?? "",
     company_id: customer.company_id ?? "",
   });
-  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [rev, setRev] = useState(0);
+  function markDirty() { setDirty(true); setSaved(false); setRev((r) => r + 1); }
+  const set = (k: string, v: string) => { setForm((f) => ({ ...f, [k]: v })); markDirty(); };
   const totalSpend = projects.reduce((s, p) => s + (p.quoted_amount || 0), 0);
 
-  function saveEdit() {
+  function save() {
+    if (!form.name) return;
     const linkedCompany = form.company_id ? companies.find((c) => c.id === form.company_id) : null;
     // Pass null (not undefined) so Supabase actually clears the column when unlinking.
     onUpdate({
@@ -732,8 +722,11 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
       company_id: (form.company_id || null) as unknown as string,
       company_name: (linkedCompany?.name || null) as unknown as string,
     });
-    setEditing(false);
+    setDirty(false);
+    setSaved(true);
   }
+
+  useAutosave(dirty, rev, save);
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -742,10 +735,9 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
         <div>
           <div className="flex items-center gap-2 mb-0.5">
             <User size={16} className="text-accent" />
-            <h2 className="text-xl font-heading font-bold">{customer.name}</h2>
+            <h2 className="text-xl font-heading font-bold">{form.name || customer.name}</h2>
           </div>
           <p className="text-muted text-sm">
-            {customer.title ? `${customer.title} · ` : ""}
             {company
               ? <span>Contact at <span className="text-accent font-medium">{company.name}</span></span>
               : "Individual"
@@ -753,60 +745,43 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {!editing && !confirmDel && (
-            <button onClick={() => { setForm({ name: customer.name, title: customer.title ?? "", email: customer.email ?? "", phone: customer.phone ?? "", address: customer.address ?? "", company_id: customer.company_id ?? "" }); setEditing(true); }} className="text-muted hover:text-accent flex items-center gap-1 text-xs border border-border px-2 py-1">
-              <Pencil size={11} /> Edit
-            </button>
-          )}
+          <SaveButton dirty={dirty} saved={saved} onClick={save} size="sm" />
           {confirmDel ? (
             <div className="flex items-center gap-2">
               <span className="text-red-500 text-sm">Delete?</span>
               <button onClick={onDelete} className="text-xs border border-red-400 text-red-500 px-2 py-1 hover:bg-red-50/10">Yes</button>
               <button onClick={() => setConfirmDel(false)} className="text-xs border border-border text-muted px-2 py-1">No</button>
             </div>
-          ) : !editing && (
+          ) : (
             <button onClick={() => setConfirmDel(true)} className="text-muted hover:text-red-500"><Trash2 size={16} /></button>
           )}
         </div>
       </div>
 
-      {/* Inline edit form */}
-      {editing ? (
-        <div className="bg-card border border-border p-4 space-y-3">
-          <div><label className={lbl}>Name</label><input value={form.name} onChange={(e) => set("name", e.target.value)} className={inp} /></div>
-          <div>
-            <label className={lbl}>Company</label>
-            <select value={form.company_id} onChange={(e) => set("company_id", e.target.value)} className={inp}>
-              <option value="">— None (Individual) —</option>
-              {companies.map((co) => (
-                <option key={co.id} value={co.id}>{co.name}</option>
-              ))}
-            </select>
-            <p className="text-[11px] text-muted mt-1 italic">
-              Link this customer to a company they work for. The company name will appear on proposals alongside the customer.
-            </p>
-          </div>
-          {(customer.type === "Contact" || form.company_id) && (
-            <div><label className={lbl}>Title / Role</label><input value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Event Coordinator, Project Manager" className={inp} /></div>
-          )}
-          <div className="grid grid-cols-2 gap-3">
-            <div><label className={lbl}>Email</label><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inp} /></div>
-            <div><label className={lbl}>Phone</label><input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>
-          </div>
-          <div><label className={lbl}>Address</label><AddressAutocomplete value={form.address} onChange={(v) => set("address", v)} onSelect={(r) => set("address", r.formatted)} className={inp} /></div>
-          <div className="flex gap-2 pt-1">
-            <button onClick={saveEdit} disabled={!form.name} className="flex items-center gap-1 bg-accent text-white text-sm px-4 py-2 hover:bg-accent/80 disabled:opacity-40"><Check size={13} /> Save</button>
-            <button onClick={() => setEditing(false)} className="text-sm border border-border text-muted px-4 py-2 hover:text-foreground">Cancel</button>
-          </div>
+      {/* Always-editable form */}
+      <div className="bg-card border border-border p-4 space-y-3">
+        <div><label className={lbl}>Name</label><input value={form.name} onChange={(e) => set("name", e.target.value)} className={inp} /></div>
+        <div>
+          <label className={lbl}>Company</label>
+          <select value={form.company_id} onChange={(e) => set("company_id", e.target.value)} className={inp}>
+            <option value="">— None (Individual) —</option>
+            {companies.map((co) => (
+              <option key={co.id} value={co.id}>{co.name}</option>
+            ))}
+          </select>
+          <p className="text-[11px] text-muted mt-1 italic">
+            Link this customer to a company they work for. The company name will appear on proposals alongside the customer.
+          </p>
         </div>
-      ) : (
-        /* Contact info read-only */
-        <div className="bg-card border border-border p-4 grid grid-cols-2 gap-4 text-sm">
-          <div><span className="text-xs text-muted block">Email</span>{customer.email || "—"}</div>
-          <div><span className="text-xs text-muted block">Phone</span>{customer.phone || "—"}</div>
-          {customer.address && <div className="col-span-2"><span className="text-xs text-muted block">Address</span>{customer.address}</div>}
+        {(customer.type === "Contact" || form.company_id) && (
+          <div><label className={lbl}>Title / Role</label><input value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Event Coordinator, Project Manager" className={inp} /></div>
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <div><label className={lbl}>Email</label><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inp} /></div>
+          <div><label className={lbl}>Phone</label><input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>
         </div>
-      )}
+        <div><label className={lbl}>Address</label><AddressAutocomplete value={form.address} onChange={(v) => set("address", v)} onSelect={(r) => set("address", r.formatted)} className={inp} /></div>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">

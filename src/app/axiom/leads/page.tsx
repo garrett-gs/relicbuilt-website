@@ -3,9 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
+import { useAutosave } from "@/components/axiom/useAutosave";
 import { Lead, LeadNote, LeadFollowUp, Customer } from "@/types/axiom";
 import { formatPhone, cn } from "@/lib/utils";
 import DateField from "@/components/ui/DateField";
+import SaveButton from "@/components/ui/SaveButton";
 import EstimateDrawer from "@/components/axiom/EstimateDrawer";
 import {
   Search,
@@ -300,14 +302,15 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
   onUpdate: (updated: Lead) => void;
   onDelete: (id: string) => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [editProjectName, setEditProjectName] = useState("");
-  const [editName, setEditName] = useState("");
-  const [editEmail, setEditEmail] = useState("");
-  const [editPhone, setEditPhone] = useState("");
-  const [editDesc, setEditDesc] = useState("");
-  const [editBudget, setEditBudget] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [editProjectName, setEditProjectName] = useState(lead.project_name ?? "");
+  const [editName, setEditName] = useState(lead.name);
+  const [editEmail, setEditEmail] = useState(lead.email ?? "");
+  const [editPhone, setEditPhone] = useState(lead.phone ?? "");
+  const [editDesc, setEditDesc] = useState(lead.description ?? "");
+  const [editBudget, setEditBudget] = useState(lead.budget_range ?? "");
+  const [dirty, setDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [rev, setRev] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [converting, setConverting] = useState(false);
   const [drawerEstimateId, setDrawerEstimateId] = useState<string | null>(null);
@@ -327,12 +330,20 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
   const [currentUserEmail, setCurrentUserEmail] = useState<string>("");
 
   useEffect(() => {
-    setEditing(false);
     setConfirmDelete(false);
     setNewNote("");
     setNewFollowUpDate("");
     setNewFollowUpText("");
   }, [lead.id]);
+
+  // Skip the initial mount so opening a lead doesn't trigger a save.
+  const initialMount = useRef(true);
+  useEffect(() => {
+    if (initialMount.current) { initialMount.current = false; return; }
+    setDirty(true);
+    setSaved(false);
+    setRev((r) => r + 1);
+  }, [editProjectName, editName, editEmail, editPhone, editDesc, editBudget]);
 
   useEffect(() => {
     axiom.auth.getUser().then(({ data }) => {
@@ -351,18 +362,8 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
     return (b.completed_at || "").localeCompare(a.completed_at || "");
   });
 
-  function startEdit() {
-    setEditProjectName(lead.project_name ?? "");
-    setEditName(lead.name);
-    setEditEmail(lead.email ?? "");
-    setEditPhone(lead.phone ?? "");
-    setEditDesc(lead.description ?? "");
-    setEditBudget(lead.budget_range ?? "");
-    setEditing(true);
-  }
-
   async function saveEdit() {
-    setSaving(true);
+    if (!editName.trim()) return;
     const { data, error } = await axiom.from("leads")
       .update({
         project_name: editProjectName.trim() || null,
@@ -377,9 +378,11 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
       .select()
       .single();
     if (!error && data) onUpdate(data as Lead);
-    setSaving(false);
-    setEditing(false);
+    setDirty(false);
+    setSaved(true);
   }
+
+  useAutosave(dirty, rev, saveEdit);
 
   async function updateStatus(status: Lead["status"]) {
     const { data, error } = await axiom.from("leads")
@@ -605,11 +608,7 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {!editing && (
-            <button onClick={startEdit} className="p-1.5 text-muted hover:text-foreground hover:bg-card rounded transition-colors">
-              <Pencil size={15} />
-            </button>
-          )}
+          <SaveButton dirty={dirty} saved={saved} onClick={saveEdit} size="sm" />
           {!confirmDelete ? (
             <button onClick={() => setConfirmDelete(true)} className="p-1.5 text-muted hover:text-red-500 hover:bg-card rounded transition-colors">
               <Trash2 size={15} />
@@ -646,88 +645,54 @@ function LeadDetail({ lead, onUpdate, onDelete }: {
           </div>
         </div>
 
-        {/* Contact Info */}
-        {editing ? (
-          <div className="space-y-3 border border-border p-4">
-            <div>
-              <label className={lbl}>Project Name</label>
-              <input value={editProjectName} onChange={(e) => setEditProjectName(e.target.value)} className={inp} placeholder="Walnut kitchen island, etc." />
-            </div>
-            <div>
-              <label className={lbl}>Customer Name</label>
-              <input value={editName} onChange={(e) => setEditName(e.target.value)} className={inp} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={lbl}>Email</label>
-                <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className={inp} />
-              </div>
-              <div>
-                <label className={lbl}>Phone</label>
-                <input
-                  type="tel"
-                  value={editPhone}
-                  onChange={(e) => setEditPhone(formatPhone(e.target.value))}
-                  placeholder="(402) 000-0000"
-                  className={inp}
-                />
-              </div>
-            </div>
-            <div>
-              <label className={lbl}>Budget Range</label>
-              <select value={editBudget} onChange={(e) => setEditBudget(e.target.value)} className={inp}>
-                <option value="">Select…</option>
-                {BUDGET_RANGES.map((b) => <option key={b} value={b}>{b}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={lbl}>Description</label>
-              <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} className={inp + " min-h-[80px] resize-y"} />
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setEditing(false)} className="flex-1 border border-border px-4 py-2 text-sm text-muted hover:text-foreground">Cancel</button>
-              <button onClick={saveEdit} disabled={saving} className="flex-1 bg-accent text-background px-4 py-2 text-sm font-semibold hover:bg-accent/90 disabled:opacity-50">
-                {saving ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </div>
-        ) : (
+        {/* Always-editable contact + project fields */}
+        <div className="space-y-3 border border-border p-4">
           <div>
-            <p className={lbl}>Contact Info</p>
-            <div className="space-y-2.5">
-              {lead.email && (
-                <a href={`mailto:${lead.email}`} className="flex items-center gap-2 text-sm text-foreground hover:text-accent group">
-                  <Mail size={14} className="text-muted" />
-                  <span>{lead.email}</span>
-                  <ExternalLink size={11} className="text-muted opacity-0 group-hover:opacity-100" />
+            <label className={lbl}>Project Name</label>
+            <input value={editProjectName} onChange={(e) => setEditProjectName(e.target.value)} className={inp} placeholder="Walnut kitchen island, etc." />
+          </div>
+          <div>
+            <label className={lbl}>Customer Name</label>
+            <input value={editName} onChange={(e) => setEditName(e.target.value)} className={inp} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>Email</label>
+              <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className={inp} />
+              {editEmail && (
+                <a href={`mailto:${editEmail}`} className="text-xs text-accent hover:underline inline-flex items-center gap-1 mt-1">
+                  <Mail size={11} /> Email <ExternalLink size={10} />
                 </a>
               )}
-              {lead.phone && (
-                <a href={`tel:${lead.phone}`} className="flex items-center gap-2 text-sm text-foreground hover:text-accent group">
-                  <Phone size={14} className="text-muted" />
-                  <span>{lead.phone}</span>
+            </div>
+            <div>
+              <label className={lbl}>Phone</label>
+              <input
+                type="tel"
+                value={editPhone}
+                onChange={(e) => setEditPhone(formatPhone(e.target.value))}
+                placeholder="(402) 000-0000"
+                className={inp}
+              />
+              {editPhone && (
+                <a href={`tel:${editPhone}`} className="text-xs text-accent hover:underline inline-flex items-center gap-1 mt-1">
+                  <Phone size={11} /> Call
                 </a>
-              )}
-              {lead.budget_range && (
-                <div className="flex items-center gap-2 text-sm text-foreground">
-                  <DollarSign size={14} className="text-muted" />
-                  <span>{lead.budget_range}</span>
-                </div>
-              )}
-              {!lead.email && !lead.phone && !lead.budget_range && (
-                <p className="text-sm text-muted italic">No contact info</p>
               )}
             </div>
           </div>
-        )}
-
-        {/* Description */}
-        {!editing && lead.description && (
           <div>
-            <p className={lbl}>Project Description</p>
-            <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{lead.description}</p>
+            <label className={lbl}>Budget Range</label>
+            <select value={editBudget} onChange={(e) => setEditBudget(e.target.value)} className={inp}>
+              <option value="">Select…</option>
+              {BUDGET_RANGES.map((b) => <option key={b} value={b}>{b}</option>)}
+            </select>
           </div>
-        )}
+          <div>
+            <label className={lbl}>Description</label>
+            <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} className={inp + " min-h-[80px] resize-y"} />
+          </div>
+        </div>
 
         {/* Inspiration Photos */}
         {lead.inspiration_photos && lead.inspiration_photos.length > 0 && (
@@ -1088,7 +1053,7 @@ export default function LeadsPage() {
 
       {/* Right: Detail or empty state */}
       {selected ? (
-        <LeadDetail lead={selected} onUpdate={handleUpdate} onDelete={handleDelete} />
+        <LeadDetail key={selected.id} lead={selected} onUpdate={handleUpdate} onDelete={handleDelete} />
       ) : (
         <div className="flex-1 flex items-center justify-center text-center px-8">
           <div>
