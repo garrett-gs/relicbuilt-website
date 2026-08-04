@@ -1,15 +1,16 @@
-// Geometry safety net. Run with:
-//   node --test src/lib/partSvg.test.ts
-// Node 22.6+ strips TS types natively; no compile step or runner needed.
+// Geometry safety net for the parts generator. Run with `npm test`.
 //
 // Checks the DXF output against the source SVG path across five geometry
 // cases: standard scallop, wave, deep (largeArc kicks in), shallow, and
-// single-arc. Also confirms arcs stay as ARC entities (not polylines /
-// splines) and that unsupported path commands throw.
+// single-arc. Also confirms:
+// - the outline is a closed chain
+// - arcs stay as ARC entities (not polylines / splines)
+// - the DXF declares $ACADVER, LTYPE, and BLOCKS so strict readers
+//   (Illustrator, ezdxf) accept it
+// - unsupported path commands throw rather than corrupt
 
-import { test } from "node:test";
-import assert from "node:assert/strict";
-import { parsePath, buildDxf, sagitta, fmt } from "./partSvg.ts";
+import { test, expect } from "vitest";
+import { parsePath, buildDxf, sagitta, fmt } from "./partSvg";
 
 type Spec = {
   width: number;
@@ -58,6 +59,8 @@ type Entity =
       end: [number, number];
     };
 
+// Parses group codes by line parity — DXF values can look like group
+// codes, so a regex-based reader can misidentify them.
 function readDxfEntities(dxf: string): Entity[] {
   const lines = dxf.split("\n");
   const out: Entity[] = [];
@@ -112,7 +115,7 @@ for (const [name, spec] of CASES) {
     const segs = parsePath(part.path);
     const ents = readDxfEntities(buildDxf(part));
 
-    assert.equal(ents.length, segs.length, "entity count");
+    expect(ents.length).toBe(segs.length);
 
     segs.forEach((s, i) => {
       const e = ents[i];
@@ -120,10 +123,10 @@ for (const [name, spec] of CASES) {
       const B: [number, number] = [s.to[0], part.height - s.to[1]];
       const forward = dist(e.start, A) + dist(e.end, B);
       const reverse = dist(e.start, B) + dist(e.end, A);
-      assert.ok(
-        Math.min(forward, reverse) < TOL,
+      expect(
+        Math.min(forward, reverse),
         `segment ${i} (${s.type}) endpoints drifted`
-      );
+      ).toBeLessThan(TOL);
     });
   });
 
@@ -135,22 +138,50 @@ for (const [name, spec] of CASES) {
     const loose = pts.filter(
       (p) => pts.filter((q) => dist(p, q) < TOL).length !== 2
     );
-    assert.equal(
+    expect(
       loose.length,
-      0,
       `open vertex at ${loose[0]?.map((n) => n.toFixed(6)).join(", ")}`
-    );
+    ).toBe(0);
   });
 }
+
+test("dxf declares required structure for strict readers", () => {
+  const dxf = buildDxf(scallop(CASES[0][1]));
+
+  expect(dxf, "must declare a version").toMatch(/\$ACADVER\n1\nAC1009/);
+  expect(dxf, "must include a BLOCKS section").toMatch(/SECTION\n2\nBLOCKS/);
+  expect(dxf, "must define a LTYPE table").toMatch(/TABLE\n2\nLTYPE/);
+
+  const lines = dxf.split("\n");
+  const referenced: string[] = [];
+  for (let i = 0; i + 1 < lines.length; i += 2)
+    if (lines[i] === "6") referenced.push(lines[i + 1]);
+
+  expect(referenced.length, "expected at least one linetype reference")
+    .toBeGreaterThan(0);
+  for (const lt of new Set(referenced))
+    expect(
+      dxf.includes(`LTYPE\n2\n${lt}`),
+      `linetype ${lt} referenced but never defined`
+    ).toBe(true);
+
+  const order = ["HEADER", "TABLES", "BLOCKS", "ENTITIES"].map((s) =>
+    dxf.indexOf(`SECTION\n2\n${s}`)
+  );
+  expect(
+    order.every((v, i) => v > -1 && (i === 0 || v > order[i - 1])),
+    "sections must appear in spec order"
+  ).toBe(true);
+});
 
 test("arcs survive as ARC entities, not polylines", () => {
   const dxf = buildDxf(scallop(CASES[0][1]));
   const arcs = readDxfEntities(dxf).filter((e) => e.kind === "ARC");
-  assert.equal(arcs.length, 9, "expected 9 scallop arcs");
-  assert.ok(!dxf.includes("POLYLINE"), "must not emit polylines");
-  assert.ok(!dxf.includes("SPLINE"), "must not emit splines");
+  expect(arcs.length, "expected 9 scallop arcs").toBe(9);
+  expect(dxf.includes("POLYLINE"), "must not emit polylines").toBe(false);
+  expect(dxf.includes("SPLINE"), "must not emit splines").toBe(false);
 });
 
 test("unsupported path commands throw rather than corrupt", () => {
-  assert.throws(() => parsePath("M 0 0 C 1 1 2 2 3 3"), /unsupported command/);
+  expect(() => parsePath("M 0 0 C 1 1 2 2 3 3")).toThrow(/unsupported command/);
 });

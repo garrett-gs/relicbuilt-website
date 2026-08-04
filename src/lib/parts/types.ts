@@ -48,6 +48,11 @@ export type PartField = NumberField | ChoiceField;
 
 export interface PartGenerator {
   id: string;
+  // Bump whenever solve() output changes — bug fix, rounding tweak, anything.
+  // Stored on the saved row at export time so old specs re-solve to their
+  // original geometry (or you can tell they need re-checking against the
+  // current version).
+  version: number;
   label: string;
   blurb?: string;
   defaults: PartSpec;

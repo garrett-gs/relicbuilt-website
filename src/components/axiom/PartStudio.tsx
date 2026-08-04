@@ -16,6 +16,7 @@ export interface PartStudioExport {
   spec: PartSpec;
   result: SolveOk;
   generatorId: string;
+  generatorVersion: number;
 }
 
 interface PartStudioProps {
@@ -44,7 +45,14 @@ export default function PartStudio({
   const handleExport = (format: "dxf" | "svg", ok: SolveOk) => {
     const name = ok.filename ?? generator.id;
     const text = format === "dxf" ? buildDxf(ok) : buildSvg(ok);
-    onExport?.({ format, text, spec, result: ok, generatorId: generator.id });
+    onExport?.({
+      format,
+      text,
+      spec,
+      result: ok,
+      generatorId: generator.id,
+      generatorVersion: generator.version,
+    });
     (format === "dxf" ? downloadDxf : downloadSvg)(text, name);
   };
 

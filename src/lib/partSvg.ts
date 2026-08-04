@@ -152,9 +152,15 @@ export function buildDxf({ path, width, height }: PartGeometry, layer = "CUT"): 
         pair(51, fmt(b, 9));
     }
   }
+  // Section order (HEADER → TABLES → BLOCKS → ENTITIES), $ACADVER, and
+  // the CONTINUOUS LTYPE definition are all required by strict readers
+  // like Illustrator and ezdxf. Lenient readers (Fusion, most CAM) fill
+  // them in silently, which is how the earlier tests missed the defect.
   return (
     pair(0, "SECTION") +
     pair(2, "HEADER") +
+    pair(9, "$ACADVER") +
+    pair(1, "AC1009") +
     pair(9, "$INSUNITS") +
     pair(70, "1") +
     pair(9, "$MEASUREMENT") +
@@ -162,12 +168,25 @@ export function buildDxf({ path, width, height }: PartGeometry, layer = "CUT"): 
     pair(9, "$EXTMIN") +
     pair(10, "0.0") +
     pair(20, "0.0") +
+    pair(30, "0.0") +
     pair(9, "$EXTMAX") +
     pair(10, fmt(width, 9)) +
     pair(20, fmt(height, 9)) +
+    pair(30, "0.0") +
     pair(0, "ENDSEC") +
     pair(0, "SECTION") +
     pair(2, "TABLES") +
+    pair(0, "TABLE") +
+    pair(2, "LTYPE") +
+    pair(70, "1") +
+    pair(0, "LTYPE") +
+    pair(2, "CONTINUOUS") +
+    pair(70, "0") +
+    pair(3, "Solid line") +
+    pair(72, "65") +
+    pair(73, "0") +
+    pair(40, "0.0") +
+    pair(0, "ENDTAB") +
     pair(0, "TABLE") +
     pair(2, "LAYER") +
     pair(70, "1") +
@@ -177,6 +196,9 @@ export function buildDxf({ path, width, height }: PartGeometry, layer = "CUT"): 
     pair(62, "7") +
     pair(6, "CONTINUOUS") +
     pair(0, "ENDTAB") +
+    pair(0, "ENDSEC") +
+    pair(0, "SECTION") +
+    pair(2, "BLOCKS") +
     pair(0, "ENDSEC") +
     pair(0, "SECTION") +
     pair(2, "ENTITIES") +

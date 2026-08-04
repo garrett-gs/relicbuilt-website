@@ -771,3 +771,19 @@ export type AxiomPage =
   | "calendar"
   | "activity"
   | "settings";
+
+// A parametric part saved against a Custom Work project. `spec` is the
+// generator input and `generator_version` is stamped at export so a
+// later change to solve() doesn't silently re-solve old rows to
+// different geometry than what was actually cut.
+export interface CustomWorkPart {
+  id: string;
+  custom_work_id: string;
+  generator_id: string;
+  generator_version: number;
+  spec: Record<string, string | number>;
+  label?: string;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
