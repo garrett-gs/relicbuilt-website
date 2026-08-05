@@ -10,9 +10,9 @@ const archedApron: PartGenerator = {
   defaults: { width: 48, height: 6, ear: 3, rise: 1.75 },
   fields: [
     { key: "width", label: "Apron width", min: 6, max: 120, step: 0.25 },
-    { key: "height", label: "Apron height", min: 1, max: 24, step: 0.25 },
+    { key: "height", label: "Apron height", min: 1, max: 96, step: 0.25 },
     { key: "ear", label: "Flat ear, each end", min: 0, max: 24, step: 0.25 },
-    { key: "rise", label: "Arch rise", min: 0.125, max: 12, step: 0.125 },
+    { key: "rise", label: "Arch rise", min: 0.125, max: 24, step: 0.125 },
   ],
 
   solve(spec) {
