@@ -11,6 +11,7 @@
 
 import { test, expect } from "vitest";
 import { parsePath, buildDxf, sagitta, fmt } from "./partSvg";
+import { GENERATORS, byId } from "./parts";
 
 type Spec = {
   width: number;
@@ -184,4 +185,61 @@ test("arcs survive as ARC entities, not polylines", () => {
 
 test("unsupported path commands throw rather than corrupt", () => {
   expect(() => parsePath("M 0 0 C 1 1 2 2 3 3")).toThrow(/unsupported command/);
+});
+
+// Registry health. Two generators shipped broken in ways nothing caught
+// (one missing category/version, one file missing from the package).
+// Do not remove or weaken these.
+test("registry: every generator is registered and well-formed", () => {
+  expect(GENERATORS.length, `expected 3+ generators, got ${GENERATORS.length}`)
+    .toBeGreaterThanOrEqual(3);
+
+  const ids = new Set<string>();
+  for (const g of GENERATORS) {
+    for (const f of ["id", "label", "category", "version", "defaults", "fields", "solve"] as const)
+      expect(g[f], `${g.id ?? "?"} is missing "${f}"`).not.toBeUndefined();
+
+    expect(g.id, `${g.id} must be kebab-case`).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
+    expect(ids.has(g.id), `duplicate id ${g.id}`).toBe(false);
+    ids.add(g.id);
+
+    expect(byId[g.id], `${g.id} missing from byId`).toBe(g);
+
+    for (const f of g.fields) {
+      expect(f.key in g.defaults, `${g.id}: field "${f.key}" has no default`).toBe(true);
+      if (f.type !== "choice") {
+        expect(
+          f.min !== undefined && f.max !== undefined,
+          `${g.id}: ${f.key} needs min/max`
+        ).toBe(true);
+        const v = g.defaults[f.key] as number;
+        expect(
+          v >= f.min && v <= f.max,
+          `${g.id}: default ${f.key}=${v} outside ${f.min}..${f.max}`
+        ).toBe(true);
+      }
+    }
+  }
+});
+
+test("registry: every generator solves its defaults into valid output", () => {
+  for (const g of GENERATORS) {
+    const r = g.solve(g.defaults, { bitDiameter: 0.25 });
+    expect("error" in r, `${g.id} errored on its own defaults: ${"error" in r ? r.error : ""}`)
+      .toBe(false);
+    if ("error" in r) continue; // narrowing for the block below
+    expect(r.width > 0 && r.height > 0, `${g.id}: non-positive extents`).toBe(true);
+
+    const list = r.paths ?? (r.path ? [{ d: r.path, role: "cut" }] : []);
+    expect(list.length, `${g.id}: emitted no geometry`).toBeGreaterThan(0);
+    for (const p of list)
+      expect(parsePath(p.d).length, `${g.id}: empty path`).toBeGreaterThan(0);
+
+    const dxf = buildDxf(r);
+    const used = new Set(
+      [...dxf.matchAll(/\n8\n(\S+)\n/g)].map((m) => m[1])
+    );
+    for (const l of used)
+      expect(dxf.includes(`LAYER\n2\n${l}\n`), `${g.id}: layer ${l} used but not declared`).toBe(true);
+  }
 });

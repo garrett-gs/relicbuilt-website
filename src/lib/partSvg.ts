@@ -1,6 +1,6 @@
 // Geometry writers for the part generator. The math here is verified —
 // don't touch arcCenter, the Y-flip in buildDxf, or the 9-decimal DXF
-// precision without running lib/partSvg.test.ts and getting 12 passes.
+// precision without running `npm test` and getting 15 passes.
 //
 // SVG lives in a Y-down coordinate system; DXF lives Y-up. The flip in
 // buildDxf plus the sweep swap on `sweep === 1` arcs is the subtle part.
@@ -24,8 +24,17 @@ export interface ArcSeg {
 
 export type PathSeg = LineSeg | ArcSeg;
 
+export interface PathEntry {
+  d: string;
+  role: string;
+}
+
+// A generator's solve() returns EITHER `paths` (multi-loop, tagged by
+// role) OR a single legacy `path` (treated as one entry with role "cut").
+// Everything downstream normalizes via asList().
 export interface PartGeometry {
-  path: string;
+  paths?: PathEntry[];
+  path?: string;
   width: number;
   height: number;
 }
@@ -37,13 +46,39 @@ export function sagitta(chord: number, depth: number): number {
   return (chord * chord + 4 * depth * depth) / (8 * depth);
 }
 
-export function buildSvg({ path, width, height }: PartGeometry): string {
+// role -> DXF layer name. Uppercase, non-alphanumerics become underscores.
+// `ring-bottom` -> `RING_BOTTOM`. Layers get declared in the DXF LAYER
+// table so strict readers accept them.
+export const roleToLayer = (role: string | undefined | null): string =>
+  String(role || "cut")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_");
+
+function asList(result: PartGeometry): PathEntry[] {
+  if (result.paths && result.paths.length) return result.paths;
+  if (result.path) return [{ d: result.path, role: "cut" }];
+  return [];
+}
+
+export function buildSvg(result: PartGeometry): string {
+  const { width, height } = result;
+  const groups: Record<string, string[]> = {};
+  for (const p of asList(result)) {
+    const role = p.role || "cut";
+    (groups[role] ??= []).push(p.d);
+  }
+  const body = Object.entries(groups)
+    .map(
+      ([role, ds]) =>
+        `<g id="${role}" fill="none" stroke="#000000" stroke-width="0.01">\n` +
+        ds.map((d) => `<path d="${d}"/>`).join("\n") +
+        `\n</g>`
+    )
+    .join("\n");
   return `<svg xmlns="http://www.w3.org/2000/svg" version="1.1" width="${fmt(
     width
   )}in" height="${fmt(height)}in" viewBox="0 0 ${fmt(width)} ${fmt(height)}">
-<g id="cut" fill="none" stroke="#000000" stroke-width="0.01">
-<path d="${path}"/>
-</g>
+${body}
 </svg>
 `;
 }
@@ -118,44 +153,69 @@ const deg = (rad: number): number => {
   const d = (rad * 180) / Math.PI;
   return ((d % 360) + 360) % 360;
 };
-const pair = (code: number, value: string | number): string => `${code}\n${value}\n`;
+const pair = (code: number, value: string | number): string =>
+  `${code}\n${value}\n`;
 
-export function buildDxf({ path, width, height }: PartGeometry, layer = "CUT"): string {
+export function buildDxf(
+  result: PartGeometry,
+  fallbackLayer = "CUT"
+): string {
+  const { width, height } = result;
   // SVG is Y-down, DXF is Y-up. Flip Y and reverse sweep-1 arc endpoints
   // to keep the geometry identical after the coordinate flip.
   const flip = (y: number): number => height - y;
+  const layers = new Set<string>();
   let body = "";
-  for (const s of parsePath(path)) {
-    if (s.type === "line") {
-      body +=
-        pair(0, "LINE") +
-        pair(8, layer) +
-        pair(10, fmt(s.from[0], 9)) +
-        pair(20, fmt(flip(s.from[1]), 9)) +
-        pair(30, "0.0") +
-        pair(11, fmt(s.to[0], 9)) +
-        pair(21, fmt(flip(s.to[1]), 9)) +
-        pair(31, "0.0");
-    } else {
-      const { cx, cy, r, t1, t2 } = arcCenter(s);
-      const p1 = deg(-t1);
-      const p2 = deg(-t2);
-      const [a, b] = s.sweep === 1 ? [p2, p1] : [p1, p2];
-      body +=
-        pair(0, "ARC") +
-        pair(8, layer) +
-        pair(10, fmt(cx, 9)) +
-        pair(20, fmt(flip(cy), 9)) +
-        pair(30, "0.0") +
-        pair(40, fmt(r, 9)) +
-        pair(50, fmt(a, 9)) +
-        pair(51, fmt(b, 9));
+
+  for (const entry of asList(result)) {
+    const layer = entry.role ? roleToLayer(entry.role) : fallbackLayer;
+    layers.add(layer);
+    for (const s of parsePath(entry.d)) {
+      if (s.type === "line") {
+        body +=
+          pair(0, "LINE") +
+          pair(8, layer) +
+          pair(10, fmt(s.from[0], 9)) +
+          pair(20, fmt(flip(s.from[1]), 9)) +
+          pair(30, "0.0") +
+          pair(11, fmt(s.to[0], 9)) +
+          pair(21, fmt(flip(s.to[1]), 9)) +
+          pair(31, "0.0");
+      } else {
+        const { cx, cy, r, t1, t2 } = arcCenter(s);
+        const p1 = deg(-t1);
+        const p2 = deg(-t2);
+        const [a, b] = s.sweep === 1 ? [p2, p1] : [p1, p2];
+        body +=
+          pair(0, "ARC") +
+          pair(8, layer) +
+          pair(10, fmt(cx, 9)) +
+          pair(20, fmt(flip(cy), 9)) +
+          pair(30, "0.0") +
+          pair(40, fmt(r, 9)) +
+          pair(50, fmt(a, 9)) +
+          pair(51, fmt(b, 9));
+      }
     }
   }
+
+  if (!layers.size) layers.add(fallbackLayer);
+  // Every layer used by any entity gets declared in the LAYER table so
+  // strict readers (Illustrator, ezdxf) accept the file.
+  let layerTable =
+    pair(0, "TABLE") + pair(2, "LAYER") + pair(70, String(layers.size));
+  for (const l of layers) {
+    layerTable +=
+      pair(0, "LAYER") +
+      pair(2, l) +
+      pair(70, "0") +
+      pair(62, "7") +
+      pair(6, "CONTINUOUS");
+  }
+  layerTable += pair(0, "ENDTAB");
+
   // Section order (HEADER → TABLES → BLOCKS → ENTITIES), $ACADVER, and
-  // the CONTINUOUS LTYPE definition are all required by strict readers
-  // like Illustrator and ezdxf. Lenient readers (Fusion, most CAM) fill
-  // them in silently, which is how the earlier tests missed the defect.
+  // the CONTINUOUS LTYPE definition are all required by strict readers.
   return (
     pair(0, "SECTION") +
     pair(2, "HEADER") +
@@ -187,15 +247,7 @@ export function buildDxf({ path, width, height }: PartGeometry, layer = "CUT"): 
     pair(73, "0") +
     pair(40, "0.0") +
     pair(0, "ENDTAB") +
-    pair(0, "TABLE") +
-    pair(2, "LAYER") +
-    pair(70, "1") +
-    pair(0, "LAYER") +
-    pair(2, layer) +
-    pair(70, "0") +
-    pair(62, "7") +
-    pair(6, "CONTINUOUS") +
-    pair(0, "ENDTAB") +
+    layerTable +
     pair(0, "ENDSEC") +
     pair(0, "SECTION") +
     pair(2, "BLOCKS") +

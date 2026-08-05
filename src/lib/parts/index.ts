@@ -1,5 +1,6 @@
 import scallopApron from "./scallopApron";
 import archedApron from "./archedApron";
+import roundBase from "./roundBase";
 import type { PartGenerator } from "./types";
 
 export type {
@@ -11,9 +12,10 @@ export type {
   SolveOk,
   SolveError,
   SolveStat,
+  PathEntry,
 } from "./types";
 
-export const GENERATORS: PartGenerator[] = [scallopApron, archedApron];
+export const GENERATORS: PartGenerator[] = [scallopApron, archedApron, roundBase];
 
 export const byId: Record<string, PartGenerator> = Object.fromEntries(
   GENERATORS.map((g) => [g.id, g])

@@ -154,22 +154,32 @@ function PartOkPanel({
           role="img"
           aria-label={`${label} preview`}
         >
-          <path
-            d={result.path}
-            fill="currentColor"
-            className="text-muted/20"
-            stroke="currentColor"
-            strokeWidth="1"
-            vectorEffect="non-scaling-stroke"
-          />
-          <path
-            d={result.path}
-            fill="none"
-            stroke="currentColor"
-            className="text-accent"
-            strokeWidth="1"
-            vectorEffect="non-scaling-stroke"
-          />
+          {(result.paths ?? (result.path ? [{ d: result.path, role: "cut" }] : [])).map(
+            (p, i) => (
+              <path
+                key={i}
+                d={p.d}
+                fill="currentColor"
+                className="text-muted/20"
+                stroke="currentColor"
+                strokeWidth="1"
+                vectorEffect="non-scaling-stroke"
+              />
+            )
+          )}
+          {(result.paths ?? (result.path ? [{ d: result.path, role: "cut" }] : [])).map(
+            (p, i) => (
+              <path
+                key={`stroke-${i}`}
+                d={p.d}
+                fill="none"
+                stroke="currentColor"
+                className="text-accent"
+                strokeWidth="1"
+                vectorEffect="non-scaling-stroke"
+              />
+            )
+          )}
         </svg>
       </div>
 

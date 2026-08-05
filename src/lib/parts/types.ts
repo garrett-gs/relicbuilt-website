@@ -13,8 +13,18 @@ export interface SolveStat {
   value: string | number;
 }
 
+// Multi-loop output. A round base emits ring + bore + part as three
+// separate closed loops, each with its own role that maps to a DXF layer
+// (see roleToLayer in partSvg). Legacy single-`path` is still accepted
+// downstream and treated as one entry with role "cut".
+export interface PathEntry {
+  d: string;
+  role: string;
+}
+
 export interface SolveOk {
-  path: string;
+  paths?: PathEntry[];
+  path?: string;
   width: number;
   height: number;
   filename: string;
