@@ -10,9 +10,9 @@ const archedApron: PartGenerator = {
   defaults: { width: 48, height: 6, ear: 3, rise: 1.75 },
   fields: [
     { key: "width", label: "Apron width", min: 6, max: 120, step: 0.25 },
-    { key: "height", label: "Apron height", min: 1, max: 96, step: 0.25 },
+    { key: "height", label: "Apron height", min: 0.25, max: 96, step: 0.25 },
     { key: "ear", label: "Flat ear, each end", min: 0, max: 24, step: 0.25 },
-    { key: "rise", label: "Arch rise", min: 0.125, max: 24, step: 0.125 },
+    { key: "rise", label: "Arch rise", min: 0.125, max: 96, step: 0.125 },
   ],
 
   solve(spec) {
@@ -23,8 +23,12 @@ const archedApron: PartGenerator = {
     const span = width - 2 * ear;
     if (span <= 0.5)
       return { error: "Ears consume the whole apron. Reduce ear length." };
-    if (rise >= height - 0.5)
-      return { error: "Rise leaves no rail. Reduce rise or raise the apron." };
+    // Guard was rise >= height - 0.5 (guaranteeing a rail); relaxed to
+    // rise > height so full-height arches and small pill-in-the-middle
+    // shapes (rise == height, no material above the arch peak) work for
+    // decorative openings.
+    if (rise > height)
+      return { error: "Rise exceeds apron height. Reduce rise or increase apron height." };
 
     const radius = sagitta(span, rise);
     const sweep = (4 * Math.atan((2 * rise) / span) * 180) / Math.PI;
