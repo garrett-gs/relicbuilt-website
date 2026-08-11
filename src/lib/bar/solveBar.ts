@@ -32,6 +32,18 @@ export interface SeamPt {
 
 export type BarShape = "rect" | "radius" | "hex" | "round" | "oval";
 export type Coating = "none" | "paint" | "epoxy" | "concrete";
+// How a hard corner (square / hex vertex) is built. miter/butt keep the
+// sharp corner; radius/chamfer reshape the outline; column drops a post at
+// the corner (bars can share a common column and reconfigure).
+export type CornerStyle = "miter" | "butt" | "radius" | "chamfer" | "column";
+
+export const CORNER_STYLES: { value: CornerStyle; label: string }[] = [
+  { value: "miter", label: "Mitered" },
+  { value: "butt", label: "Butt joint" },
+  { value: "radius", label: "Rounded" },
+  { value: "chamfer", label: "Chamfer" },
+  { value: "column", label: "Column" },
+];
 
 export const BAR_SHAPES: { value: BarShape; label: string }[] = [
   { value: "rect", label: "Square / rect" },
@@ -66,6 +78,8 @@ export interface BarSpec {
   overhangIn: number; // service-rail overhang toward the patron
   toeKickIn: number; // toe kick height
   shelfCount: number; // internal shelves per section
+  cornerStyle: CornerStyle; // how hard corners are built
+  cornerSizeIn: number; // radius / chamfer leg / column size
   coating: Coating;
   maxPanelIn: number; // max section width before it splits (for transport)
   curvedFronts: boolean; // true curved build for arced runs
@@ -92,6 +106,8 @@ export const BAR_DEFAULTS: BarSpec = {
   overhangIn: 10,
   toeKickIn: 4,
   shelfCount: 1,
+  cornerStyle: "miter",
+  cornerSizeIn: 6,
   coating: "none",
   maxPanelIn: 48,
   curvedFronts: false,
@@ -167,6 +183,7 @@ export interface BarSolve {
   faceHeightIn: number; // to top of service rail structure
   frontSkinHeightIn: number; // visible front skin (above the toe kick)
   stepDownIn: number;
+  railClearanceIn: number; // under service-rail top to working surface (bottle storage)
   panelCount: number;
   facetCount: number;
   panels: CutItem[]; // front skins
@@ -180,6 +197,8 @@ export interface BarSolve {
   weightPerSectionLb: number;
   seams: SeamPt[]; // interior subdivision joints on the plan
   corners: SeamPt[]; // shape corners / straight-to-curve joints
+  cornerPosts: { x: number; y: number }[]; // column posts (column style)
+  cornerSizeIn: number;
   entrance: { ax: number; ay: number; bx: number; by: number } | null;
   dims: { outerW: number; outerH: number; innerW: number; innerH: number };
   gap: { active: boolean; widthIn: number };
@@ -197,6 +216,52 @@ export interface BarSolve {
 
 // ------------------------------------------------------------------------
 
+type V = [number, number];
+const vsub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1]];
+const vlen = (a: V): number => Math.hypot(a[0], a[1]);
+const vunit = (a: V): V => {
+  const l = vlen(a) || 1;
+  return [a[0] / l, a[1] / l];
+};
+const vadd = (a: V, d: V, s: number): V => [a[0] + d[0] * s, a[1] + d[1] * s];
+
+// Build a closed outline from convex polygon vertices (given clockwise in
+// SVG's y-down space), applying a corner treatment at every vertex.
+// `sharp` styles (miter/butt/column) keep the vertex; radius fillets it;
+// chamfer clips it flat. Trim is clamped so it never eats a whole edge.
+function polygonOutline(verts: V[], style: CornerStyle, size: number): string {
+  const nV = verts.length;
+  const treat = style === "radius" || style === "chamfer";
+  const nodes = verts.map((Vv, i) => {
+    const P = verts[(i - 1 + nV) % nV];
+    const N = verts[(i + 1) % nV];
+    const din = vunit(vsub(Vv, P));
+    const dout = vunit(vsub(N, Vv));
+    if (!treat || size <= 0) return { A: Vv, B: Vv, arc: 0 };
+    let d = size;
+    if (style === "radius") {
+      // fillet tangent length = r / tan(interiorAngle/2)
+      const cosT = Math.max(-1, Math.min(1, -din[0] * dout[0] - din[1] * dout[1]));
+      const theta = Math.acos(cosT);
+      d = size / Math.tan(theta / 2);
+    }
+    d = Math.min(d, vlen(vsub(Vv, P)) * 0.49, vlen(vsub(N, Vv)) * 0.49);
+    return { A: vadd(Vv, din, -d), B: vadd(Vv, dout, d), arc: style === "radius" ? size : 0 };
+  });
+
+  let path = `M ${fmt(nodes[0].B[0])} ${fmt(nodes[0].B[1])}`;
+  for (let i = 0; i < nV; i++) {
+    const next = nodes[(i + 1) % nV];
+    path += ` L ${fmt(next.A[0])} ${fmt(next.A[1])}`;
+    if (next.arc > 0) {
+      path += ` A ${fmt(next.arc)} ${fmt(next.arc)} 0 0 1 ${fmt(next.B[0])} ${fmt(next.B[1])}`;
+    } else if (treat) {
+      path += ` L ${fmt(next.B[0])} ${fmt(next.B[1])}`;
+    }
+  }
+  return path + " Z";
+}
+
 function shapeGeometry(spec: BarSpec):
   | {
       outline: string;
@@ -213,7 +278,16 @@ function shapeGeometry(spec: BarSpec):
 
   switch (spec.shape) {
     case "rect": {
-      const outline = `M 0 0 L ${fmt(L)} 0 L ${fmt(L)} ${fmt(W)} L 0 ${fmt(W)} Z`;
+      const outline = polygonOutline(
+        [
+          [0, 0],
+          [L, 0],
+          [L, W],
+          [0, W],
+        ],
+        spec.cornerStyle,
+        spec.cornerSizeIn
+      );
       return {
         outline,
         bboxW: L,
@@ -264,16 +338,18 @@ function shapeGeometry(spec: BarSpec):
     }
     case "hex": {
       const e = Math.min(W / 2, L / 3);
-      const A: [number, number] = [e, 0];
-      const B: [number, number] = [L - e, 0];
-      const C: [number, number] = [L, W / 2];
-      const D: [number, number] = [L - e, W];
-      const E: [number, number] = [e, W];
-      const F: [number, number] = [0, W / 2];
-      const outline =
-        `M ${fmt(A[0])} ${fmt(A[1])} L ${fmt(B[0])} ${fmt(B[1])} ` +
-        `L ${fmt(C[0])} ${fmt(C[1])} L ${fmt(D[0])} ${fmt(D[1])} ` +
-        `L ${fmt(E[0])} ${fmt(E[1])} L ${fmt(F[0])} ${fmt(F[1])} Z`;
+      const outline = polygonOutline(
+        [
+          [e, 0],
+          [L - e, 0],
+          [L, W / 2],
+          [L - e, W],
+          [e, W],
+          [0, W / 2],
+        ],
+        spec.cornerStyle,
+        spec.cornerSizeIn
+      );
       const diag = Math.sqrt(e * e + (W / 2) * (W / 2));
       return {
         outline,
@@ -341,6 +417,21 @@ interface RawPanel {
   w: number;
   h: number;
   kind: "straight" | "facet" | "curved";
+  leftCut?: number; // miter angle (deg) on the start-side vertical edge
+  rightCut?: number; // miter angle (deg) on the end-side vertical edge
+}
+
+// Miter angle for the panels meeting at a hard (line-to-line) corner. Half
+// the exterior turn angle: a 90° square corner returns 45°. Null when a
+// segment isn't straight-to-straight (curves handle their own bevels).
+function miterDeg(prev: PSeg, cur: PSeg): number | null {
+  if (prev.type !== "line" || cur.type !== "line") return null;
+  const a = cur.at(0);
+  const b = prev.at(1);
+  const dot = Math.max(-1, Math.min(1, a.nx * b.nx + a.ny * b.ny));
+  const theta = Math.acos(dot);
+  const deg = (theta / 2) * (180 / Math.PI);
+  return deg < 0.5 ? null : Math.round(deg * 10) / 10;
 }
 
 // --- perimeter walker ---------------------------------------------------
@@ -486,23 +577,34 @@ function layoutSections(
     corners.push({ x: a.x, y: a.y, nx: nx / l, ny: ny / l });
   }
 
-  const emit = (seg: PSeg, startLen: number, w: number) => {
-    // tick only for interior subdivisions; junctions are handled as corners
-    if (startLen > 0.01) seams.push(seg.at(startLen / seg.len));
-    if (seg.type === "line") {
-      panels.push({ w, h: skinH, kind: "straight" });
-    } else {
-      const ang = w / seg.r;
-      panels.push({
-        w: spec.curvedFronts ? w : 2 * seg.r * Math.sin(ang / 2),
-        h: skinH,
-        kind: spec.curvedFronts ? "curved" : "facet",
-      });
+  const miter = spec.cornerStyle === "miter";
+  // Push a contiguous set of sections; returns [firstIdx, lastIdx] so the
+  // caller can tag the corner-adjacent panels' end cuts.
+  const pushRun = (seg: PSeg, startLen: number, widths: number[]): [number, number] => {
+    const first = panels.length;
+    let pos = startLen;
+    for (const w of widths) {
+      if (pos > startLen + 0.01) seams.push(seg.at(pos / seg.len));
+      if (seg.type === "line") {
+        panels.push({ w, h: skinH, kind: "straight" });
+      } else {
+        const ang = w / seg.r;
+        panels.push({
+          w: spec.curvedFronts ? w : 2 * seg.r * Math.sin(ang / 2),
+          h: skinH,
+          kind: spec.curvedFronts ? "curved" : "facet",
+        });
+      }
+      pos += w;
     }
+    return [first, panels.length - 1];
   };
 
   segs.forEach((seg, i) => {
     if (seg.len < 0.5) return;
+    const startMiter = miter ? miterDeg(segs[(i - 1 + n) % n], seg) : null;
+    const endMiter = miter ? miterDeg(seg, segs[(i + 1) % n]) : null;
+
     if (i === entSeg && gapW > 0) {
       const center = entT * seg.len;
       const a = center - gapW / 2;
@@ -516,41 +618,42 @@ function layoutSections(
         gapNote = "Access opening spans the entire back run.";
         return;
       }
-      // left part: start -> a  (entrance at its END, remainder at start/corner)
-      let pos = 0;
-      for (const w of sizeRun(a, spec.maxPanelIn, true)) {
-        emit(seg, pos, w);
-        pos += w;
-      }
+      // left part: start -> a (entrance at its END, remainder at start/corner)
+      const [lf] = pushRun(seg, 0, sizeRun(a, spec.maxPanelIn, true));
+      if (startMiter != null && panels[lf]) panels[lf].leftCut = startMiter;
       const aPt = seg.at(a / seg.len);
       const bPt = seg.at(b / seg.len);
       entrance = { ax: aPt.x, ay: aPt.y, bx: bPt.x, by: bPt.y };
       gapApplied = true;
       // right part: b -> end (entrance at its START, remainder at end/corner)
-      pos = b;
-      for (const w of sizeRun(seg.len - b, spec.maxPanelIn, false)) {
-        emit(seg, pos, w);
-        pos += w;
-      }
+      const [, rl] = pushRun(seg, b, sizeRun(seg.len - b, spec.maxPanelIn, false));
+      if (endMiter != null && panels[rl]) panels[rl].rightCut = endMiter;
     } else {
-      let pos = 0;
-      for (const w of sizeEven(seg.len, spec.maxPanelIn)) {
-        emit(seg, pos, w);
-        pos += w;
-      }
+      const [f, l] = pushRun(seg, 0, sizeEven(seg.len, spec.maxPanelIn));
+      if (startMiter != null && panels[f]) panels[f].leftCut = startMiter;
+      if (endMiter != null && panels[l]) panels[l].rightCut = endMiter;
     }
   });
 
   return { panels, seams, corners, entrance, gapApplied, gapNote };
 }
 
-function group(items: RawPanel[], prefix: string, noteFor?: (k: string) => string | undefined): CutItem[] {
+function faceNote(p: RawPanel): string | undefined {
+  if (p.kind === "curved") return "Curved / coopered face";
+  if (p.kind === "facet") return "Bevel both vertical edges";
+  const parts: string[] = [];
+  if (p.leftCut) parts.push(`L miter ${p.leftCut}°`);
+  if (p.rightCut) parts.push(`R miter ${p.rightCut}°`);
+  return parts.length ? parts.join(" · ") : undefined;
+}
+
+function group(items: RawPanel[], prefix: string, noteFor?: (p: RawPanel) => string | undefined): CutItem[] {
   const map = new Map<string, CutItem>();
   const order: string[] = [];
   for (const p of items) {
     const w = round16(p.w);
     const h = round16(p.h);
-    const key = `${p.kind}|${w}|${h}`;
+    const key = `${p.kind}|${w}|${h}|${p.leftCut ?? 0}|${p.rightCut ?? 0}`;
     const existing = map.get(key);
     if (existing) {
       existing.qty += 1;
@@ -561,13 +664,7 @@ function group(items: RawPanel[], prefix: string, noteFor?: (k: string) => strin
         widthIn: w,
         heightIn: h,
         kind: p.kind,
-        note: noteFor
-          ? noteFor(p.kind)
-          : p.kind === "facet"
-            ? "Bevel both vertical edges"
-            : p.kind === "curved"
-              ? "Curved / coopered face"
-              : undefined,
+        note: noteFor ? noteFor(p) : faceNote(p),
       });
       order.push(key);
     }
@@ -595,6 +692,11 @@ function innerOutline(spec: BarSpec, d: number): string | null {
     lengthFt: (L - 2 * d) / 12,
     widthFt: (W - 2 * d) / 12,
     cornerRadiusIn: Math.max(0, spec.cornerRadiusIn - d),
+    // inner corner treatment shrinks with the offset
+    cornerSizeIn:
+      spec.cornerStyle === "radius" || spec.cornerStyle === "chamfer"
+        ? Math.max(0, spec.cornerSizeIn - d)
+        : spec.cornerSizeIn,
   });
   return "error" in inner ? null : inner.outline;
 }
@@ -613,6 +715,7 @@ const emptySolve = (error: string): BarSolve => ({
   faceHeightIn: 0,
   frontSkinHeightIn: 0,
   stepDownIn: 0,
+  railClearanceIn: 0,
   panelCount: 0,
   facetCount: 0,
   panels: [],
@@ -626,6 +729,8 @@ const emptySolve = (error: string): BarSolve => ({
   weightPerSectionLb: 0,
   seams: [],
   corners: [],
+  cornerPosts: [],
+  cornerSizeIn: 0,
   entrance: null,
   dims: { outerW: 0, outerH: 0, innerW: 0, innerH: 0 },
   gap: { active: false, widthIn: 0 },
@@ -643,12 +748,15 @@ export function solveBar(spec: BarSpec): BarSolve {
   );
   const frontSkinHeightIn = Math.max(1, faceHeightIn - spec.toeKickIn);
   const stepDownIn = Math.max(0, spec.serviceHeightIn - spec.workingHeightIn);
+  // Clear space under the service-rail top down to the working surface —
+  // the bottle-storage shelf zone.
+  const railClearanceIn = Math.max(
+    0,
+    spec.serviceHeightIn - spec.topThicknessIn - spec.workingHeightIn
+  );
 
   const geo = shapeGeometry(spec);
   if ("error" in geo) return emptySolve(geo.error);
-
-  const perimeterIn = geo.runs.reduce((s, r) => s + r.len, 0);
-  const perimeterFt = perimeterIn / 12;
 
   const {
     panels: rawFaces,
@@ -663,6 +771,10 @@ export function solveBar(spec: BarSpec): BarSolve {
 
   const builtFaceIn = rawFaces.reduce((s, p) => s + p.w, 0);
   const builtFaceFt = builtFaceIn / 12;
+
+  // Full footprint perimeter = built face + the access opening.
+  const perimeterIn = builtFaceIn + (entrance ? spec.accessGapIn : 0);
+  const perimeterFt = perimeterIn / 12;
 
   // Derive the other per-section components from the same section widths so
   // gap removal and facet widths carry through consistently.
@@ -810,6 +922,24 @@ export function solveBar(spec: BarSpec): BarSolve {
   notes.push(
     `Service rail: ${spec.overhangIn}″ overhang, ${spec.nosingIn}″ nosing/lip, ${spec.topThicknessIn}″ ${coating.label.toLowerCase()} wood top.`
   );
+  const hardCorners = spec.shape === "rect" || spec.shape === "hex";
+  if (hardCorners) {
+    const cs = spec.cornerStyle;
+    const desc =
+      cs === "miter"
+        ? "mitered — cut angles in the Front skins list"
+        : cs === "butt"
+          ? "butt joints"
+          : cs === "radius"
+            ? `rounded, ${spec.cornerSizeIn}″ radius (curved corner sections)`
+            : cs === "chamfer"
+              ? `chamfered, ${spec.cornerSizeIn}″ (flat clipped corner sections)`
+              : `${spec.cornerSizeIn}″ corner columns — bars can share a column and reconfigure`;
+    notes.push(`Corners: ${desc}.`);
+  }
+  notes.push(
+    `Under-rail storage: ${railClearanceIn.toFixed(1)}″ clear between the service-rail underside and the working surface (target 12″).`
+  );
   if (spec.lightRail)
     notes.push(
       `Light rail tucked under the lip — skin set down ${spec.lightRailClearanceIn}″ for clearance.`
@@ -837,6 +967,7 @@ export function solveBar(spec: BarSpec): BarSolve {
     faceHeightIn,
     frontSkinHeightIn,
     stepDownIn,
+    railClearanceIn,
     panelCount,
     facetCount,
     panels,
@@ -850,6 +981,11 @@ export function solveBar(spec: BarSpec): BarSolve {
     weightPerSectionLb,
     seams,
     corners,
+    cornerPosts:
+      hardCorners && spec.cornerStyle === "column"
+        ? corners.map((c) => ({ x: c.x, y: c.y }))
+        : [],
+    cornerSizeIn: spec.cornerSizeIn,
     entrance,
     dims: {
       outerW: geo.bboxW,

@@ -9,9 +9,11 @@ import {
   BAR_SHAPES,
   BAR_DEFAULTS,
   COATINGS,
+  CORNER_STYLES,
   type BarSpec,
   type BarShape,
   type Coating,
+  type CornerStyle,
 } from "@/lib/bar/solveBar";
 
 const usd = (n: number) =>
@@ -140,6 +142,51 @@ export default function BarDesigner() {
           })}
         </div>
       </div>
+
+      {/* Corner style (hard corners) */}
+      {(spec.shape === "rect" || spec.shape === "hex") && (
+        <div className="mb-5">
+          <span className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
+            Corner style
+          </span>
+          <div className="flex flex-wrap items-start gap-2">
+            <div className="grid flex-1 grid-cols-2 gap-2 sm:grid-cols-5">
+              {CORNER_STYLES.map((c) => {
+                const active = spec.cornerStyle === c.value;
+                return (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => set("cornerStyle", c.value as CornerStyle)}
+                    className={
+                      active
+                        ? "h-9 border border-accent bg-accent text-sm font-medium text-background"
+                        : "h-9 border border-border bg-card text-sm text-foreground transition-colors hover:border-accent hover:text-accent"
+                    }
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+            {(spec.cornerStyle === "radius" ||
+              spec.cornerStyle === "chamfer" ||
+              spec.cornerStyle === "column") && (
+              <div className="w-28">
+                <NumField
+                  label={spec.cornerStyle === "radius" ? "Radius" : spec.cornerStyle === "column" ? "Column" : "Chamfer"}
+                  suffix="in"
+                  value={spec.cornerSizeIn}
+                  onChange={(v) => set("cornerSizeIn", v)}
+                  min={1}
+                  max={24}
+                  step={0.5}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Dimensions */}
       <div className="mb-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -484,6 +531,22 @@ export default function BarDesigner() {
                     />
                   ));
                 })()}
+                {/* corner columns */}
+                {result.cornerPosts.map((p, i) => {
+                  const s = result.cornerSizeIn;
+                  return (
+                    <rect
+                      key={i}
+                      x={p.x - s / 2}
+                      y={p.y - s / 2}
+                      width={s}
+                      height={s}
+                      className="fill-accent/60 stroke-accent"
+                      strokeWidth="1"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  );
+                })}
                 {/* bartender access opening (centered) */}
                 {result.entrance &&
                   (() => {
@@ -564,11 +627,16 @@ export default function BarDesigner() {
           </div>
 
           {/* Summary stats */}
-          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             {[
               { label: "Sections", value: String(result.sections) },
               { label: "Built face", value: `${result.builtFaceFt.toFixed(1)}′` },
               { label: "Skin height", value: `${result.frontSkinHeightIn.toFixed(1)}″` },
+              {
+                label: "Under-rail",
+                value: `${result.railClearanceIn.toFixed(1)}″`,
+                warn: result.railClearanceIn < 12,
+              },
               { label: "Sheets", value: String(result.sheetsFace) },
               { label: "Weight", value: `${Math.round(result.weightLb)} lb` },
               {
@@ -618,6 +686,25 @@ export default function BarDesigner() {
                   Toe kick
                 </h3>
                 <CutTable items={result.toeKicks} />
+              </div>
+            )}
+            {result.cornerPosts.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-sm font-heading font-bold text-foreground">
+                  Corner columns
+                </h3>
+                <CutTable
+                  items={[
+                    {
+                      label: "C1",
+                      qty: result.cornerPosts.length,
+                      widthIn: result.cornerSizeIn,
+                      heightIn: Math.round(result.faceHeightIn * 10) / 10,
+                      kind: "post",
+                      note: "Square corner post — shared reconfig joint",
+                    },
+                  ]}
+                />
               </div>
             )}
           </div>
@@ -754,9 +841,14 @@ function Elevation({ spec, faceHeightIn }: { spec: BarSpec; faceHeightIn: number
   const svcTop = R(-oh, sh - tt, frontTier, sh); // service rail slab (overhangs)
   const workTop = R(frontTier, wh - tt, d, wh); // working surface slab
 
+  const underRail = Math.max(0, sh - tt - wh);
   const legend: { swatch: string; text: string }[] = [
     { swatch: "bg-accent/40 border border-accent", text: `Service rail ${sh}″` },
     { swatch: "bg-accent/40 border border-accent", text: `Working surface ${wh}″` },
+    {
+      swatch: "bg-muted/20 border border-dashed border-muted",
+      text: `Under-rail storage ${underRail.toFixed(1)}″${underRail < 12 ? " (target 12″)" : ""}`,
+    },
     { swatch: "bg-muted/20 border border-accent", text: `Cabinet · ${d}″ deep` },
     { swatch: "bg-accent/60", text: `${oh}″ overhang · ${nos}″ nosing` },
     ...(spec.lightRail ? [{ swatch: "bg-amber-400", text: "Light rail under lip" }] : []),
