@@ -6,6 +6,7 @@ import { buildSvg, buildDxf, downloadSvg, downloadDxf } from "@/lib/partSvg";
 import {
   solveBar,
   panelSheetGeometry,
+  endPanelGeometry,
   BAR_SHAPES,
   BAR_DEFAULTS,
   COATINGS,
@@ -106,6 +107,12 @@ export default function BarDesigner() {
     const pad = 2;
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${result.bboxW + pad * 2}in" height="${result.bboxH + pad * 2}in" viewBox="${-pad} ${-pad} ${result.bboxW + pad * 2} ${result.bboxH + pad * 2}"><path d="${result.outline}" fill="none" stroke="#000" stroke-width="0.05"/></svg>`;
     downloadSvg(svg, `bar-${spec.shape}-plan`);
+  };
+  const exportEndPanel = (format: "dxf" | "svg") => {
+    if (result.error || !result.endPanel.count) return;
+    const geo = endPanelGeometry(result.endPanel);
+    const text = format === "dxf" ? buildDxf(geo) : buildSvg(geo);
+    (format === "dxf" ? downloadDxf : downloadSvg)(text, `bar-${spec.shape}-end-panel`);
   };
 
   const pad = (Math.max(result.bboxW, result.bboxH) || 60) * 0.14 + 10;
@@ -707,6 +714,15 @@ export default function BarDesigner() {
                 />
               </div>
             )}
+            {result.endPanels.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-sm font-heading font-bold text-foreground">
+                  End panels <span className="font-normal text-muted">(bolt-together)</span>
+                </h3>
+                <CutTable items={result.endPanels} />
+                <EndPanelDiagram ep={result.endPanel} />
+              </div>
+            )}
           </div>
 
           {/* Rates */}
@@ -794,10 +810,14 @@ export default function BarDesigner() {
             <Button variant="outline" onClick={exportPlan} className="flex-1">
               Plan SVG
             </Button>
+            <Button variant="outline" onClick={() => exportEndPanel("dxf")} className="flex-1">
+              End panel DXF
+            </Button>
           </div>
           <p className="mt-2 text-xs text-muted">
             Panels DXF is one cut sheet of every unique face panel (qty noted in the
-            list). Plan SVG is the top-down outline. DXF for Fusion/CAM.
+            list). End panel DXF has the 3/8″ bolt holes on a separate “HOLES” layer
+            for CNC. Plan SVG is the top-down outline. DXF for Fusion/CAM.
           </p>
         </>
       )}
@@ -891,6 +911,56 @@ function Elevation({ spec, faceHeightIn }: { spec: BarSpec; faceHeightIn: number
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Small end-panel drawing showing the 3/8" bolt hole layout (CNC).
+function EndPanelDiagram({
+  ep,
+}: {
+  ep: { widthIn: number; heightIn: number; holeDiaIn: number; holes: { x: number; y: number }[] };
+}) {
+  if (!ep.widthIn) return null;
+  const pad = 3;
+  const r = ep.holeDiaIn / 2;
+  return (
+    <div className="mt-2 border border-border bg-card p-3">
+      <svg
+        viewBox={`${-pad} ${-pad} ${ep.widthIn + pad * 2} ${ep.heightIn + pad * 2}`}
+        preserveAspectRatio="xMidYMid meet"
+        className="mx-auto block h-auto max-h-40 w-auto max-w-full"
+        role="img"
+        aria-label="End panel bolt pattern"
+      >
+        <rect
+          x={0}
+          y={0}
+          width={ep.widthIn}
+          height={ep.heightIn}
+          fill="currentColor"
+          className="text-muted/10"
+          stroke="currentColor"
+          strokeWidth="1"
+          vectorEffect="non-scaling-stroke"
+        />
+        {ep.holes.map((h, i) => (
+          <circle
+            key={i}
+            cx={h.x}
+            cy={h.y}
+            r={r}
+            fill="none"
+            stroke="currentColor"
+            className="text-amber-400"
+            strokeWidth="1.5"
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+      </svg>
+      <p className="mt-1.5 text-center text-[10px] text-muted">
+        End panel {ep.widthIn}″ × {ep.heightIn}″ · {ep.holes.length}× ⌀3/8″ through-holes
+      </p>
     </div>
   );
 }

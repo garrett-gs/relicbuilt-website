@@ -99,7 +99,7 @@ export const BAR_DEFAULTS: BarSpec = {
   widthFt: 2,
   cornerRadiusIn: 6,
   counterDepthIn: 24, // standard counter depth
-  serviceHeightIn: 42,
+  serviceHeightIn: 43.5, // gives 12" under-rail bottle storage
   workingHeightIn: 30,
   topThicknessIn: 1.5,
   nosingIn: 1.5,
@@ -123,6 +123,8 @@ export const BAR_DEFAULTS: BarSpec = {
 export const PANEL_MATERIAL = '3/4" birch plywood (11/16" actual)';
 export const FRAMING_MATERIAL = "Poplar";
 export const PANEL_THICKNESS_IN = 0.6875;
+export const BOLT_HOLE_DIA_IN = 0.375; // 3/8" CNC through-holes
+export const BOLT_INSET_IN = 3; // hole inset from panel edges
 
 // --- construction / pricing constants -----------------------------------
 const WASTE = 0.15;
@@ -190,6 +192,14 @@ export interface BarSolve {
   shelves: CutItem[];
   toeKicks: CutItem[];
   tops: CutItem[];
+  endPanels: CutItem[]; // bolt-together end panels (2 per section)
+  endPanel: {
+    widthIn: number;
+    heightIn: number;
+    holeDiaIn: number;
+    holes: { x: number; y: number }[];
+    count: number;
+  };
   plyAreaSqft: number;
   topAreaSqft: number;
   sheetsFace: number;
@@ -722,6 +732,8 @@ const emptySolve = (error: string): BarSolve => ({
   shelves: [],
   toeKicks: [],
   tops: [],
+  endPanels: [],
+  endPanel: { widthIn: 0, heightIn: 0, holeDiaIn: BOLT_HOLE_DIA_IN, holes: [], count: 0 },
   plyAreaSqft: 0,
   topAreaSqft: 0,
   sheetsFace: 0,
@@ -796,10 +808,38 @@ export function solveBar(spec: BarSpec): BarSolve {
   const toeKicks = group(rawToe, "K", () => "Recessed toe kick");
   const tops = group(rawTops, "T", () => undefined);
 
+  // End panels: each section is an independent box that bolts to its
+  // neighbors, so it carries two end panels (counter-depth × skin height)
+  // with 3/8" CNC through-holes. Exposed ends (either side of the access
+  // opening) are these same panels, just finished.
+  const endPanelW = spec.counterDepthIn;
+  const endPanelH = frontSkinHeightIn;
+  const endPanelCount = 2 * panelCount;
+  const inset = Math.min(BOLT_INSET_IN, endPanelW / 2 - 1, endPanelH / 2 - 1);
+  const holes = [
+    { x: inset, y: inset },
+    { x: endPanelW - inset, y: inset },
+    { x: inset, y: endPanelH - inset },
+    { x: endPanelW - inset, y: endPanelH - inset },
+  ];
+  const endPanels: CutItem[] = endPanelCount
+    ? [
+        {
+          label: "E1",
+          qty: endPanelCount,
+          widthIn: round16(endPanelW),
+          heightIn: round16(endPanelH),
+          kind: "straight",
+          note: `${holes.length}× ⌀3/8″ CNC bolt holes`,
+        },
+      ]
+    : [];
+
   const faceAreaSqft = rawFaces.reduce((s, p) => s + p.w * p.h, 0) / 144;
   const shelfAreaSqft = rawShelves.reduce((s, p) => s + p.w * p.h, 0) / 144;
   const toeAreaSqft = rawToe.reduce((s, p) => s + p.w * p.h, 0) / 144;
-  const plyAreaSqft = faceAreaSqft + shelfAreaSqft + toeAreaSqft;
+  const endAreaSqft = (endPanelCount * endPanelW * endPanelH) / 144;
+  const plyAreaSqft = faceAreaSqft + shelfAreaSqft + toeAreaSqft + endAreaSqft;
   const topAreaSqft = (builtFaceIn * serviceTopWidthIn) / 144;
   const sheetsFace = Math.ceil((plyAreaSqft * (1 + WASTE)) / SHEET_SQFT);
 
@@ -931,12 +971,15 @@ export function solveBar(spec: BarSpec): BarSolve {
         : cs === "butt"
           ? "butt joints"
           : cs === "radius"
-            ? `rounded, ${spec.cornerSizeIn}″ radius (curved corner sections)`
+            ? `rounded, ${spec.cornerSizeIn}″ radius — corner unit runs slightly deeper; straight sections butt to it`
             : cs === "chamfer"
-              ? `chamfered, ${spec.cornerSizeIn}″ (flat clipped corner sections)`
-              : `${spec.cornerSizeIn}″ corner columns — bars can share a column and reconfigure`;
+              ? `chamfered, ${spec.cornerSizeIn}″ — corner unit runs slightly deeper; straight sections butt to it`
+              : `${spec.cornerSizeIn}″ corner columns — column runs deeper; sections butt to it, and bars can share a column to reconfigure`;
     notes.push(`Corners: ${desc}.`);
   }
+  notes.push(
+    `End panels: ${endPanelCount} total (2 per section), ${round16(endPanelW)}″ × ${round16(endPanelH)}″, each with 4× ⌀3/8″ CNC bolt through-holes to bolt sections together. Every unfinished/exposed end gets one.`
+  );
   notes.push(
     `Under-rail storage: ${railClearanceIn.toFixed(1)}″ clear between the service-rail underside and the working surface (target 12″).`
   );
@@ -974,6 +1017,14 @@ export function solveBar(spec: BarSpec): BarSolve {
     shelves,
     toeKicks,
     tops,
+    endPanels,
+    endPanel: {
+      widthIn: round16(endPanelW),
+      heightIn: round16(endPanelH),
+      holeDiaIn: BOLT_HOLE_DIA_IN,
+      holes,
+      count: endPanelCount,
+    },
     plyAreaSqft,
     topAreaSqft,
     sheetsFace,
@@ -1007,6 +1058,27 @@ export function solveBar(spec: BarSpec): BarSolve {
     },
     notes,
   };
+}
+
+// End panel as a CNC cut file: outer rectangle on the "cut" layer plus the
+// 3/8" bolt holes on a "holes" layer (circles = two half-arcs).
+export function endPanelGeometry(ep: BarSolve["endPanel"]): {
+  paths: { d: string; role: string }[];
+  width: number;
+  height: number;
+} {
+  const r = ep.holeDiaIn / 2;
+  const paths: { d: string; role: string }[] = [
+    {
+      d: `M 0 0 L ${fmt(ep.widthIn)} 0 L ${fmt(ep.widthIn)} ${fmt(ep.heightIn)} L 0 ${fmt(ep.heightIn)} Z`,
+      role: "cut",
+    },
+    ...ep.holes.map((h) => ({
+      d: `M ${fmt(h.x - r)} ${fmt(h.y)} A ${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(h.x + r)} ${fmt(h.y)} A ${fmt(r)} ${fmt(r)} 0 0 1 ${fmt(h.x - r)} ${fmt(h.y)} Z`,
+      role: "holes",
+    })),
+  ];
+  return { paths, width: ep.widthIn, height: ep.heightIn };
 }
 
 // Lay every unique face panel out in a row as rectangles for a single
