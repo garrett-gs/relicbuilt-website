@@ -142,7 +142,7 @@ export default function BarDesigner() {
         />
         {!isRound && (
           <NumField
-            label="Depth / width"
+            label="Depth (std 2′)"
             suffix="ft"
             value={spec.widthFt}
             onChange={(v) => set("widthFt", v)}
@@ -233,6 +233,68 @@ export default function BarDesigner() {
         </div>
       )}
 
+      {/* Access gap + light rail */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        <div>
+          <span className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
+            Bartender access
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => set("accessGap", !spec.accessGap)}
+              className={
+                spec.accessGap
+                  ? "h-9 flex-1 border border-accent bg-accent text-sm font-medium text-background"
+                  : "h-9 flex-1 border border-border bg-card text-sm text-foreground transition-colors hover:border-accent hover:text-accent"
+              }
+            >
+              {spec.accessGap ? "Opening on" : "No opening"}
+            </button>
+            <div className="w-28">
+              <NumField
+                label="Width"
+                suffix="in"
+                value={spec.accessGapIn}
+                onChange={(v) => set("accessGapIn", v)}
+                min={18}
+                max={60}
+                step={1}
+              />
+            </div>
+          </div>
+        </div>
+        <div>
+          <span className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
+            Light rail under lip
+          </span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => set("lightRail", !spec.lightRail)}
+              className={
+                spec.lightRail
+                  ? "h-9 flex-1 border border-accent bg-accent text-sm font-medium text-background"
+                  : "h-9 flex-1 border border-border bg-card text-sm text-foreground transition-colors hover:border-accent hover:text-accent"
+              }
+            >
+              {spec.lightRail ? "Light rail on" : "No light rail"}
+            </button>
+            <div className="w-28">
+              <NumField
+                label="Clearance"
+                suffix="in"
+                value={spec.lightRailClearanceIn}
+                onChange={(v) => set("lightRailClearanceIn", v)}
+                min={0.5}
+                max={4}
+                step={0.25}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {result.error ? (
         <p className="border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-400">
           {result.error}
@@ -245,6 +307,9 @@ export default function BarDesigner() {
               <span className="mr-auto text-[10px] uppercase tracking-wider text-muted">
                 Plan view · {result.bboxW % 12 === 0 ? result.bboxW / 12 : (result.bboxW / 12).toFixed(1)}′ ×{" "}
                 {(result.bboxH / 12).toFixed(1)}′
+                {result.gap.active && (
+                  <span className="text-amber-400"> · {result.gap.widthIn}″ access</span>
+                )}
               </span>
               <button
                 type="button"
@@ -293,6 +358,31 @@ export default function BarDesigner() {
                   strokeWidth="1.5"
                   vectorEffect="non-scaling-stroke"
                 />
+                {result.gap.active &&
+                  (() => {
+                    const w = Math.min(result.gap.widthIn, result.bboxW);
+                    const x1 = result.gap.cx - w / 2;
+                    const x2 = result.gap.cx + w / 2;
+                    const y = result.gap.cy;
+                    const tick = Math.max(4, result.bboxH * 0.12);
+                    return (
+                      <g stroke="currentColor" vectorEffect="non-scaling-stroke">
+                        {/* dashed opening across the back run */}
+                        <line
+                          x1={x1}
+                          y1={y}
+                          x2={x2}
+                          y2={y}
+                          className="text-amber-400"
+                          strokeWidth="2"
+                          strokeDasharray="5 3"
+                        />
+                        {/* jamb posts */}
+                        <line x1={x1} y1={y - tick} x2={x1} y2={y + tick} className="text-amber-400" strokeWidth="2" />
+                        <line x1={x2} y1={y - tick} x2={x2} y2={y + tick} className="text-amber-400" strokeWidth="2" />
+                      </g>
+                    );
+                  })()}
               </g>
             </svg>
           </div>
@@ -300,8 +390,8 @@ export default function BarDesigner() {
           {/* Summary stats */}
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
-              { label: "Perimeter", value: `${result.perimeterFt.toFixed(1)}′` },
-              { label: "Body height", value: `${result.bodyHeightIn.toFixed(1)}″` },
+              { label: "Built face", value: `${result.builtFaceFt.toFixed(1)}′` },
+              { label: "Face height", value: `${result.bodyHeightIn.toFixed(1)}″` },
               { label: "Face panels", value: String(result.panelCount) },
               { label: "Sheets (face)", value: String(result.sheetsFace) },
             ].map((s) => (
