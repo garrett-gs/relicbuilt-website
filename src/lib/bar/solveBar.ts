@@ -178,7 +178,8 @@ export interface BarSolve {
   sheetsFace: number;
   weightLb: number;
   weightPerSectionLb: number;
-  seams: SeamPt[]; // section joints on the plan (XY + outward normal)
+  seams: SeamPt[]; // interior subdivision joints on the plan
+  corners: SeamPt[]; // shape corners / straight-to-curve joints
   entrance: { ax: number; ay: number; bx: number; by: number } | null;
   dims: { outerW: number; outerH: number; innerW: number; innerH: number };
   gap: { active: boolean; widthIn: number };
@@ -422,7 +423,8 @@ function sizeEven(len: number, max: number): number[] {
 
 interface Layout {
   panels: RawPanel[];
-  seams: SeamPt[];
+  seams: SeamPt[]; // interior subdivision joints
+  corners: SeamPt[]; // shape corners / straight-to-curve joints
   entrance: { ax: number; ay: number; bx: number; by: number } | null;
   gapApplied: boolean;
   gapNote?: string;
@@ -464,9 +466,29 @@ function layoutSections(
   let gapApplied = false;
   let gapNote: string | undefined;
 
+  // Corners = junctions between segments, unless it's a smooth arc-to-arc
+  // continuation (a round bar has no corners). Straight-to-curve joints on
+  // radius/oval bars DO count — they're real section joints.
+  const corners: SeamPt[] = [];
+  const n = segs.length;
+  for (let i = 0; i < n; i++) {
+    const cur = segs[i];
+    const prev = segs[(i - 1 + n) % n];
+    if (cur.len < 0.5 || prev.len < 0.5) continue;
+    const a = cur.at(0);
+    const b = prev.at(1);
+    const smooth =
+      cur.type === "arc" && prev.type === "arc" && a.nx * b.nx + a.ny * b.ny > 0.999;
+    if (smooth) continue;
+    let nx = a.nx + b.nx;
+    let ny = a.ny + b.ny;
+    const l = Math.hypot(nx, ny) || 1;
+    corners.push({ x: a.x, y: a.y, nx: nx / l, ny: ny / l });
+  }
+
   const emit = (seg: PSeg, startLen: number, w: number) => {
-    // seam tick at the start of this section (skip the loop's very start)
-    if (startLen > 0.01 || seg !== segs[0]) seams.push(seg.at(startLen / seg.len));
+    // tick only for interior subdivisions; junctions are handled as corners
+    if (startLen > 0.01) seams.push(seg.at(startLen / seg.len));
     if (seg.type === "line") {
       panels.push({ w, h: skinH, kind: "straight" });
     } else {
@@ -519,7 +541,7 @@ function layoutSections(
     }
   });
 
-  return { panels, seams, entrance, gapApplied, gapNote };
+  return { panels, seams, corners, entrance, gapApplied, gapNote };
 }
 
 function group(items: RawPanel[], prefix: string, noteFor?: (k: string) => string | undefined): CutItem[] {
@@ -603,6 +625,7 @@ const emptySolve = (error: string): BarSolve => ({
   weightLb: 0,
   weightPerSectionLb: 0,
   seams: [],
+  corners: [],
   entrance: null,
   dims: { outerW: 0, outerH: 0, innerW: 0, innerH: 0 },
   gap: { active: false, widthIn: 0 },
@@ -630,6 +653,7 @@ export function solveBar(spec: BarSpec): BarSolve {
   const {
     panels: rawFaces,
     seams,
+    corners,
     entrance,
     gapApplied,
     gapNote,
@@ -825,6 +849,7 @@ export function solveBar(spec: BarSpec): BarSolve {
     weightLb,
     weightPerSectionLb,
     seams,
+    corners,
     entrance,
     dims: {
       outerW: geo.bboxW,

@@ -467,6 +467,23 @@ export default function BarDesigner() {
                     />
                   ));
                 })()}
+                {/* corner joints */}
+                {(() => {
+                  const t = Math.max(4, Math.min(result.bboxW, result.bboxH) * 0.09);
+                  return result.corners.map((s, i) => (
+                    <line
+                      key={i}
+                      x1={s.x - s.nx * t * 0.5}
+                      y1={s.y - s.ny * t * 0.5}
+                      x2={s.x + s.nx * t * 0.5}
+                      y2={s.y + s.ny * t * 0.5}
+                      stroke="currentColor"
+                      className="text-accent"
+                      strokeWidth="2"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ));
+                })()}
                 {/* bartender access opening (centered) */}
                 {result.entrance &&
                   (() => {
