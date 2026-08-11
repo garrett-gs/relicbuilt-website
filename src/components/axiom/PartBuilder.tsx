@@ -205,19 +205,59 @@ function PartOkPanel({
   onExport: (format: "dxf" | "svg", ok: SolveOk) => void;
 }) {
   const pad = 0.5;
+  // Preview-only orientation. Rotating the display 90° lets you eyeball a
+  // part the way it'll actually hang (a scallop apron on a vertical face,
+  // say) — the cut file and dimensions are unchanged.
+  const [rotated, setRotated] = useState(false);
+
+  const entries =
+    result.paths ?? (result.path ? [{ d: result.path, role: "cut" }] : []);
+  const vbW = (rotated ? result.height : result.width) + pad * 2;
+  const vbH = (rotated ? result.width : result.height) + pad * 2;
+  // Rotate 90° CW about the origin, then shift back into positive space.
+  const groupTransform = rotated
+    ? `translate(${result.height} 0) rotate(90)`
+    : undefined;
+
   return (
     <>
       <div className="my-5 bg-card border border-border p-4">
+        <div className="mb-3 flex items-center justify-end gap-2">
+          <span className="mr-auto text-[10px] uppercase tracking-wider text-muted">
+            {rotated ? "Portrait" : "Landscape"} view
+          </span>
+          <button
+            type="button"
+            onClick={() => setRotated(false)}
+            className={
+              !rotated
+                ? "border border-accent bg-accent px-2.5 py-1 text-[11px] font-medium text-background"
+                : "border border-border bg-card px-2.5 py-1 text-[11px] text-muted hover:border-accent hover:text-accent transition-colors"
+            }
+          >
+            Landscape
+          </button>
+          <button
+            type="button"
+            onClick={() => setRotated(true)}
+            className={
+              rotated
+                ? "border border-accent bg-accent px-2.5 py-1 text-[11px] font-medium text-background"
+                : "border border-border bg-card px-2.5 py-1 text-[11px] text-muted hover:border-accent hover:text-accent transition-colors"
+            }
+          >
+            Portrait
+          </button>
+        </div>
         <svg
-          viewBox={`${-pad} ${-pad} ${result.width + pad * 2} ${
-            result.height + pad * 2
-          }`}
-          className="h-auto w-full"
+          viewBox={`${-pad} ${-pad} ${vbW} ${vbH}`}
+          preserveAspectRatio="xMidYMid meet"
+          className="mx-auto block h-auto w-full max-h-[70vh]"
           role="img"
           aria-label={`${label} preview`}
         >
-          {(result.paths ?? (result.path ? [{ d: result.path, role: "cut" }] : [])).map(
-            (p, i) => (
+          <g transform={groupTransform}>
+            {entries.map((p, i) => (
               <path
                 key={i}
                 d={p.d}
@@ -227,10 +267,8 @@ function PartOkPanel({
                 strokeWidth="1"
                 vectorEffect="non-scaling-stroke"
               />
-            )
-          )}
-          {(result.paths ?? (result.path ? [{ d: result.path, role: "cut" }] : [])).map(
-            (p, i) => (
+            ))}
+            {entries.map((p, i) => (
               <path
                 key={`stroke-${i}`}
                 d={p.d}
@@ -240,8 +278,8 @@ function PartOkPanel({
                 strokeWidth="1"
                 vectorEffect="non-scaling-stroke"
               />
-            )
-          )}
+            ))}
+          </g>
         </svg>
       </div>
 
