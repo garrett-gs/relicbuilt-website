@@ -554,6 +554,23 @@ export default function BarDesigner() {
                     />
                   );
                 })}
+                {/* section-joint bolt positions */}
+                {(() => {
+                  const r = Math.max(1.2, Math.min(result.bboxW, result.bboxH) * 0.012);
+                  return result.boltPoints.map((b, i) => (
+                    <circle
+                      key={i}
+                      cx={b.x}
+                      cy={b.y}
+                      r={r}
+                      fill="none"
+                      stroke="currentColor"
+                      className="text-amber-400"
+                      strokeWidth="1"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ));
+                })()}
                 {/* bartender access opening (centered) */}
                 {result.entrance &&
                   (() => {
@@ -919,7 +936,7 @@ function Elevation({ spec, faceHeightIn }: { spec: BarSpec; faceHeightIn: number
 function EndPanelDiagram({
   ep,
 }: {
-  ep: { widthIn: number; heightIn: number; holeDiaIn: number; holes: { x: number; y: number }[] };
+  ep: { widthIn: number; heightIn: number; holeDiaIn: number; holes: { x: number; y: number }[]; through: boolean };
 }) {
   if (!ep.widthIn) return null;
   const pad = 3;
@@ -958,8 +975,13 @@ function EndPanelDiagram({
           />
         ))}
       </svg>
-      <p className="mt-1.5 text-center text-[10px] text-muted">
-        End panel {ep.widthIn}″ × {ep.heightIn}″ · {ep.holes.length}× ⌀3/8″ through-holes
+      <div className="mt-1 flex justify-between px-1 text-[9px] uppercase tracking-wider text-muted/70">
+        <span>front</span>
+        <span>back</span>
+      </div>
+      <p className="mt-1 text-center text-[10px] text-muted">
+        End panel {ep.widthIn}″ × {ep.heightIn}″ · 2 front / 2 back ⌀3/8″ ·{" "}
+        {ep.through ? "through" : "threaded / set-screw"}
       </p>
     </div>
   );

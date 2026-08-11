@@ -103,7 +103,7 @@ export const BAR_DEFAULTS: BarSpec = {
   workingHeightIn: 30,
   topThicknessIn: 1.5,
   nosingIn: 1.5,
-  overhangIn: 10,
+  overhangIn: 1.5,
   toeKickIn: 4,
   shelfCount: 1,
   cornerStyle: "miter",
@@ -192,14 +192,16 @@ export interface BarSolve {
   shelves: CutItem[];
   toeKicks: CutItem[];
   tops: CutItem[];
-  endPanels: CutItem[]; // bolt-together end panels (2 per section)
+  endPanels: CutItem[]; // the (max 2) exposed-end panels
   endPanel: {
     widthIn: number;
     heightIn: number;
     holeDiaIn: number;
     holes: { x: number; y: number }[];
     count: number;
+    through: boolean; // false = threaded / set-screw
   };
+  boltPoints: { x: number; y: number }[]; // section-joint bolt positions on the plan
   plyAreaSqft: number;
   topAreaSqft: number;
   sheetsFace: number;
@@ -733,7 +735,8 @@ const emptySolve = (error: string): BarSolve => ({
   toeKicks: [],
   tops: [],
   endPanels: [],
-  endPanel: { widthIn: 0, heightIn: 0, holeDiaIn: BOLT_HOLE_DIA_IN, holes: [], count: 0 },
+  endPanel: { widthIn: 0, heightIn: 0, holeDiaIn: BOLT_HOLE_DIA_IN, holes: [], count: 0, through: false },
+  boltPoints: [],
   plyAreaSqft: 0,
   topAreaSqft: 0,
   sheetsFace: 0,
@@ -808,19 +811,20 @@ export function solveBar(spec: BarSpec): BarSolve {
   const toeKicks = group(rawToe, "K", () => "Recessed toe kick");
   const tops = group(rawTops, "T", () => undefined);
 
-  // End panels: each section is an independent box that bolts to its
-  // neighbors, so it carries two end panels (counter-depth × skin height)
-  // with 3/8" CNC through-holes. Exposed ends (either side of the access
-  // opening) are these same panels, just finished.
+  // End panels: a full bar needs only TWO — on the inside of the bartender
+  // entrance section, or the two open ends of an open-ended bar. (Break the
+  // bar into more pieces and you build more, but two is the standard.)
+  // Same bolt pattern as the section joints — 2 front / 2 back — but the end
+  // panels are threaded / set-screw (not through) so panels interchange.
   const endPanelW = spec.counterDepthIn;
   const endPanelH = frontSkinHeightIn;
-  const endPanelCount = 2 * panelCount;
+  const endPanelCount = entrance ? 2 : 0;
   const inset = Math.min(BOLT_INSET_IN, endPanelW / 2 - 1, endPanelH / 2 - 1);
   const holes = [
-    { x: inset, y: inset },
-    { x: endPanelW - inset, y: inset },
-    { x: inset, y: endPanelH - inset },
-    { x: endPanelW - inset, y: endPanelH - inset },
+    { x: inset, y: inset }, // front-top
+    { x: inset, y: endPanelH - inset }, // front-bottom
+    { x: endPanelW - inset, y: inset }, // back-top
+    { x: endPanelW - inset, y: endPanelH - inset }, // back-bottom
   ];
   const endPanels: CutItem[] = endPanelCount
     ? [
@@ -830,10 +834,21 @@ export function solveBar(spec: BarSpec): BarSolve {
           widthIn: round16(endPanelW),
           heightIn: round16(endPanelH),
           kind: "straight",
-          note: `${holes.length}× ⌀3/8″ CNC bolt holes`,
+          note: "Same pattern, threaded/set-screw (not through)",
         },
       ]
     : [];
+
+  // Bolt positions on the plan: at every section joint (seams + corners),
+  // one hole near the front (outer) edge and one near the back (inner) edge
+  // — the top-view projection of the 2-front / 2-back pattern. Same offsets
+  // as the end panels, so everything lines up and parts interchange.
+  const backOff = Math.max(inset, spec.counterDepthIn - inset);
+  const boltPoints: { x: number; y: number }[] = [];
+  for (const p of [...seams, ...corners]) {
+    boltPoints.push({ x: p.x - p.nx * inset, y: p.y - p.ny * inset });
+    boltPoints.push({ x: p.x - p.nx * backOff, y: p.y - p.ny * backOff });
+  }
 
   const faceAreaSqft = rawFaces.reduce((s, p) => s + p.w * p.h, 0) / 144;
   const shelfAreaSqft = rawShelves.reduce((s, p) => s + p.w * p.h, 0) / 144;
@@ -978,8 +993,12 @@ export function solveBar(spec: BarSpec): BarSolve {
     notes.push(`Corners: ${desc}.`);
   }
   notes.push(
-    `End panels: ${endPanelCount} total (2 per section), ${round16(endPanelW)}″ × ${round16(endPanelH)}″, each with 4× ⌀3/8″ CNC bolt through-holes to bolt sections together. Every unfinished/exposed end gets one.`
+    `Bolt pattern: ⌀3/8″, 2 front / 2 back, identical at every section joint (through-bolted) and on the end panels (threaded / set-screw) so parts interchange.`
   );
+  if (endPanelCount)
+    notes.push(
+      `End panels: ${endPanelCount} — on the inside of the entrance section (or the open ends of an open-ended bar), ${round16(endPanelW)}″ × ${round16(endPanelH)}″. Break the bar into more pieces and you add more.`
+    );
   notes.push(
     `Under-rail storage: ${railClearanceIn.toFixed(1)}″ clear between the service-rail underside and the working surface (target 12″).`
   );
@@ -1024,7 +1043,9 @@ export function solveBar(spec: BarSpec): BarSolve {
       holeDiaIn: BOLT_HOLE_DIA_IN,
       holes,
       count: endPanelCount,
+      through: false,
     },
+    boltPoints,
     plyAreaSqft,
     topAreaSqft,
     sheetsFace,
