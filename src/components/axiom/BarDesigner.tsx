@@ -422,6 +422,24 @@ export default function BarDesigner() {
                   strokeWidth="1.5"
                   vectorEffect="non-scaling-stroke"
                 />
+                {result.innerOutline && (
+                  <g transform={`translate(${result.innerInsetIn} ${result.innerInsetIn})`}>
+                    <path
+                      d={result.innerOutline}
+                      fill="currentColor"
+                      className="text-background"
+                    />
+                    <path
+                      d={result.innerOutline}
+                      fill="none"
+                      stroke="currentColor"
+                      className="text-muted"
+                      strokeWidth="1"
+                      strokeDasharray="4 3"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  </g>
+                )}
                 {result.gap.active &&
                   (() => {
                     const w = Math.min(result.gap.widthIn, result.bboxW);
@@ -449,6 +467,14 @@ export default function BarDesigner() {
                   })()}
               </g>
             </svg>
+          </div>
+
+          {/* Section elevation */}
+          <div className="mb-5 border border-border bg-card p-4">
+            <span className="mb-3 block text-[10px] uppercase tracking-wider text-muted">
+              Section — patron side at left
+            </span>
+            <Elevation spec={spec} faceHeightIn={result.faceHeightIn} />
           </div>
 
           {/* Summary stats */}
@@ -603,6 +629,96 @@ export default function BarDesigner() {
         </>
       )}
     </div>
+  );
+}
+
+// Schematic cross-section, patron side at left. Shows the two tiers
+// (service rail over working surface), the overhang + nosing, the light
+// rail tucked under the lip, and the recessed toe kick. Drawn in inches.
+function Elevation({ spec, faceHeightIn }: { spec: BarSpec; faceHeightIn: number }) {
+  const oh = spec.overhangIn;
+  const d = spec.counterDepthIn;
+  const sh = spec.serviceHeightIn;
+  const wh = spec.workingHeightIn;
+  const tt = spec.topThicknessIn;
+  const nos = spec.nosingIn;
+  const tk = spec.toeKickIn;
+  const kickSetback = 3;
+  const frontTier = Math.min(d * 0.45, 14); // service-rail tier depth (schematic)
+
+  const pad = 8;
+  const xMin = -oh;
+  const xMax = d;
+  const yMax = sh;
+  const W = xMax - xMin + pad * 2;
+  const H = yMax + pad * 2;
+  const sx = (x: number) => x - xMin + pad;
+  const sy = (y: number) => yMax - y + pad;
+  // rect helper in world coords (x0<x1, y0<y1)
+  const R = (x0: number, y0: number, x1: number, y1: number) => ({
+    x: sx(x0),
+    y: sy(y1),
+    width: x1 - x0,
+    height: y1 - y0,
+  });
+
+  const body = R(0, tk, d, wh - tt); // lower cabinet mass
+  const frontRise = R(0, wh - tt, frontTier, sh - tt); // raised front die
+  const kick = R(kickSetback, 0, d, tk); // recessed toe base
+  const svcTop = R(-oh, sh - tt, frontTier, sh); // service rail slab (overhangs)
+  const workTop = R(frontTier, wh - tt, d, wh); // working surface slab
+
+  const label = (
+    x: number,
+    y: number,
+    t: string,
+    anchor: "middle" | "start" | "end" = "middle"
+  ) => (
+    <text
+      x={sx(x)}
+      y={sy(y)}
+      fontSize="3"
+      textAnchor={anchor}
+      className="fill-muted"
+      style={{ fontFamily: "var(--font-mono, monospace)" }}
+    >
+      {t}
+    </text>
+  );
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="mx-auto block h-auto max-h-[45vh] w-full"
+      role="img"
+      aria-label="Bar section"
+    >
+      {/* ground line */}
+      <line x1={sx(xMin)} y1={sy(0)} x2={sx(xMax)} y2={sy(0)} className="stroke-muted" strokeWidth="0.4" />
+      {/* cabinet mass */}
+      {[body, frontRise, kick].map((r, i) => (
+        <rect key={i} {...r} className="fill-muted/15 stroke-accent" strokeWidth="0.4" vectorEffect="non-scaling-stroke" />
+      ))}
+      {/* tops */}
+      {[svcTop, workTop].map((r, i) => (
+        <rect key={`t${i}`} {...r} className="fill-accent/40 stroke-accent" strokeWidth="0.4" vectorEffect="non-scaling-stroke" />
+      ))}
+      {/* nosing lip */}
+      <rect {...R(-oh, sh - tt - nos, -oh + 0.9, sh - tt)} className="fill-accent/60" />
+      {/* light rail under the lip */}
+      {spec.lightRail && (
+        <rect {...R(-oh + 1.2, sh - tt - 1, -oh + 2.4, sh - tt)} className="fill-amber-400" />
+      )}
+      {/* front skin edge */}
+      <line x1={sx(0)} y1={sy(tk)} x2={sx(0)} y2={sy(faceHeightIn)} className="stroke-accent" strokeWidth="0.8" />
+
+      {/* dimension labels */}
+      {label(-oh + oh / 2, sh + 3, `${oh}″ OH`)}
+      {label(frontTier + (d - frontTier) / 2, wh + 3.5, `${wh}″ work`)}
+      {label(frontTier / 2, sh + 3, `${sh}″ svc`)}
+      {label(d + 4, tk / 2, `${tk}″ kick`, "start")}
+      {spec.lightRail && label(-oh + 1.8, sh - tt + 3.5, "light rail", "middle")}
+    </svg>
   );
 }
 

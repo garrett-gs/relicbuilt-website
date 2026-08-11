@@ -148,6 +148,8 @@ export interface PriceLine {
 
 export interface BarSolve {
   outline: string;
+  innerOutline: string | null; // hollow standing space (perimeter inset by counter depth)
+  innerInsetIn: number;
   bboxW: number;
   bboxH: number;
   perimeterIn: number;
@@ -439,8 +441,30 @@ function group(items: RawPanel[], prefix: string, noteFor?: (k: string) => strin
   });
 }
 
+// Inner opening = the shape inset by the counter depth on all sides. Built
+// by re-running the shape at reduced dimensions; returns null when the
+// bar is too small to leave a standing space (a solid bar).
+function innerOutline(spec: BarSpec, d: number): string | null {
+  const L = spec.lengthFt * 12;
+  const W = spec.widthFt * 12;
+  if (spec.shape === "round") {
+    if (L - 2 * d < 12) return null;
+  } else if (L - 2 * d < 6 || W - 2 * d < 6) {
+    return null;
+  }
+  const inner = shapeGeometry({
+    ...spec,
+    lengthFt: (L - 2 * d) / 12,
+    widthFt: (W - 2 * d) / 12,
+    cornerRadiusIn: Math.max(0, spec.cornerRadiusIn - d),
+  });
+  return "error" in inner ? null : inner.outline;
+}
+
 const emptySolve = (error: string): BarSolve => ({
   outline: "",
+  innerOutline: null,
+  innerInsetIn: 0,
   bboxW: 0,
   bboxH: 0,
   perimeterIn: 0,
@@ -655,6 +679,8 @@ export function solveBar(spec: BarSpec): BarSolve {
 
   return {
     outline: geo.outline,
+    innerOutline: innerOutline(spec, spec.counterDepthIn),
+    innerInsetIn: spec.counterDepthIn,
     bboxW: geo.bboxW,
     bboxH: geo.bboxH,
     perimeterIn,
