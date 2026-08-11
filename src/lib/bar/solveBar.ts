@@ -21,7 +21,14 @@
 //
 // Geometry is in INCHES. Overall length/width come in as feet.
 
-import { fmt } from "../partSvg";
+import { fmt, parsePath, arcCenter } from "../partSvg";
+
+export interface SeamPt {
+  x: number;
+  y: number;
+  nx: number;
+  ny: number;
+}
 
 export type BarShape = "rect" | "radius" | "hex" | "round" | "oval";
 export type Coating = "none" | "paint" | "epoxy" | "concrete";
@@ -171,7 +178,10 @@ export interface BarSolve {
   sheetsFace: number;
   weightLb: number;
   weightPerSectionLb: number;
-  gap: { active: boolean; widthIn: number; cx: number; cy: number };
+  seams: SeamPt[]; // section joints on the plan (XY + outward normal)
+  entrance: { ax: number; ay: number; bx: number; by: number } | null;
+  dims: { outerW: number; outerH: number; innerW: number; innerH: number };
+  gap: { active: boolean; widthIn: number };
   price: {
     lines: PriceLine[];
     materials: number;
@@ -332,78 +342,184 @@ interface RawPanel {
   kind: "straight" | "facet" | "curved";
 }
 
-function pushStraight(len: number, maxPanel: number, h: number, out: RawPanel[]) {
-  if (len < 0.5) return;
-  const n = Math.max(1, Math.ceil(len / maxPanel));
-  const w = len / n;
-  for (let i = 0; i < n; i++) out.push({ w, h, kind: "straight" });
+// --- perimeter walker ---------------------------------------------------
+// Every path segment (a straight run between corners, or one arc) is a
+// unit that sections subdivide — a section never crosses a corner.
+interface PSeg {
+  type: "line" | "arc";
+  len: number;
+  r: number;
+  at: (t: number) => SeamPt; // t in [0,1] along the segment; nx,ny = outward normal
 }
 
-function pushArc(
-  r: number,
-  angle: number,
-  len: number,
-  spec: BarSpec,
-  h: number,
-  minFacets: number,
-  out: RawPanel[]
-) {
-  if (len < 0.5 || angle <= 0) return;
-  let n = Math.max(minFacets, Math.ceil(len / spec.maxPanelIn));
-  n = Math.min(n, 60);
-  if (spec.curvedFronts) {
-    const w = len / n;
-    for (let i = 0; i < n; i++) out.push({ w, h, kind: "curved" });
+function buildSegs(outline: string): PSeg[] {
+  return parsePath(outline).map((s): PSeg => {
+    if (s.type === "line") {
+      const dx = s.to[0] - s.from[0];
+      const dy = s.to[1] - s.from[1];
+      const len = Math.hypot(dx, dy) || 0;
+      const nl = len || 1;
+      return {
+        type: "line",
+        len,
+        r: 0,
+        at: (t) => ({
+          x: s.from[0] + dx * t,
+          y: s.from[1] + dy * t,
+          nx: dy / nl,
+          ny: -dx / nl,
+        }),
+      };
+    }
+    const c = arcCenter(s);
+    let sweep = c.t2 - c.t1;
+    if (s.sweep === 1 && sweep < 0) sweep += 2 * Math.PI;
+    if (s.sweep === 0 && sweep > 0) sweep -= 2 * Math.PI;
+    const len = Math.abs(sweep * c.r);
+    return {
+      type: "arc",
+      len,
+      r: c.r,
+      at: (t) => {
+        const a = c.t1 + sweep * t;
+        return {
+          x: c.cx + c.r * Math.cos(a),
+          y: c.cy + c.r * Math.sin(a),
+          nx: Math.cos(a),
+          ny: Math.sin(a),
+        };
+      },
+    };
+  });
+}
+
+// Full sections from the entrance outward; small remainder pushed to the
+// far (corner) end so it never borders the entrance. Returns arc-lengths
+// ordered start->end of the sub-run; `remAtStart` puts the remainder at
+// the start instead (used for the half whose entrance edge is at its end).
+function sizeRun(len: number, max: number, remAtStart: boolean): number[] {
+  const MIN = 8;
+  if (len <= max + 0.01) return [len];
+  const n = Math.floor(len / max);
+  const rem = len - n * max;
+  let widths: number[];
+  if (rem < MIN) {
+    const m = Math.ceil(len / max);
+    widths = Array(m).fill(len / m);
   } else {
-    const w = 2 * r * Math.sin(angle / (2 * n));
-    for (let i = 0; i < n; i++) out.push({ w, h, kind: "facet" });
+    widths = Array(n).fill(max);
+    widths.push(rem); // remainder at the far end
   }
+  if (remAtStart) widths.reverse();
+  return widths;
 }
 
-function panelize(
-  runs: Run[],
-  accessRunIndex: number,
+// Even sections (used for non-entrance runs, so mirrored runs match).
+function sizeEven(len: number, max: number): number[] {
+  const n = Math.max(1, Math.ceil(len / max));
+  return Array(n).fill(len / n);
+}
+
+interface Layout {
+  panels: RawPanel[];
+  seams: SeamPt[];
+  entrance: { ax: number; ay: number; bx: number; by: number } | null;
+  gapApplied: boolean;
+  gapNote?: string;
+}
+
+function layoutSections(
+  outline: string,
   spec: BarSpec,
-  skinH: number
-): { panels: RawPanel[]; gapApplied: boolean; gapNote?: string } {
-  const panels: RawPanel[] = [];
-  const isRound = spec.shape === "round";
+  skinH: number,
+  anchorX: number,
+  anchorY: number
+): Layout {
+  const segs = buildSegs(outline);
   const gapW = spec.accessGap ? spec.accessGapIn : 0;
+
+  // Which segment carries the entrance (the one containing bottom-center).
+  let entSeg = -1;
+  let entT = 0.5;
+  if (gapW > 0) {
+    let best = Infinity;
+    segs.forEach((seg, i) => {
+      const N = 48;
+      for (let k = 0; k <= N; k++) {
+        const t = k / N;
+        const p = seg.at(t);
+        const d = (p.x - anchorX) ** 2 + (p.y - anchorY) ** 2;
+        if (d < best) {
+          best = d;
+          entSeg = i;
+          entT = t;
+        }
+      }
+    });
+  }
+
+  const panels: RawPanel[] = [];
+  const seams: SeamPt[] = [];
+  let entrance: Layout["entrance"] = null;
   let gapApplied = false;
   let gapNote: string | undefined;
 
-  runs.forEach((run, i) => {
-    const isAccess = spec.accessGap && i === accessRunIndex && gapW > 0;
-    if (run.kind === "straight") {
-      if (isAccess) {
-        if (run.len > gapW + 6) {
-          const half = (run.len - gapW) / 2;
-          pushStraight(half, spec.maxPanelIn, skinH, panels);
-          pushStraight(half, spec.maxPanelIn, skinH, panels);
-          gapApplied = true;
-        } else {
-          gapApplied = true;
-          gapNote = "Access opening spans the entire back run.";
-        }
-      } else {
-        pushStraight(run.len, spec.maxPanelIn, skinH, panels);
+  const emit = (seg: PSeg, startLen: number, w: number) => {
+    // seam tick at the start of this section (skip the loop's very start)
+    if (startLen > 0.01 || seg !== segs[0]) seams.push(seg.at(startLen / seg.len));
+    if (seg.type === "line") {
+      panels.push({ w, h: skinH, kind: "straight" });
+    } else {
+      const ang = w / seg.r;
+      panels.push({
+        w: spec.curvedFronts ? w : 2 * seg.r * Math.sin(ang / 2),
+        h: skinH,
+        kind: spec.curvedFronts ? "curved" : "facet",
+      });
+    }
+  };
+
+  segs.forEach((seg, i) => {
+    if (seg.len < 0.5) return;
+    if (i === entSeg && gapW > 0) {
+      const center = entT * seg.len;
+      const a = center - gapW / 2;
+      const b = center + gapW / 2;
+      if (a <= 0.5 || b >= seg.len - 0.5) {
+        // entrance eats the whole run — leave it fully open
+        const s0 = seg.at(0);
+        const s1 = seg.at(1);
+        entrance = { ax: s0.x, ay: s0.y, bx: s1.x, by: s1.y };
+        gapApplied = true;
+        gapNote = "Access opening spans the entire back run.";
+        return;
+      }
+      // left part: start -> a  (entrance at its END, remainder at start/corner)
+      let pos = 0;
+      for (const w of sizeRun(a, spec.maxPanelIn, true)) {
+        emit(seg, pos, w);
+        pos += w;
+      }
+      const aPt = seg.at(a / seg.len);
+      const bPt = seg.at(b / seg.len);
+      entrance = { ax: aPt.x, ay: aPt.y, bx: bPt.x, by: bPt.y };
+      gapApplied = true;
+      // right part: b -> end (entrance at its START, remainder at end/corner)
+      pos = b;
+      for (const w of sizeRun(seg.len - b, spec.maxPanelIn, false)) {
+        emit(seg, pos, w);
+        pos += w;
       }
     } else {
-      const r = run.r ?? 0;
-      const angle = run.angle ?? 0;
-      const minFacets = isRound ? 8 : 3;
-      if (isAccess && r > 0) {
-        const gapAngle = 2 * Math.asin(Math.min(0.999, gapW / (2 * r)));
-        const remain = Math.max(0, angle - gapAngle);
-        pushArc(r, remain, r * remain, spec, skinH, minFacets, panels);
-        gapApplied = true;
-      } else {
-        pushArc(r, angle, run.len, spec, skinH, minFacets, panels);
+      let pos = 0;
+      for (const w of sizeEven(seg.len, spec.maxPanelIn)) {
+        emit(seg, pos, w);
+        pos += w;
       }
     }
   });
 
-  return { panels, gapApplied, gapNote };
+  return { panels, seams, entrance, gapApplied, gapNote };
 }
 
 function group(items: RawPanel[], prefix: string, noteFor?: (k: string) => string | undefined): CutItem[] {
@@ -486,7 +602,10 @@ const emptySolve = (error: string): BarSolve => ({
   sheetsFace: 0,
   weightLb: 0,
   weightPerSectionLb: 0,
-  gap: { active: false, widthIn: 0, cx: 0, cy: 0 },
+  seams: [],
+  entrance: null,
+  dims: { outerW: 0, outerH: 0, innerW: 0, innerH: 0 },
+  gap: { active: false, widthIn: 0 },
   price: { lines: [], materials: 0, labor: 0, laborHours: 0, total: 0, perFt: 0 },
   notes: [],
   error,
@@ -508,12 +627,13 @@ export function solveBar(spec: BarSpec): BarSolve {
   const perimeterIn = geo.runs.reduce((s, r) => s + r.len, 0);
   const perimeterFt = perimeterIn / 12;
 
-  const { panels: rawFaces, gapApplied, gapNote } = panelize(
-    geo.runs,
-    geo.accessRunIndex,
-    spec,
-    frontSkinHeightIn
-  );
+  const {
+    panels: rawFaces,
+    seams,
+    entrance,
+    gapApplied,
+    gapNote,
+  } = layoutSections(geo.outline, spec, frontSkinHeightIn, geo.bboxW / 2, geo.bboxH);
   const panelCount = rawFaces.length;
   const facetCount = rawFaces.filter((p) => p.kind !== "straight").length;
 
@@ -677,9 +797,11 @@ export function solveBar(spec: BarSpec): BarSolve {
       `⚠ ~${Math.round(weightPerSectionLb)} lb per section — heavy for a rental. Consider a smaller max section width or a lighter top finish.`
     );
 
+  const inner = innerOutline(spec, spec.counterDepthIn);
+
   return {
     outline: geo.outline,
-    innerOutline: innerOutline(spec, spec.counterDepthIn),
+    innerOutline: inner,
     innerInsetIn: spec.counterDepthIn,
     bboxW: geo.bboxW,
     bboxH: geo.bboxH,
@@ -702,11 +824,17 @@ export function solveBar(spec: BarSpec): BarSolve {
     sheetsFace,
     weightLb,
     weightPerSectionLb,
+    seams,
+    entrance,
+    dims: {
+      outerW: geo.bboxW,
+      outerH: geo.bboxH,
+      innerW: inner ? geo.bboxW - 2 * spec.counterDepthIn : 0,
+      innerH: inner ? geo.bboxH - 2 * spec.counterDepthIn : 0,
+    },
     gap: {
       active: gapApplied && spec.accessGap,
       widthIn: spec.accessGapIn,
-      cx: geo.bboxW / 2,
-      cy: geo.bboxH,
     },
     price: {
       lines,

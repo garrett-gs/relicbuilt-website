@@ -17,6 +17,16 @@ import {
 const usd = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 
+// Inches -> feet-inches label, e.g. 96 -> 8'-0", 34 -> 2'-10".
+const ftIn = (v: number) => {
+  const t = Math.round(v);
+  const ft = Math.floor(t / 12);
+  const inch = t - ft * 12;
+  if (ft && inch) return `${ft}'-${inch}"`;
+  if (ft) return `${ft}'-0"`;
+  return `${inch}"`;
+};
+
 // Small labeled numeric field with its own text buffer so decimals type
 // cleanly. `suffix` is display-only ("ft" / "in").
 function NumField({
@@ -96,7 +106,7 @@ export default function BarDesigner() {
     downloadSvg(svg, `bar-${spec.shape}-plan`);
   };
 
-  const pad = Math.max(result.bboxW, result.bboxH) * 0.06 || 4;
+  const pad = (Math.max(result.bboxW, result.bboxH) || 60) * 0.14 + 10;
   const vbW = (rotated ? result.bboxH : result.bboxW) + pad * 2;
   const vbH = (rotated ? result.bboxW : result.bboxH) + pad * 2;
   const groupTransform = rotated
@@ -440,31 +450,90 @@ export default function BarDesigner() {
                     />
                   </g>
                 )}
-                {result.gap.active &&
+                {/* section seams */}
+                {(() => {
+                  const t = Math.max(3, Math.min(result.bboxW, result.bboxH) * 0.06);
+                  return result.seams.map((s, i) => (
+                    <line
+                      key={i}
+                      x1={s.x - s.nx * t * 0.5}
+                      y1={s.y - s.ny * t * 0.5}
+                      x2={s.x + s.nx * t * 0.5}
+                      y2={s.y + s.ny * t * 0.5}
+                      stroke="currentColor"
+                      className="text-accent"
+                      strokeWidth="1.25"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ));
+                })()}
+                {/* bartender access opening (centered) */}
+                {result.entrance &&
                   (() => {
-                    const w = Math.min(result.gap.widthIn, result.bboxW);
-                    const x1 = result.gap.cx - w / 2;
-                    const x2 = result.gap.cx + w / 2;
-                    const y = result.gap.cy;
-                    const tick = Math.max(4, result.bboxH * 0.12);
+                    const e = result.entrance;
+                    const dx = e.bx - e.ax;
+                    const dy = e.by - e.ay;
+                    const L = Math.hypot(dx, dy) || 1;
+                    const nx = -dy / L;
+                    const ny = dx / L;
+                    const t = Math.max(6, Math.min(result.bboxW, result.bboxH) * 0.12);
                     return (
-                      <g stroke="currentColor" vectorEffect="non-scaling-stroke">
-                        {/* dashed opening across the back run */}
-                        <line
-                          x1={x1}
-                          y1={y}
-                          x2={x2}
-                          y2={y}
-                          className="text-amber-400"
-                          strokeWidth="2"
-                          strokeDasharray="5 3"
-                        />
-                        {/* jamb posts */}
-                        <line x1={x1} y1={y - tick} x2={x1} y2={y + tick} className="text-amber-400" strokeWidth="2" />
-                        <line x1={x2} y1={y - tick} x2={x2} y2={y + tick} className="text-amber-400" strokeWidth="2" />
+                      <g stroke="currentColor" className="text-amber-400" strokeWidth="2" vectorEffect="non-scaling-stroke">
+                        <line x1={e.ax} y1={e.ay} x2={e.bx} y2={e.by} strokeDasharray="5 3" />
+                        <line x1={e.ax - nx * t * 0.5} y1={e.ay - ny * t * 0.5} x2={e.ax + nx * t * 0.5} y2={e.ay + ny * t * 0.5} />
+                        <line x1={e.bx - nx * t * 0.5} y1={e.by - ny * t * 0.5} x2={e.bx + nx * t * 0.5} y2={e.by + ny * t * 0.5} />
                       </g>
                     );
                   })()}
+                {/* dimensions */}
+                {(() => {
+                  const D = result.dims;
+                  const fs = (Math.max(result.bboxW, result.bboxH) || 60) * 0.045;
+                  const off = pad * 0.55;
+                  const tik = fs * 0.5;
+                  const isRound = spec.shape === "round";
+                  return (
+                    <g stroke="currentColor" className="text-muted" vectorEffect="non-scaling-stroke">
+                      {/* outer width — above */}
+                      <line x1={0} y1={-off} x2={result.bboxW} y2={-off} strokeWidth="1" />
+                      <line x1={0} y1={-off - tik} x2={0} y2={-off + tik} strokeWidth="1" />
+                      <line x1={result.bboxW} y1={-off - tik} x2={result.bboxW} y2={-off + tik} strokeWidth="1" />
+                      <text x={result.bboxW / 2} y={-off - fs * 0.4} textAnchor="middle" fontSize={fs} stroke="none" className="fill-muted">
+                        {(isRound ? "⌀ " : "") + ftIn(D.outerW)}
+                      </text>
+                      {/* outer depth — left (skip for round) */}
+                      {!isRound && (
+                        <>
+                          <line x1={-off} y1={0} x2={-off} y2={result.bboxH} strokeWidth="1" />
+                          <line x1={-off - tik} y1={0} x2={-off + tik} y2={0} strokeWidth="1" />
+                          <line x1={-off - tik} y1={result.bboxH} x2={-off + tik} y2={result.bboxH} strokeWidth="1" />
+                          <text
+                            transform={`rotate(-90 ${-off - fs * 0.4} ${result.bboxH / 2})`}
+                            x={-off - fs * 0.4}
+                            y={result.bboxH / 2}
+                            textAnchor="middle"
+                            fontSize={fs}
+                            stroke="none"
+                            className="fill-muted"
+                          >
+                            {ftIn(D.outerH)}
+                          </text>
+                        </>
+                      )}
+                      {/* inner opening */}
+                      {D.innerW > 0 && (
+                        <text x={result.bboxW / 2} y={result.bboxH / 2} textAnchor="middle" fontSize={fs * 0.9} stroke="none" className="fill-muted">
+                          <tspan x={result.bboxW / 2} dy={0}>
+                            inside
+                          </tspan>
+                          <tspan x={result.bboxW / 2} dy={fs}>
+                            {(isRound ? "⌀ " : "") + ftIn(D.innerW) + (isRound ? "" : ` × ${ftIn(D.innerH)}`)}
+                          </tspan>
+                        </text>
+                      )}
+                    </g>
+                  );
+                })()}
               </g>
             </svg>
           </div>
