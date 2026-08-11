@@ -8,8 +8,10 @@ import {
   panelSheetGeometry,
   BAR_SHAPES,
   BAR_DEFAULTS,
+  COATINGS,
   type BarSpec,
   type BarShape,
+  type Coating,
 } from "@/lib/bar/solveBar";
 
 const usd = (n: number) =>
@@ -163,31 +165,58 @@ export default function BarDesigner() {
           />
         )}
         <NumField
-          label="Bar height"
+          label="Service height"
           suffix="in"
-          value={spec.barHeightIn}
-          onChange={(v) => set("barHeightIn", v)}
-          min={30}
-          max={54}
+          value={spec.serviceHeightIn}
+          onChange={(v) => set("serviceHeightIn", v)}
+          min={34}
+          max={48}
           step={0.5}
         />
         <NumField
-          label="Top depth"
+          label="Working height"
+          suffix="in"
+          value={spec.workingHeightIn}
+          onChange={(v) => set("workingHeightIn", v)}
+          min={28}
+          max={40}
+          step={0.5}
+        />
+        <NumField
+          label="Overhang"
+          suffix="in"
+          value={spec.overhangIn}
+          onChange={(v) => set("overhangIn", v)}
+          min={4}
+          max={16}
+          step={0.5}
+        />
+        <NumField
+          label="Nosing / lip"
+          suffix="in"
+          value={spec.nosingIn}
+          onChange={(v) => set("nosingIn", v)}
+          min={0.5}
+          max={4}
+          step={0.25}
+        />
+        <NumField
+          label="Top depth (over die)"
           suffix="in"
           value={spec.topDepthIn}
           onChange={(v) => set("topDepthIn", v)}
-          min={8}
-          max={36}
+          min={6}
+          max={30}
           step={0.5}
         />
         <NumField
-          label="Top overhang"
+          label="Working top depth"
           suffix="in"
-          value={spec.topOverhangIn}
-          onChange={(v) => set("topOverhangIn", v)}
-          min={0}
-          max={12}
-          step={0.25}
+          value={spec.workingTopDepthIn}
+          onChange={(v) => set("workingTopDepthIn", v)}
+          min={6}
+          max={30}
+          step={0.5}
         />
         <NumField
           label="Max panel width"
@@ -198,6 +227,32 @@ export default function BarDesigner() {
           max={96}
           step={1}
         />
+      </div>
+
+      {/* Top finish */}
+      <div className="mb-6">
+        <span className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
+          Countertop finish
+        </span>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {COATINGS.map((c) => {
+            const active = spec.coating === c.value;
+            return (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => set("coating", c.value as Coating)}
+                className={
+                  active
+                    ? "h-9 border border-accent bg-accent text-sm font-medium text-background"
+                    : "h-9 border border-border bg-card text-sm text-foreground transition-colors hover:border-accent hover:text-accent"
+                }
+              >
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Curved upgrade */}
@@ -388,10 +443,11 @@ export default function BarDesigner() {
           </div>
 
           {/* Summary stats */}
-          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {[
               { label: "Built face", value: `${result.builtFaceFt.toFixed(1)}′` },
-              { label: "Face height", value: `${result.bodyHeightIn.toFixed(1)}″` },
+              { label: "Face height", value: `${result.faceHeightIn.toFixed(1)}″` },
+              { label: "Step-down", value: `${result.stepDownIn.toFixed(0)}″` },
               { label: "Face panels", value: String(result.panelCount) },
               { label: "Sheets (face)", value: String(result.sheetsFace) },
             ].map((s) => (

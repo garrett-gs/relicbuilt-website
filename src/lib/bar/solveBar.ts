@@ -1,22 +1,25 @@
 // Bar designer engine. Takes a shape + overall size + your standard
-// construction params and produces: a plan-view outline, a panelized
-// front-body cut list, a counter/top blank list, and an itemized
-// materials + labor price. Faceted construction is the default; round /
-// oval / radius-corner bars can be upgraded to true curved fronts per
-// bar (curvedFronts), which changes labor + material, not the footprint.
+// construction and produces: a plan-view outline, a panelized front-body
+// cut list, counter/top blanks, and an itemized materials + labor price.
 //
-// Shop standards baked into the defaults:
-//  - 24" deep, 30" working height
-//  - 36" bartender access gap on the back run
-//  - 3/4" birch plywood faces (11/16" actual), poplar framing
-//  - light rail under the front lip, 1" clearance (drops the face height)
+// The standard section is a TWO-TIER bar:
+//   - Patron / service side: 42" service-rail height. The front face
+//     panels (the "die") are built to this height.
+//   - Bartender side: 30" working surface, stepped down ~12" behind the
+//     service rail.
+//   - Service rail top: wood countertop, 1-1/2" thick, overhanging the
+//     patron side 10" with a 1-1/2" nosing/lip. A light rail tucks up
+//     under the top behind the nosing, so the face is set down 1" for
+//     clearance. The top can be coated (none / paint / epoxy / concrete).
+//   - Faces: 3/4" birch ply (11/16" actual). Framing: poplar.
+//   - 36" bartender access opening in the back run.
 //
-// All geometry is computed in INCHES. Overall length/width come in as
-// feet from the UI and are converted at the boundary.
+// Geometry is in INCHES. Overall length/width come in as feet.
 
 import { fmt } from "../partSvg";
 
 export type BarShape = "rect" | "radius" | "hex" | "round" | "oval";
+export type Coating = "none" | "paint" | "epoxy" | "concrete";
 
 export const BAR_SHAPES: { value: BarShape; label: string }[] = [
   { value: "rect", label: "Square / rect" },
@@ -26,43 +29,58 @@ export const BAR_SHAPES: { value: BarShape; label: string }[] = [
   { value: "oval", label: "Oval" },
 ];
 
+export const COATINGS: { value: Coating; label: string; perSqft: number }[] = [
+  { value: "none", label: "Bare wood", perSqft: 0 },
+  { value: "paint", label: "Paint", perSqft: 3 },
+  { value: "epoxy", label: "Epoxy", perSqft: 12 },
+  { value: "concrete", label: "Concrete", perSqft: 18 },
+];
+
 export interface BarSpec {
   shape: BarShape;
   lengthFt: number; // overall length (round: diameter)
-  widthFt: number; // overall depth (oval: cap diameter; round: ignored)
+  widthFt: number; // overall footprint depth (oval: cap dia; round: ignored)
   cornerRadiusIn: number; // radius shape only
-  barHeightIn: number; // finished working height, floor to top of counter
-  topThicknessIn: number;
-  topOverhangIn: number; // counter overhang past the face (patron side)
-  topDepthIn: number; // front-to-back width of the counter band
+  serviceHeightIn: number; // patron-side service rail height (drives face)
+  workingHeightIn: number; // bartender-side working surface height
+  topThicknessIn: number; // wood countertop thickness
+  nosingIn: number; // front lip / nosing drop
+  overhangIn: number; // service-rail overhang toward the patron
+  topDepthIn: number; // countertop depth over the die (behind the overhang)
+  workingTopDepthIn: number; // bartender work-counter depth
+  coating: Coating;
   maxPanelIn: number; // max face panel width before it splits
   curvedFronts: boolean; // true curved build for arced runs
-  accessGap: boolean; // bartender access opening in the back run
-  accessGapIn: number; // width of that opening
-  lightRail: boolean; // LED light rail under the front lip
-  lightRailClearanceIn: number; // reveal left under the lip for the rail
+  accessGap: boolean;
+  accessGapIn: number;
+  lightRail: boolean;
+  lightRailClearanceIn: number;
   // editable rates
-  sheetPrice: number; // $ per 4x8 sheet good (birch ply)
-  topPricePerSqft: number; // $ per sqft of finished top
+  sheetPrice: number; // $ per 4x8 birch ply sheet
+  topPricePerSqft: number; // $ per sqft of countertop material
   laborRate: number; // $ per hour
 }
 
 export const BAR_DEFAULTS: BarSpec = {
   shape: "rect",
   lengthFt: 8,
-  widthFt: 2, // 24" standard depth
+  widthFt: 2, // 24" standard footprint depth
   cornerRadiusIn: 6,
-  barHeightIn: 30, // standard working height
+  serviceHeightIn: 42,
+  workingHeightIn: 30,
   topThicknessIn: 1.5,
-  topOverhangIn: 1.5,
-  topDepthIn: 16,
+  nosingIn: 1.5,
+  overhangIn: 10,
+  topDepthIn: 14,
+  workingTopDepthIn: 12,
+  coating: "none",
   maxPanelIn: 48,
   curvedFronts: false,
   accessGap: true,
-  accessGapIn: 36, // standard bartender access
+  accessGapIn: 36,
   lightRail: true,
   lightRailClearanceIn: 1,
-  sheetPrice: 75, // birch 3/4 ply
+  sheetPrice: 75,
   topPricePerSqft: 22,
   laborRate: 65,
 };
@@ -72,25 +90,27 @@ export const FRAMING_MATERIAL = "Poplar";
 export const PANEL_THICKNESS_IN = 0.6875;
 
 // --- construction / pricing constants -----------------------------------
-const WASTE = 0.15; // sheet-good waste factor
-const SHEET_SQFT = 32; // usable 4x8
-const FRAMING_PER_FT = 4; // $ poplar framing per linear ft of built face
+const WASTE = 0.15;
+const SHEET_SQFT = 32;
+const FRAMING_PER_FT = 4; // poplar framing $/lf of built face
 const HARDWARE_FLAT = 60;
 const HARDWARE_PER_FT = 6;
-const LIGHT_RAIL_PER_FT = 9; // LED strip + aluminum channel per linear ft
-const HOURS_BASE = 6;
+const LIGHT_RAIL_PER_FT = 9; // LED + channel $/lf
+const NOSING_PER_FT = 3.5; // solid nosing stock $/lf
+const HOURS_BASE = 8; // two-tier build base
 const HOURS_PER_PANEL = 1.25;
-const HOURS_PER_FT_TOP = 0.35;
-const CURVED_LABOR_MULT = 1.7; // extra fab time on curved panels
-const CURVED_MATERIAL_PER_PANEL = 25; // cooper/kerf stock per curved panel
+const HOURS_PER_FT_TOP = 0.35; // service rail top
+const HOURS_PER_FT_WORKING = 0.4; // stepped work counter
+const CURVED_LABOR_MULT = 1.7;
+const CURVED_MATERIAL_PER_PANEL = 25;
 
 const round16 = (v: number): number => Math.round(v * 16) / 16;
 
 interface Run {
   kind: "straight" | "arc";
-  len: number; // straight length OR arc length
+  len: number;
   r?: number;
-  angle?: number; // radians (arc)
+  angle?: number;
 }
 
 export interface CutItem {
@@ -109,20 +129,22 @@ export interface PriceLine {
 }
 
 export interface BarSolve {
-  outline: string; // SVG path (plan)
+  outline: string;
   bboxW: number;
   bboxH: number;
   perimeterIn: number;
   perimeterFt: number;
-  builtFaceIn: number; // paneled face length (perimeter minus access gap)
+  builtFaceIn: number;
   builtFaceFt: number;
-  bodyHeightIn: number;
+  faceHeightIn: number; // front die face panel height
+  stepDownIn: number; // service height - working height
   panelCount: number;
   facetCount: number;
-  panels: CutItem[]; // grouped face panels
-  tops: CutItem[]; // grouped top blanks
+  panels: CutItem[];
+  tops: CutItem[];
   faceAreaSqft: number;
-  topAreaSqft: number;
+  serviceTopSqft: number;
+  workingTopSqft: number;
   sheetsFace: number;
   gap: { active: boolean; widthIn: number; cx: number; cy: number };
   price: {
@@ -166,7 +188,7 @@ function shapeGeometry(spec: BarSpec):
           { kind: "straight", len: L },
           { kind: "straight", len: W },
         ],
-        accessRunIndex: 2, // back (bottom) run
+        accessRunIndex: 2,
         notes,
       };
     }
@@ -200,12 +222,12 @@ function shapeGeometry(spec: BarSpec):
           { kind: "straight", len: W - 2 * r },
           { kind: "arc", len: quarter, r, angle: Math.PI / 2 },
         ],
-        accessRunIndex: 4, // back straight
+        accessRunIndex: 4,
         notes,
       };
     }
     case "hex": {
-      const e = Math.min(W / 2, L / 3); // end taper
+      const e = Math.min(W / 2, L / 3);
       const A: [number, number] = [e, 0];
       const B: [number, number] = [L - e, 0];
       const C: [number, number] = [L, W / 2];
@@ -222,14 +244,14 @@ function shapeGeometry(spec: BarSpec):
         bboxW: L,
         bboxH: W,
         runs: [
-          { kind: "straight", len: L - 2 * e }, // top
+          { kind: "straight", len: L - 2 * e },
           { kind: "straight", len: diag },
           { kind: "straight", len: diag },
-          { kind: "straight", len: L - 2 * e }, // bottom
+          { kind: "straight", len: L - 2 * e },
           { kind: "straight", len: diag },
           { kind: "straight", len: diag },
         ],
-        accessRunIndex: 3, // bottom edge
+        accessRunIndex: 3,
         notes,
       };
     }
@@ -272,7 +294,7 @@ function shapeGeometry(spec: BarSpec):
           { kind: "straight", len: straight },
           { kind: "arc", len: Math.PI * r, r, angle: Math.PI },
         ],
-        accessRunIndex: 2, // bottom straight
+        accessRunIndex: 2,
         notes,
       };
     }
@@ -305,10 +327,10 @@ function panelizeArc(
   let n = Math.max(minFacets, Math.ceil(len / spec.maxPanelIn));
   n = Math.min(n, 60);
   if (spec.curvedFronts) {
-    const w = len / n; // developed length along the curve
+    const w = len / n;
     for (let i = 0; i < n; i++) out.push({ w, h: bodyH, kind: "curved" });
   } else {
-    const w = 2 * r * Math.sin(angle / (2 * n)); // flat chord
+    const w = 2 * r * Math.sin(angle / (2 * n));
     for (let i = 0; i < n; i++) out.push({ w, h: bodyH, kind: "facet" });
   }
 }
@@ -327,7 +349,6 @@ function panelize(
 
   runs.forEach((run, i) => {
     const isAccess = spec.accessGap && i === accessRunIndex && gapW > 0;
-
     if (run.kind === "straight") {
       if (isAccess) {
         if (run.len > gapW + 6) {
@@ -336,7 +357,6 @@ function panelize(
           panelizeStraight(half, spec.maxPanelIn, bodyH, panels);
           gapApplied = true;
         } else {
-          // opening spans (nearly) the whole run — leave it fully open
           gapApplied = true;
           gapNote = "Access opening spans the entire back run.";
         }
@@ -395,7 +415,7 @@ function group(items: RawPanel[], prefix: string): CutItem[] {
   });
 }
 
-const emptySolve = (error: string, bodyHeightIn: number): BarSolve => ({
+const emptySolve = (error: string, faceHeightIn: number): BarSolve => ({
   outline: "",
   bboxW: 0,
   bboxH: 0,
@@ -403,13 +423,15 @@ const emptySolve = (error: string, bodyHeightIn: number): BarSolve => ({
   perimeterFt: 0,
   builtFaceIn: 0,
   builtFaceFt: 0,
-  bodyHeightIn,
+  faceHeightIn,
+  stepDownIn: 0,
   panelCount: 0,
   facetCount: 0,
   panels: [],
   tops: [],
   faceAreaSqft: 0,
-  topAreaSqft: 0,
+  serviceTopSqft: 0,
+  workingTopSqft: 0,
   sheetsFace: 0,
   gap: { active: false, widthIn: 0, cx: 0, cy: 0 },
   price: { lines: [], materials: 0, labor: 0, laborHours: 0, total: 0, perFt: 0 },
@@ -418,15 +440,16 @@ const emptySolve = (error: string, bodyHeightIn: number): BarSolve => ({
 });
 
 export function solveBar(spec: BarSpec): BarSolve {
-  const bodyHeightIn = Math.max(
+  const faceHeightIn = Math.max(
     1,
-    spec.barHeightIn -
+    spec.serviceHeightIn -
       spec.topThicknessIn -
       (spec.lightRail ? spec.lightRailClearanceIn : 0)
   );
+  const stepDownIn = Math.max(0, spec.serviceHeightIn - spec.workingHeightIn);
 
   const geo = shapeGeometry(spec);
-  if ("error" in geo) return emptySolve(geo.error, bodyHeightIn);
+  if ("error" in geo) return emptySolve(geo.error, faceHeightIn);
 
   const perimeterIn = geo.runs.reduce((s, r) => s + r.len, 0);
   const perimeterFt = perimeterIn / 12;
@@ -435,7 +458,7 @@ export function solveBar(spec: BarSpec): BarSolve {
     geo.runs,
     geo.accessRunIndex,
     spec,
-    bodyHeightIn
+    faceHeightIn
   );
   const panelCount = raw.length;
   const facetCount = raw.filter((p) => p.kind !== "straight").length;
@@ -443,10 +466,12 @@ export function solveBar(spec: BarSpec): BarSolve {
   const builtFaceIn = raw.reduce((s, p) => s + p.w, 0);
   const builtFaceFt = builtFaceIn / 12;
 
-  // Top blanks: one over each face panel, depth = top band.
+  // Service-rail top segments: one blank over each face panel, depth =
+  // countertop over the die + patron overhang.
+  const serviceTopWidthIn = spec.topDepthIn + spec.overhangIn;
   const topRaw: RawPanel[] = raw.map((p) => ({
     w: p.w,
-    h: spec.topDepthIn,
+    h: serviceTopWidthIn,
     kind: "straight",
   }));
 
@@ -454,7 +479,9 @@ export function solveBar(spec: BarSpec): BarSolve {
   const tops = group(topRaw, "T");
 
   const faceAreaSqft = raw.reduce((s, p) => s + p.w * p.h, 0) / 144;
-  const topAreaSqft = (builtFaceIn * spec.topDepthIn) / 144;
+  const serviceTopSqft = (builtFaceIn * serviceTopWidthIn) / 144;
+  const workingTopSqft = (builtFaceIn * spec.workingTopDepthIn) / 144;
+  const totalTopSqft = serviceTopSqft + workingTopSqft;
   const sheetsFace = Math.ceil((faceAreaSqft * (1 + WASTE)) / SHEET_SQFT);
 
   // --- pricing ----------------------------------------------------------
@@ -467,18 +494,23 @@ export function solveBar(spec: BarSpec): BarSolve {
         ? 2
         : 0;
 
+  const coating = COATINGS.find((c) => c.value === spec.coating) ?? COATINGS[0];
+
   const sheetCost = sheetsFace * spec.sheetPrice;
   const framingCost = builtFaceFt * FRAMING_PER_FT;
-  const topCost = topAreaSqft * spec.topPricePerSqft;
+  const topCost = totalTopSqft * spec.topPricePerSqft;
+  const coatingCost = totalTopSqft * coating.perSqft;
+  const nosingCost = builtFaceFt * NOSING_PER_FT;
+  const lightRailCost = spec.lightRail ? builtFaceFt * LIGHT_RAIL_PER_FT : 0;
   const curvedMaterialCost = curvedCount * CURVED_MATERIAL_PER_PANEL;
   const hardwareCost = HARDWARE_FLAT + builtFaceFt * HARDWARE_PER_FT;
-  const lightRailCost = spec.lightRail ? builtFaceFt * LIGHT_RAIL_PER_FT : 0;
 
   const laborHours =
     HOURS_BASE +
     straightPanels * HOURS_PER_PANEL +
     curvedCount * HOURS_PER_PANEL * CURVED_LABOR_MULT +
     builtFaceFt * HOURS_PER_FT_TOP +
+    builtFaceFt * HOURS_PER_FT_WORKING +
     shapeExtraHours;
   const laborCost = laborHours * spec.laborRate;
 
@@ -494,9 +526,23 @@ export function solveBar(spec: BarSpec): BarSolve {
       amount: framingCost,
     },
     {
-      label: "Counter / top material",
-      detail: `${topAreaSqft.toFixed(1)} sqft @ $${spec.topPricePerSqft}/sqft`,
+      label: "Wood countertop",
+      detail: `${totalTopSqft.toFixed(1)} sqft (service ${serviceTopSqft.toFixed(1)} + working ${workingTopSqft.toFixed(1)}) @ $${spec.topPricePerSqft}/sqft`,
       amount: topCost,
+    },
+    ...(coatingCost > 0
+      ? [
+          {
+            label: `Top finish — ${coating.label.toLowerCase()}`,
+            detail: `${totalTopSqft.toFixed(1)} sqft @ $${coating.perSqft}/sqft`,
+            amount: coatingCost,
+          },
+        ]
+      : []),
+    {
+      label: "Nosing / lip stock",
+      detail: `${builtFaceFt.toFixed(1)} lf @ $${NOSING_PER_FT}/lf`,
+      amount: nosingCost,
     },
     ...(lightRailCost > 0
       ? [
@@ -532,6 +578,8 @@ export function solveBar(spec: BarSpec): BarSolve {
     sheetCost +
     framingCost +
     topCost +
+    coatingCost +
+    nosingCost +
     lightRailCost +
     curvedMaterialCost +
     hardwareCost;
@@ -540,16 +588,20 @@ export function solveBar(spec: BarSpec): BarSolve {
 
   const notes = [...geo.notes];
   notes.push(
-    `Faces: ${PANEL_MATERIAL}. Framing: ${FRAMING_MATERIAL}. Depth ${spec.widthFt * 12}″, working height ${spec.barHeightIn}″.`
+    `Two-tier: ${spec.serviceHeightIn}″ service rail over ${spec.workingHeightIn}″ working surface (${stepDownIn}″ step-down).`
+  );
+  notes.push(
+    `Faces: ${PANEL_MATERIAL} @ ${faceHeightIn.toFixed(1)}″ tall. Framing: ${FRAMING_MATERIAL}. Footprint depth ${spec.widthFt * 12}″.`
+  );
+  notes.push(
+    `Service rail: ${spec.overhangIn}″ overhang, ${spec.nosingIn}″ nosing/lip, ${spec.topThicknessIn}″ ${coating.label.toLowerCase()} wood top.`
   );
   if (spec.lightRail)
     notes.push(
-      `Light rail under the front lip — face set down ${spec.lightRailClearanceIn}″ for clearance (face height ${bodyHeightIn.toFixed(1)}″).`
+      `Light rail tucked under the lip — face set down ${spec.lightRailClearanceIn}″ for clearance.`
     );
   if (gapApplied)
-    notes.push(
-      gapNote ?? `${spec.accessGapIn}″ bartender access opening in the back run.`
-    );
+    notes.push(gapNote ?? `${spec.accessGapIn}″ bartender access opening in the back run.`);
 
   return {
     outline: geo.outline,
@@ -559,13 +611,15 @@ export function solveBar(spec: BarSpec): BarSolve {
     perimeterFt,
     builtFaceIn,
     builtFaceFt,
-    bodyHeightIn,
+    faceHeightIn,
+    stepDownIn,
     panelCount,
     facetCount,
     panels,
     tops,
     faceAreaSqft,
-    topAreaSqft,
+    serviceTopSqft,
+    workingTopSqft,
     sheetsFace,
     gap: {
       active: gapApplied && spec.accessGap,
@@ -586,8 +640,7 @@ export function solveBar(spec: BarSpec): BarSolve {
 }
 
 // Lay every unique face panel out in a row as rectangles for a single
-// cut-sheet DXF/SVG. Uses grouped panels (one rect per unique size, with
-// the qty in its label).
+// cut-sheet DXF/SVG.
 export function panelSheetGeometry(panels: CutItem[]): {
   paths: { d: string; role: string }[];
   width: number;
