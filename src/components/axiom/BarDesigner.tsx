@@ -668,57 +668,52 @@ function Elevation({ spec, faceHeightIn }: { spec: BarSpec; faceHeightIn: number
   const svcTop = R(-oh, sh - tt, frontTier, sh); // service rail slab (overhangs)
   const workTop = R(frontTier, wh - tt, d, wh); // working surface slab
 
-  const label = (
-    x: number,
-    y: number,
-    t: string,
-    anchor: "middle" | "start" | "end" = "middle"
-  ) => (
-    <text
-      x={sx(x)}
-      y={sy(y)}
-      fontSize="3"
-      textAnchor={anchor}
-      className="fill-muted"
-      style={{ fontFamily: "var(--font-mono, monospace)" }}
-    >
-      {t}
-    </text>
-  );
+  const legend: { swatch: string; text: string }[] = [
+    { swatch: "bg-accent/40 border border-accent", text: `Service rail ${sh}″` },
+    { swatch: "bg-accent/40 border border-accent", text: `Working surface ${wh}″` },
+    { swatch: "bg-muted/20 border border-accent", text: `Cabinet · ${d}″ deep` },
+    { swatch: "bg-accent/60", text: `${oh}″ overhang · ${nos}″ nosing` },
+    ...(spec.lightRail ? [{ swatch: "bg-amber-400", text: "Light rail under lip" }] : []),
+    { swatch: "bg-muted/20 border border-accent", text: `${tk}″ recessed toe kick` },
+  ];
 
   return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      className="mx-auto block h-auto max-h-[45vh] w-full"
-      role="img"
-      aria-label="Bar section"
-    >
-      {/* ground line */}
-      <line x1={sx(xMin)} y1={sy(0)} x2={sx(xMax)} y2={sy(0)} className="stroke-muted" strokeWidth="0.4" />
-      {/* cabinet mass */}
-      {[body, frontRise, kick].map((r, i) => (
-        <rect key={i} {...r} className="fill-muted/15 stroke-accent" strokeWidth="0.4" vectorEffect="non-scaling-stroke" />
-      ))}
-      {/* tops */}
-      {[svcTop, workTop].map((r, i) => (
-        <rect key={`t${i}`} {...r} className="fill-accent/40 stroke-accent" strokeWidth="0.4" vectorEffect="non-scaling-stroke" />
-      ))}
-      {/* nosing lip */}
-      <rect {...R(-oh, sh - tt - nos, -oh + 0.9, sh - tt)} className="fill-accent/60" />
-      {/* light rail under the lip */}
-      {spec.lightRail && (
-        <rect {...R(-oh + 1.2, sh - tt - 1, -oh + 2.4, sh - tt)} className="fill-amber-400" />
-      )}
-      {/* front skin edge */}
-      <line x1={sx(0)} y1={sy(tk)} x2={sx(0)} y2={sy(faceHeightIn)} className="stroke-accent" strokeWidth="0.8" />
+    <div>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="mx-auto block h-auto max-h-[42vh] w-auto max-w-full"
+        role="img"
+        aria-label="Bar section"
+      >
+        {/* ground line */}
+        <line x1={sx(xMin)} y1={sy(0)} x2={sx(xMax)} y2={sy(0)} className="stroke-muted" strokeWidth="0.4" />
+        {/* cabinet mass */}
+        {[body, frontRise, kick].map((r, i) => (
+          <rect key={i} {...r} className="fill-muted/15 stroke-accent" strokeWidth="0.4" vectorEffect="non-scaling-stroke" />
+        ))}
+        {/* tops */}
+        {[svcTop, workTop].map((r, i) => (
+          <rect key={`t${i}`} {...r} className="fill-accent/40 stroke-accent" strokeWidth="0.4" vectorEffect="non-scaling-stroke" />
+        ))}
+        {/* nosing lip */}
+        <rect {...R(-oh, sh - tt - nos, -oh + 0.9, sh - tt)} className="fill-accent/60" />
+        {/* light rail under the lip */}
+        {spec.lightRail && (
+          <rect {...R(-oh + 1.2, sh - tt - 1, -oh + 2.4, sh - tt)} className="fill-amber-400" />
+        )}
+        {/* front skin edge */}
+        <line x1={sx(0)} y1={sy(tk)} x2={sx(0)} y2={sy(faceHeightIn)} className="stroke-accent" strokeWidth="0.8" />
+      </svg>
 
-      {/* dimension labels */}
-      {label(-oh + oh / 2, sh + 3, `${oh}″ OH`)}
-      {label(frontTier + (d - frontTier) / 2, wh + 3.5, `${wh}″ work`)}
-      {label(frontTier / 2, sh + 3, `${sh}″ svc`)}
-      {label(d + 4, tk / 2, `${tk}″ kick`, "start")}
-      {spec.lightRail && label(-oh + 1.8, sh - tt + 3.5, "light rail", "middle")}
-    </svg>
+      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+        {legend.map((l) => (
+          <span key={l.text} className="flex items-center gap-1.5 text-[11px] text-muted">
+            <span className={`inline-block h-2.5 w-2.5 shrink-0 ${l.swatch}`} />
+            {l.text}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
