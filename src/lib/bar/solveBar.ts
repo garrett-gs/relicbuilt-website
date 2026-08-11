@@ -1,18 +1,23 @@
-// Bar designer engine. Takes a shape + overall size + your standard
-// construction and produces: a plan-view outline, a panelized front-body
-// cut list, counter/top blanks, and an itemized materials + labor price.
+// Bar designer engine for lightweight, sectional event-rental bars.
+//
+// A bar is a COUNTER-DEPTH cabinet that follows the path of a shape
+// (round, hexagon, oval, rect...). It is broken into modular SECTIONS for
+// storage and transport, and built light — poplar frame + birch ply skin,
+// not solid boxes. Each section has an internal shelf and a 4" toe kick.
 //
 // The standard section is a TWO-TIER bar:
-//   - Patron / service side: 42" service-rail height. The front face
-//     panels (the "die") are built to this height.
-//   - Bartender side: 30" working surface, stepped down ~12" behind the
-//     service rail.
-//   - Service rail top: wood countertop, 1-1/2" thick, overhanging the
-//     patron side 10" with a 1-1/2" nosing/lip. A light rail tucks up
-//     under the top behind the nosing, so the face is set down 1" for
-//     clearance. The top can be coated (none / paint / epoxy / concrete).
-//   - Faces: 3/4" birch ply (11/16" actual). Framing: poplar.
+//   - Patron / service side: 42" service-rail height (drives the front
+//     face skin height).
+//   - Bartender side: 30" working surface, stepped down behind the rail.
+//   - Service rail top: wood countertop overhanging the patron side with a
+//     nosing/lip. A light rail tucks under, so the skin is set down for
+//     clearance. Top can be coated (none / paint / epoxy / concrete).
+//   - Faces/shelves/toe kick: 3/4" birch ply (11/16" actual). Frame: poplar.
 //   - 36" bartender access opening in the back run.
+//
+// The engine reports an itemized price AND an estimated weight (total and
+// per section) — weight is a first-class number for a rental that gets
+// moved constantly.
 //
 // Geometry is in INCHES. Overall length/width come in as feet.
 
@@ -29,11 +34,16 @@ export const BAR_SHAPES: { value: BarShape; label: string }[] = [
   { value: "oval", label: "Oval" },
 ];
 
-export const COATINGS: { value: Coating; label: string; perSqft: number }[] = [
-  { value: "none", label: "Bare wood", perSqft: 0 },
-  { value: "paint", label: "Paint", perSqft: 3 },
-  { value: "epoxy", label: "Epoxy", perSqft: 12 },
-  { value: "concrete", label: "Concrete", perSqft: 18 },
+export const COATINGS: {
+  value: Coating;
+  label: string;
+  perSqft: number;
+  lbPerSqft: number;
+}[] = [
+  { value: "none", label: "Bare wood", perSqft: 0, lbPerSqft: 0 },
+  { value: "paint", label: "Paint", perSqft: 3, lbPerSqft: 0.1 },
+  { value: "epoxy", label: "Epoxy", perSqft: 12, lbPerSqft: 0.4 },
+  { value: "concrete", label: "Concrete", perSqft: 18, lbPerSqft: 6 },
 ];
 
 export interface BarSpec {
@@ -41,15 +51,16 @@ export interface BarSpec {
   lengthFt: number; // overall length (round: diameter)
   widthFt: number; // overall footprint depth (oval: cap dia; round: ignored)
   cornerRadiusIn: number; // radius shape only
+  counterDepthIn: number; // depth of the cabinet band (front-to-back)
   serviceHeightIn: number; // patron-side service rail height (drives face)
   workingHeightIn: number; // bartender-side working surface height
   topThicknessIn: number; // wood countertop thickness
   nosingIn: number; // front lip / nosing drop
   overhangIn: number; // service-rail overhang toward the patron
-  topDepthIn: number; // countertop depth over the die (behind the overhang)
-  workingTopDepthIn: number; // bartender work-counter depth
+  toeKickIn: number; // toe kick height
+  shelfCount: number; // internal shelves per section
   coating: Coating;
-  maxPanelIn: number; // max face panel width before it splits
+  maxPanelIn: number; // max section width before it splits (for transport)
   curvedFronts: boolean; // true curved build for arced runs
   accessGap: boolean;
   accessGapIn: number;
@@ -64,15 +75,16 @@ export interface BarSpec {
 export const BAR_DEFAULTS: BarSpec = {
   shape: "rect",
   lengthFt: 8,
-  widthFt: 2, // 24" standard footprint depth
+  widthFt: 2,
   cornerRadiusIn: 6,
+  counterDepthIn: 24, // standard counter depth
   serviceHeightIn: 42,
   workingHeightIn: 30,
   topThicknessIn: 1.5,
   nosingIn: 1.5,
   overhangIn: 10,
-  topDepthIn: 14,
-  workingTopDepthIn: 12,
+  toeKickIn: 4,
+  shelfCount: 1,
   coating: "none",
   maxPanelIn: 48,
   curvedFronts: false,
@@ -97,12 +109,18 @@ const HARDWARE_FLAT = 60;
 const HARDWARE_PER_FT = 6;
 const LIGHT_RAIL_PER_FT = 9; // LED + channel $/lf
 const NOSING_PER_FT = 3.5; // solid nosing stock $/lf
-const HOURS_BASE = 8; // two-tier build base
-const HOURS_PER_PANEL = 1.25;
-const HOURS_PER_FT_TOP = 0.35; // service rail top
-const HOURS_PER_FT_WORKING = 0.4; // stepped work counter
+const HOURS_BASE = 8;
+const HOURS_PER_SECTION = 1.5; // frame + skin + shelf + toe kick
+const HOURS_PER_FT_TOP = 0.35;
+const HOURS_PER_FT_WORKING = 0.4;
 const CURVED_LABOR_MULT = 1.7;
 const CURVED_MATERIAL_PER_PANEL = 25;
+
+// --- weight constants (lb) ----------------------------------------------
+const BIRCH_PLY_LB_PER_SQFT = 2.0; // 3/4" birch ply
+const FRAMING_LB_PER_FT = 0.45; // poplar 1x2-ish
+const FRAMING_LF_PER_FACE_FT = 4; // rails + studs + shelf cleats per lf
+const TOP_LB_PER_SQFT = 4.5; // 1.5" hardwood top
 
 const round16 = (v: number): number => Math.round(v * 16) / 16;
 
@@ -136,16 +154,21 @@ export interface BarSolve {
   perimeterFt: number;
   builtFaceIn: number;
   builtFaceFt: number;
-  faceHeightIn: number; // front die face panel height
-  stepDownIn: number; // service height - working height
+  sections: number;
+  faceHeightIn: number; // to top of service rail structure
+  frontSkinHeightIn: number; // visible front skin (above the toe kick)
+  stepDownIn: number;
   panelCount: number;
   facetCount: number;
-  panels: CutItem[];
+  panels: CutItem[]; // front skins
+  shelves: CutItem[];
+  toeKicks: CutItem[];
   tops: CutItem[];
-  faceAreaSqft: number;
-  serviceTopSqft: number;
-  workingTopSqft: number;
+  plyAreaSqft: number;
+  topAreaSqft: number;
   sheetsFace: number;
+  weightLb: number;
+  weightPerSectionLb: number;
   gap: { active: boolean; widthIn: number; cx: number; cy: number };
   price: {
     lines: PriceLine[];
@@ -307,19 +330,19 @@ interface RawPanel {
   kind: "straight" | "facet" | "curved";
 }
 
-function panelizeStraight(len: number, maxPanel: number, bodyH: number, out: RawPanel[]) {
+function pushStraight(len: number, maxPanel: number, h: number, out: RawPanel[]) {
   if (len < 0.5) return;
   const n = Math.max(1, Math.ceil(len / maxPanel));
   const w = len / n;
-  for (let i = 0; i < n; i++) out.push({ w, h: bodyH, kind: "straight" });
+  for (let i = 0; i < n; i++) out.push({ w, h, kind: "straight" });
 }
 
-function panelizeArc(
+function pushArc(
   r: number,
   angle: number,
   len: number,
   spec: BarSpec,
-  bodyH: number,
+  h: number,
   minFacets: number,
   out: RawPanel[]
 ) {
@@ -328,10 +351,10 @@ function panelizeArc(
   n = Math.min(n, 60);
   if (spec.curvedFronts) {
     const w = len / n;
-    for (let i = 0; i < n; i++) out.push({ w, h: bodyH, kind: "curved" });
+    for (let i = 0; i < n; i++) out.push({ w, h, kind: "curved" });
   } else {
     const w = 2 * r * Math.sin(angle / (2 * n));
-    for (let i = 0; i < n; i++) out.push({ w, h: bodyH, kind: "facet" });
+    for (let i = 0; i < n; i++) out.push({ w, h, kind: "facet" });
   }
 }
 
@@ -339,7 +362,7 @@ function panelize(
   runs: Run[],
   accessRunIndex: number,
   spec: BarSpec,
-  bodyH: number
+  skinH: number
 ): { panels: RawPanel[]; gapApplied: boolean; gapNote?: string } {
   const panels: RawPanel[] = [];
   const isRound = spec.shape === "round";
@@ -353,15 +376,15 @@ function panelize(
       if (isAccess) {
         if (run.len > gapW + 6) {
           const half = (run.len - gapW) / 2;
-          panelizeStraight(half, spec.maxPanelIn, bodyH, panels);
-          panelizeStraight(half, spec.maxPanelIn, bodyH, panels);
+          pushStraight(half, spec.maxPanelIn, skinH, panels);
+          pushStraight(half, spec.maxPanelIn, skinH, panels);
           gapApplied = true;
         } else {
           gapApplied = true;
           gapNote = "Access opening spans the entire back run.";
         }
       } else {
-        panelizeStraight(run.len, spec.maxPanelIn, bodyH, panels);
+        pushStraight(run.len, spec.maxPanelIn, skinH, panels);
       }
     } else {
       const r = run.r ?? 0;
@@ -370,10 +393,10 @@ function panelize(
       if (isAccess && r > 0) {
         const gapAngle = 2 * Math.asin(Math.min(0.999, gapW / (2 * r)));
         const remain = Math.max(0, angle - gapAngle);
-        panelizeArc(r, remain, r * remain, spec, bodyH, minFacets, panels);
+        pushArc(r, remain, r * remain, spec, skinH, minFacets, panels);
         gapApplied = true;
       } else {
-        panelizeArc(r, angle, run.len, spec, bodyH, minFacets, panels);
+        pushArc(r, angle, run.len, spec, skinH, minFacets, panels);
       }
     }
   });
@@ -381,7 +404,7 @@ function panelize(
   return { panels, gapApplied, gapNote };
 }
 
-function group(items: RawPanel[], prefix: string): CutItem[] {
+function group(items: RawPanel[], prefix: string, noteFor?: (k: string) => string | undefined): CutItem[] {
   const map = new Map<string, CutItem>();
   const order: string[] = [];
   for (const p of items) {
@@ -398,8 +421,9 @@ function group(items: RawPanel[], prefix: string): CutItem[] {
         widthIn: w,
         heightIn: h,
         kind: p.kind,
-        note:
-          p.kind === "facet"
+        note: noteFor
+          ? noteFor(p.kind)
+          : p.kind === "facet"
             ? "Bevel both vertical edges"
             : p.kind === "curved"
               ? "Curved / coopered face"
@@ -415,7 +439,7 @@ function group(items: RawPanel[], prefix: string): CutItem[] {
   });
 }
 
-const emptySolve = (error: string, faceHeightIn: number): BarSolve => ({
+const emptySolve = (error: string): BarSolve => ({
   outline: "",
   bboxW: 0,
   bboxH: 0,
@@ -423,16 +447,21 @@ const emptySolve = (error: string, faceHeightIn: number): BarSolve => ({
   perimeterFt: 0,
   builtFaceIn: 0,
   builtFaceFt: 0,
-  faceHeightIn,
+  sections: 0,
+  faceHeightIn: 0,
+  frontSkinHeightIn: 0,
   stepDownIn: 0,
   panelCount: 0,
   facetCount: 0,
   panels: [],
+  shelves: [],
+  toeKicks: [],
   tops: [],
-  faceAreaSqft: 0,
-  serviceTopSqft: 0,
-  workingTopSqft: 0,
+  plyAreaSqft: 0,
+  topAreaSqft: 0,
   sheetsFace: 0,
+  weightLb: 0,
+  weightPerSectionLb: 0,
   gap: { active: false, widthIn: 0, cx: 0, cy: 0 },
   price: { lines: [], materials: 0, labor: 0, laborHours: 0, total: 0, perFt: 0 },
   notes: [],
@@ -446,47 +475,66 @@ export function solveBar(spec: BarSpec): BarSolve {
       spec.topThicknessIn -
       (spec.lightRail ? spec.lightRailClearanceIn : 0)
   );
+  const frontSkinHeightIn = Math.max(1, faceHeightIn - spec.toeKickIn);
   const stepDownIn = Math.max(0, spec.serviceHeightIn - spec.workingHeightIn);
 
   const geo = shapeGeometry(spec);
-  if ("error" in geo) return emptySolve(geo.error, faceHeightIn);
+  if ("error" in geo) return emptySolve(geo.error);
 
   const perimeterIn = geo.runs.reduce((s, r) => s + r.len, 0);
   const perimeterFt = perimeterIn / 12;
 
-  const { panels: raw, gapApplied, gapNote } = panelize(
+  const { panels: rawFaces, gapApplied, gapNote } = panelize(
     geo.runs,
     geo.accessRunIndex,
     spec,
-    faceHeightIn
+    frontSkinHeightIn
   );
-  const panelCount = raw.length;
-  const facetCount = raw.filter((p) => p.kind !== "straight").length;
+  const panelCount = rawFaces.length;
+  const facetCount = rawFaces.filter((p) => p.kind !== "straight").length;
 
-  const builtFaceIn = raw.reduce((s, p) => s + p.w, 0);
+  const builtFaceIn = rawFaces.reduce((s, p) => s + p.w, 0);
   const builtFaceFt = builtFaceIn / 12;
 
-  // Service-rail top segments: one blank over each face panel, depth =
-  // countertop over the die + patron overhang.
-  const serviceTopWidthIn = spec.topDepthIn + spec.overhangIn;
-  const topRaw: RawPanel[] = raw.map((p) => ({
-    w: p.w,
-    h: serviceTopWidthIn,
-    kind: "straight",
-  }));
+  // Derive the other per-section components from the same section widths so
+  // gap removal and facet widths carry through consistently.
+  const serviceTopWidthIn = spec.counterDepthIn + spec.overhangIn;
+  const shelfDepthIn = Math.max(6, spec.counterDepthIn - 2);
 
-  const panels = group(raw, "P");
-  const tops = group(topRaw, "T");
+  const rawShelves: RawPanel[] = [];
+  const rawToe: RawPanel[] = [];
+  const rawTops: RawPanel[] = [];
+  for (const p of rawFaces) {
+    for (let s = 0; s < spec.shelfCount; s++)
+      rawShelves.push({ w: p.w, h: shelfDepthIn, kind: "straight" });
+    rawToe.push({ w: p.w, h: spec.toeKickIn, kind: "straight" });
+    rawTops.push({ w: p.w, h: serviceTopWidthIn, kind: "straight" });
+  }
 
-  const faceAreaSqft = raw.reduce((s, p) => s + p.w * p.h, 0) / 144;
-  const serviceTopSqft = (builtFaceIn * serviceTopWidthIn) / 144;
-  const workingTopSqft = (builtFaceIn * spec.workingTopDepthIn) / 144;
-  const totalTopSqft = serviceTopSqft + workingTopSqft;
-  const sheetsFace = Math.ceil((faceAreaSqft * (1 + WASTE)) / SHEET_SQFT);
+  const panels = group(rawFaces, "P");
+  const shelves = group(rawShelves, "S", () => "Shelf");
+  const toeKicks = group(rawToe, "K", () => "Recessed toe kick");
+  const tops = group(rawTops, "T", () => undefined);
+
+  const faceAreaSqft = rawFaces.reduce((s, p) => s + p.w * p.h, 0) / 144;
+  const shelfAreaSqft = rawShelves.reduce((s, p) => s + p.w * p.h, 0) / 144;
+  const toeAreaSqft = rawToe.reduce((s, p) => s + p.w * p.h, 0) / 144;
+  const plyAreaSqft = faceAreaSqft + shelfAreaSqft + toeAreaSqft;
+  const topAreaSqft = (builtFaceIn * serviceTopWidthIn) / 144;
+  const sheetsFace = Math.ceil((plyAreaSqft * (1 + WASTE)) / SHEET_SQFT);
+
+  // --- weight -----------------------------------------------------------
+  const coating = COATINGS.find((c) => c.value === spec.coating) ?? COATINGS[0];
+  const framingLf = builtFaceFt * FRAMING_LF_PER_FACE_FT;
+  const plyWeight = plyAreaSqft * BIRCH_PLY_LB_PER_SQFT;
+  const framingWeight = framingLf * FRAMING_LB_PER_FT;
+  const topWeight = topAreaSqft * (TOP_LB_PER_SQFT + coating.lbPerSqft);
+  const weightLb = plyWeight + framingWeight + topWeight;
+  const weightPerSectionLb = panelCount > 0 ? weightLb / panelCount : 0;
 
   // --- pricing ----------------------------------------------------------
-  const curvedCount = raw.filter((p) => p.kind === "curved").length;
-  const straightPanels = panelCount - curvedCount;
+  const curvedCount = rawFaces.filter((p) => p.kind === "curved").length;
+  const straightSections = panelCount - curvedCount;
   const shapeExtraHours =
     spec.shape === "round" || spec.shape === "oval"
       ? 4
@@ -494,12 +542,10 @@ export function solveBar(spec: BarSpec): BarSolve {
         ? 2
         : 0;
 
-  const coating = COATINGS.find((c) => c.value === spec.coating) ?? COATINGS[0];
-
   const sheetCost = sheetsFace * spec.sheetPrice;
   const framingCost = builtFaceFt * FRAMING_PER_FT;
-  const topCost = totalTopSqft * spec.topPricePerSqft;
-  const coatingCost = totalTopSqft * coating.perSqft;
+  const topCost = topAreaSqft * spec.topPricePerSqft;
+  const coatingCost = topAreaSqft * coating.perSqft;
   const nosingCost = builtFaceFt * NOSING_PER_FT;
   const lightRailCost = spec.lightRail ? builtFaceFt * LIGHT_RAIL_PER_FT : 0;
   const curvedMaterialCost = curvedCount * CURVED_MATERIAL_PER_PANEL;
@@ -507,8 +553,8 @@ export function solveBar(spec: BarSpec): BarSolve {
 
   const laborHours =
     HOURS_BASE +
-    straightPanels * HOURS_PER_PANEL +
-    curvedCount * HOURS_PER_PANEL * CURVED_LABOR_MULT +
+    straightSections * HOURS_PER_SECTION +
+    curvedCount * HOURS_PER_SECTION * CURVED_LABOR_MULT +
     builtFaceFt * HOURS_PER_FT_TOP +
     builtFaceFt * HOURS_PER_FT_WORKING +
     shapeExtraHours;
@@ -516,8 +562,8 @@ export function solveBar(spec: BarSpec): BarSolve {
 
   const lines: PriceLine[] = [
     {
-      label: "Birch ply faces",
-      detail: `${sheetsFace} sheet${sheetsFace === 1 ? "" : "s"} @ $${spec.sheetPrice} (${faceAreaSqft.toFixed(1)} sqft +${Math.round(WASTE * 100)}% waste)`,
+      label: "Birch ply (faces, shelves, toe kick)",
+      detail: `${sheetsFace} sheet${sheetsFace === 1 ? "" : "s"} @ $${spec.sheetPrice} (${plyAreaSqft.toFixed(1)} sqft +${Math.round(WASTE * 100)}% waste)`,
       amount: sheetCost,
     },
     {
@@ -527,14 +573,14 @@ export function solveBar(spec: BarSpec): BarSolve {
     },
     {
       label: "Wood countertop",
-      detail: `${totalTopSqft.toFixed(1)} sqft (service ${serviceTopSqft.toFixed(1)} + working ${workingTopSqft.toFixed(1)}) @ $${spec.topPricePerSqft}/sqft`,
+      detail: `${topAreaSqft.toFixed(1)} sqft @ $${spec.topPricePerSqft}/sqft`,
       amount: topCost,
     },
     ...(coatingCost > 0
       ? [
           {
             label: `Top finish — ${coating.label.toLowerCase()}`,
-            detail: `${totalTopSqft.toFixed(1)} sqft @ $${coating.perSqft}/sqft`,
+            detail: `${topAreaSqft.toFixed(1)} sqft @ $${coating.perSqft}/sqft`,
             amount: coatingCost,
           },
         ]
@@ -588,20 +634,24 @@ export function solveBar(spec: BarSpec): BarSolve {
 
   const notes = [...geo.notes];
   notes.push(
-    `Two-tier: ${spec.serviceHeightIn}″ service rail over ${spec.workingHeightIn}″ working surface (${stepDownIn}″ step-down).`
+    `${panelCount} transport sections · ${spec.counterDepthIn}″ counter depth · two-tier ${spec.serviceHeightIn}″ service / ${spec.workingHeightIn}″ working (${stepDownIn}″ step-down).`
   );
   notes.push(
-    `Faces: ${PANEL_MATERIAL} @ ${faceHeightIn.toFixed(1)}″ tall. Framing: ${FRAMING_MATERIAL}. Footprint depth ${spec.widthFt * 12}″.`
+    `Each section: poplar frame + ${PANEL_MATERIAL} skin, ${spec.shelfCount} shelf${spec.shelfCount === 1 ? "" : "s"}, ${spec.toeKickIn}″ recessed toe kick. Front skin ${frontSkinHeightIn.toFixed(1)}″ tall.`
   );
   notes.push(
     `Service rail: ${spec.overhangIn}″ overhang, ${spec.nosingIn}″ nosing/lip, ${spec.topThicknessIn}″ ${coating.label.toLowerCase()} wood top.`
   );
   if (spec.lightRail)
     notes.push(
-      `Light rail tucked under the lip — face set down ${spec.lightRailClearanceIn}″ for clearance.`
+      `Light rail tucked under the lip — skin set down ${spec.lightRailClearanceIn}″ for clearance.`
     );
   if (gapApplied)
     notes.push(gapNote ?? `${spec.accessGapIn}″ bartender access opening in the back run.`);
+  if (weightPerSectionLb > 65)
+    notes.push(
+      `⚠ ~${Math.round(weightPerSectionLb)} lb per section — heavy for a rental. Consider a smaller max section width or a lighter top finish.`
+    );
 
   return {
     outline: geo.outline,
@@ -611,16 +661,21 @@ export function solveBar(spec: BarSpec): BarSolve {
     perimeterFt,
     builtFaceIn,
     builtFaceFt,
+    sections: panelCount,
     faceHeightIn,
+    frontSkinHeightIn,
     stepDownIn,
     panelCount,
     facetCount,
     panels,
+    shelves,
+    toeKicks,
     tops,
-    faceAreaSqft,
-    serviceTopSqft,
-    workingTopSqft,
+    plyAreaSqft,
+    topAreaSqft,
     sheetsFace,
+    weightLb,
+    weightPerSectionLb,
     gap: {
       active: gapApplied && spec.accessGap,
       widthIn: spec.accessGapIn,

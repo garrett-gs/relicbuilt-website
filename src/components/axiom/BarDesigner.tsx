@@ -201,25 +201,34 @@ export default function BarDesigner() {
           step={0.25}
         />
         <NumField
-          label="Top depth (over die)"
+          label="Counter depth"
           suffix="in"
-          value={spec.topDepthIn}
-          onChange={(v) => set("topDepthIn", v)}
-          min={6}
-          max={30}
+          value={spec.counterDepthIn}
+          onChange={(v) => set("counterDepthIn", v)}
+          min={12}
+          max={36}
           step={0.5}
         />
         <NumField
-          label="Working top depth"
+          label="Toe kick"
           suffix="in"
-          value={spec.workingTopDepthIn}
-          onChange={(v) => set("workingTopDepthIn", v)}
-          min={6}
-          max={30}
-          step={0.5}
+          value={spec.toeKickIn}
+          onChange={(v) => set("toeKickIn", v)}
+          min={0}
+          max={8}
+          step={0.25}
         />
         <NumField
-          label="Max panel width"
+          label="Shelves / section"
+          suffix="ea"
+          value={spec.shelfCount}
+          onChange={(v) => set("shelfCount", Math.round(v))}
+          min={0}
+          max={4}
+          step={1}
+        />
+        <NumField
+          label="Max section width"
           suffix="in"
           value={spec.maxPanelIn}
           onChange={(v) => set("maxPanelIn", v)}
@@ -443,17 +452,28 @@ export default function BarDesigner() {
           </div>
 
           {/* Summary stats */}
-          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {[
+              { label: "Sections", value: String(result.sections) },
               { label: "Built face", value: `${result.builtFaceFt.toFixed(1)}′` },
-              { label: "Face height", value: `${result.faceHeightIn.toFixed(1)}″` },
-              { label: "Step-down", value: `${result.stepDownIn.toFixed(0)}″` },
-              { label: "Face panels", value: String(result.panelCount) },
-              { label: "Sheets (face)", value: String(result.sheetsFace) },
+              { label: "Skin height", value: `${result.frontSkinHeightIn.toFixed(1)}″` },
+              { label: "Sheets", value: String(result.sheetsFace) },
+              { label: "Weight", value: `${Math.round(result.weightLb)} lb` },
+              {
+                label: "Per section",
+                value: `${Math.round(result.weightPerSectionLb)} lb`,
+                warn: result.weightPerSectionLb > 65,
+              },
             ].map((s) => (
               <div key={s.label} className="border border-border bg-card p-3">
                 <p className="text-[10px] uppercase tracking-wider text-muted">{s.label}</p>
-                <p className="mt-0.5 font-mono text-lg text-foreground">{s.value}</p>
+                <p
+                  className={`mt-0.5 font-mono text-lg ${
+                    "warn" in s && s.warn ? "text-amber-400" : "text-foreground"
+                  }`}
+                >
+                  {s.value}
+                </p>
               </div>
             ))}
           </div>
@@ -462,16 +482,32 @@ export default function BarDesigner() {
           <div className="mb-5 grid gap-5 lg:grid-cols-2">
             <div>
               <h3 className="mb-2 text-sm font-heading font-bold text-foreground">
-                Front body — face panels
+                Front skins <span className="font-normal text-muted">(per section)</span>
               </h3>
               <CutTable items={result.panels} />
             </div>
             <div>
               <h3 className="mb-2 text-sm font-heading font-bold text-foreground">
-                Counter / top blanks
+                Service-rail top blanks
               </h3>
               <CutTable items={result.tops} />
             </div>
+            {result.shelves.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-sm font-heading font-bold text-foreground">
+                  Shelves
+                </h3>
+                <CutTable items={result.shelves} />
+              </div>
+            )}
+            {result.toeKicks.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-sm font-heading font-bold text-foreground">
+                  Toe kick
+                </h3>
+                <CutTable items={result.toeKicks} />
+              </div>
+            )}
           </div>
 
           {/* Rates */}
