@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import Button from "@/components/ui/Button";
 import { buildSvg, buildDxf, downloadSvg, downloadDxf } from "@/lib/partSvg";
 import {
@@ -11,10 +11,12 @@ import {
   BAR_DEFAULTS,
   COATINGS,
   CORNER_STYLES,
+  FRONT_STYLES,
   type BarSpec,
   type BarShape,
   type Coating,
   type CornerStyle,
+  type FrontStyle,
 } from "@/lib/bar/solveBar";
 
 const usd = (n: number) =>
@@ -326,6 +328,57 @@ export default function BarDesigner() {
             );
           })}
         </div>
+      </div>
+
+      {/* Front finish */}
+      <div className="mb-6">
+        <span className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
+          Front finish
+        </span>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {FRONT_STYLES.map((f) => {
+            const active = spec.frontStyle === f.value;
+            return (
+              <button
+                key={f.value}
+                type="button"
+                onClick={() => set("frontStyle", f.value as FrontStyle)}
+                className={
+                  active
+                    ? "h-9 border border-accent bg-accent text-sm font-medium text-background"
+                    : "h-9 border border-border bg-card text-sm text-foreground transition-colors hover:border-accent hover:text-accent"
+                }
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => set("removableTop", !spec.removableTop)}
+            className={
+              spec.removableTop
+                ? "h-8 border border-accent bg-accent px-3 text-[13px] font-medium text-background"
+                : "h-8 border border-border bg-card px-3 text-[13px] text-muted transition-colors hover:border-accent hover:text-accent"
+            }
+          >
+            Removable top
+          </button>
+          <button
+            type="button"
+            onClick={() => set("insertedPanel", !spec.insertedPanel)}
+            className={
+              spec.insertedPanel
+                ? "h-8 border border-accent bg-accent px-3 text-[13px] font-medium text-background"
+                : "h-8 border border-border bg-card px-3 text-[13px] text-muted transition-colors hover:border-accent hover:text-accent"
+            }
+          >
+            Inserted panel
+          </button>
+        </div>
+        <FrontFacePreview style={spec.frontStyle} inserted={spec.insertedPanel} />
       </div>
 
       {/* Curved upgrade */}
@@ -928,6 +981,47 @@ function Elevation({ spec, faceHeightIn }: { spec: BarSpec; faceHeightIn: number
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Representative front-face swatch showing the chosen finish on one panel.
+function FrontFacePreview({ style, inserted }: { style: FrontStyle; inserted: boolean }) {
+  const W = 120;
+  const H = 60;
+  const m = inserted ? 6 : 0; // inset reveal for a swappable insert
+  const iw = W - m * 2;
+  const ih = H - m * 2;
+  let content: ReactNode = null;
+  if (style === "reeded") {
+    const n = 16;
+    content = Array.from({ length: n }, (_, i) => {
+      const x = m + ((i + 0.5) * iw) / n;
+      return <line key={i} x1={x} y1={m + 3} x2={x} y2={H - m - 3} stroke="currentColor" className="text-accent/50" strokeWidth="1.5" />;
+    });
+  } else if (style === "paneled") {
+    content = (
+      <>
+        <rect x={m + 6} y={m + 5} width={iw / 2 - 10} height={ih - 10} fill="none" stroke="currentColor" className="text-accent/60" strokeWidth="1.5" />
+        <rect x={m + iw / 2 + 4} y={m + 5} width={iw / 2 - 10} height={ih - 10} fill="none" stroke="currentColor" className="text-accent/60" strokeWidth="1.5" />
+      </>
+    );
+  } else if (style === "trimmed") {
+    content = <rect x={m + 4} y={m + 4} width={iw - 8} height={ih - 8} fill="none" stroke="currentColor" className="text-accent/60" strokeWidth="2" />;
+  } else if (style === "cement") {
+    content = <rect x={m} y={m} width={iw} height={ih} className="fill-muted/25" />;
+  }
+  return (
+    <div className="mt-3 max-w-xs border border-border bg-card p-3">
+      <svg viewBox={`-2 -2 ${W + 4} ${H + 4}`} className="block h-auto w-full" role="img" aria-label="Front finish preview">
+        <rect x={0} y={0} width={W} height={H} className="fill-muted/10 stroke-accent" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+        {inserted && <rect x={m} y={m} width={iw} height={ih} fill="none" strokeDasharray="3 2" stroke="currentColor" className="text-muted" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
+        {content}
+      </svg>
+      <p className="mt-1.5 text-center text-[10px] text-muted">
+        {FRONT_STYLES.find((f) => f.value === style)?.label}
+        {inserted ? " · swappable insert" : ""} — front face
+      </p>
     </div>
   );
 }

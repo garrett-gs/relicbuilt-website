@@ -45,6 +45,25 @@ export const CORNER_STYLES: { value: CornerStyle; label: string }[] = [
   { value: "column", label: "Column" },
 ];
 
+// Front finishing on the visible patron-side skin. matPerSqft / hrsPerSqft
+// are added on top of the base carcass; lbPerSqft matters for a heavy
+// cement front on a rental that gets moved.
+export type FrontStyle = "flat" | "reeded" | "paneled" | "trimmed" | "cement";
+
+export const FRONT_STYLES: {
+  value: FrontStyle;
+  label: string;
+  matPerSqft: number;
+  hrsPerSqft: number;
+  lbPerSqft: number;
+}[] = [
+  { value: "flat", label: "Flat panel", matPerSqft: 0, hrsPerSqft: 0, lbPerSqft: 0 },
+  { value: "reeded", label: "Reeded", matPerSqft: 9, hrsPerSqft: 0.18, lbPerSqft: 0.4 },
+  { value: "paneled", label: "Paneled", matPerSqft: 11, hrsPerSqft: 0.22, lbPerSqft: 0.5 },
+  { value: "trimmed", label: "Trimmed out", matPerSqft: 6, hrsPerSqft: 0.16, lbPerSqft: 0.3 },
+  { value: "cement", label: "Cement", matPerSqft: 14, hrsPerSqft: 0.12, lbPerSqft: 5 },
+];
+
 export const BAR_SHAPES: { value: BarShape; label: string }[] = [
   { value: "rect", label: "Square / rect" },
   { value: "radius", label: "Curved corners" },
@@ -80,6 +99,9 @@ export interface BarSpec {
   shelfCount: number; // internal shelves per section
   cornerStyle: CornerStyle; // how hard corners are built
   cornerSizeIn: number; // radius / chamfer leg / column size
+  frontStyle: FrontStyle; // patron-side skin finish
+  removableTop: boolean; // top lifts off (cleated, not fixed)
+  insertedPanel: boolean; // front skin is a swappable insert in a frame
   coating: Coating;
   maxPanelIn: number; // max section width before it splits (for transport)
   curvedFronts: boolean; // true curved build for arced runs
@@ -108,6 +130,9 @@ export const BAR_DEFAULTS: BarSpec = {
   shelfCount: 1,
   cornerStyle: "miter",
   cornerSizeIn: 6,
+  frontStyle: "flat",
+  removableTop: false,
+  insertedPanel: false,
   coating: "none",
   maxPanelIn: 48,
   curvedFronts: false,
@@ -134,6 +159,8 @@ const HARDWARE_FLAT = 60;
 const HARDWARE_PER_FT = 6;
 const LIGHT_RAIL_PER_FT = 9; // LED + channel $/lf
 const NOSING_PER_FT = 3.5; // solid nosing stock $/lf
+const REMOVABLE_TOP_PER_FT = 4; // cleats/clips to make the top lift off
+const INSERTED_PANEL_PER_FT = 6; // frame + reveal for a swappable front insert
 const HOURS_BASE = 8;
 const HOURS_PER_SECTION = 1.5; // frame + skin + shelf + toe kick
 const HOURS_PER_FT_TOP = 0.35;
@@ -858,13 +885,16 @@ export function solveBar(spec: BarSpec): BarSolve {
   const topAreaSqft = (builtFaceIn * serviceTopWidthIn) / 144;
   const sheetsFace = Math.ceil((plyAreaSqft * (1 + WASTE)) / SHEET_SQFT);
 
+  const front = FRONT_STYLES.find((f) => f.value === spec.frontStyle) ?? FRONT_STYLES[0];
+
   // --- weight -----------------------------------------------------------
   const coating = COATINGS.find((c) => c.value === spec.coating) ?? COATINGS[0];
   const framingLf = builtFaceFt * FRAMING_LF_PER_FACE_FT;
   const plyWeight = plyAreaSqft * BIRCH_PLY_LB_PER_SQFT;
   const framingWeight = framingLf * FRAMING_LB_PER_FT;
   const topWeight = topAreaSqft * (TOP_LB_PER_SQFT + coating.lbPerSqft);
-  const weightLb = plyWeight + framingWeight + topWeight;
+  const frontWeight = faceAreaSqft * front.lbPerSqft;
+  const weightLb = plyWeight + framingWeight + topWeight + frontWeight;
   const weightPerSectionLb = panelCount > 0 ? weightLb / panelCount : 0;
 
   // --- pricing ----------------------------------------------------------
@@ -885,6 +915,9 @@ export function solveBar(spec: BarSpec): BarSolve {
   const lightRailCost = spec.lightRail ? builtFaceFt * LIGHT_RAIL_PER_FT : 0;
   const curvedMaterialCost = curvedCount * CURVED_MATERIAL_PER_PANEL;
   const hardwareCost = HARDWARE_FLAT + builtFaceFt * HARDWARE_PER_FT;
+  const frontCost = faceAreaSqft * front.matPerSqft;
+  const removableTopCost = spec.removableTop ? builtFaceFt * REMOVABLE_TOP_PER_FT : 0;
+  const insertedPanelCost = spec.insertedPanel ? builtFaceFt * INSERTED_PANEL_PER_FT : 0;
 
   const laborHours =
     HOURS_BASE +
@@ -892,6 +925,7 @@ export function solveBar(spec: BarSpec): BarSolve {
     curvedCount * HOURS_PER_SECTION * CURVED_LABOR_MULT +
     builtFaceFt * HOURS_PER_FT_TOP +
     builtFaceFt * HOURS_PER_FT_WORKING +
+    faceAreaSqft * front.hrsPerSqft +
     shapeExtraHours;
   const laborCost = laborHours * spec.laborRate;
 
@@ -943,6 +977,33 @@ export function solveBar(spec: BarSpec): BarSolve {
           },
         ]
       : []),
+    ...(frontCost > 0
+      ? [
+          {
+            label: `Front finish — ${front.label.toLowerCase()}`,
+            detail: `${faceAreaSqft.toFixed(1)} sqft @ $${front.matPerSqft}/sqft`,
+            amount: frontCost,
+          },
+        ]
+      : []),
+    ...(removableTopCost > 0
+      ? [
+          {
+            label: "Removable top hardware",
+            detail: `${builtFaceFt.toFixed(1)} lf @ $${REMOVABLE_TOP_PER_FT}/lf`,
+            amount: removableTopCost,
+          },
+        ]
+      : []),
+    ...(insertedPanelCost > 0
+      ? [
+          {
+            label: "Inserted-panel frame",
+            detail: `${builtFaceFt.toFixed(1)} lf @ $${INSERTED_PANEL_PER_FT}/lf`,
+            amount: insertedPanelCost,
+          },
+        ]
+      : []),
     {
       label: "Hardware & consumables",
       detail: `$${HARDWARE_FLAT} + ${builtFaceFt.toFixed(1)} lf @ $${HARDWARE_PER_FT}/lf`,
@@ -963,7 +1024,10 @@ export function solveBar(spec: BarSpec): BarSolve {
     nosingCost +
     lightRailCost +
     curvedMaterialCost +
-    hardwareCost;
+    hardwareCost +
+    frontCost +
+    removableTopCost +
+    insertedPanelCost;
   const labor = laborCost;
   const total = materials + labor;
 
@@ -992,6 +1056,9 @@ export function solveBar(spec: BarSpec): BarSolve {
               : `${spec.cornerSizeIn}″ corner columns — column runs deeper; sections butt to it, and bars can share a column to reconfigure`;
     notes.push(`Corners: ${desc}.`);
   }
+  notes.push(
+    `Front finish: ${front.label.toLowerCase()}${spec.insertedPanel ? ", swappable inserted panel" : ""}${spec.removableTop ? ", removable top" : ""}.`
+  );
   notes.push(
     `Bolt pattern: ⌀3/8″, 2 front / 2 back, identical at every section joint (through-bolted) and on the end panels (threaded / set-screw) so parts interchange.`
   );
