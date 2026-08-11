@@ -31,6 +31,7 @@ import {
   HardHat,
   ClipboardList,
   Ruler,
+  Martini,
 } from "lucide-react";
 
 const navSections = [
@@ -65,6 +66,7 @@ const navSections = [
     label: "Parts Studio",
     items: [
       { href: "/axiom/parts-studio", icon: Ruler, label: "Parts Studio" },
+      { href: "/axiom/bar-designer", icon: Martini, label: "Bar Designer" },
     ],
   },
   {
