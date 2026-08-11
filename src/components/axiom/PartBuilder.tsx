@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Button from "@/components/ui/Button";
 import { buildSvg, buildDxf, downloadSvg, downloadDxf } from "@/lib/partSvg";
 import type {
@@ -95,25 +95,15 @@ export default function PartBuilder({
               </div>
             </div>
           ) : (
-            <label key={f.key} className="block">
-              <span className="mb-1.5 flex items-baseline justify-between">
-                <span className="text-xs uppercase tracking-wider text-muted">
-                  {f.label}
-                </span>
-                <span className="font-mono text-sm text-foreground">
-                  {spec[f.key]}&Prime;
-                </span>
-              </span>
-              <input
-                type="range"
-                className="w-full accent-accent"
-                min={f.min}
-                max={f.max}
-                step={f.step}
-                value={spec[f.key] as number}
-                onChange={(e) => set(f.key, parseFloat(e.target.value))}
-              />
-            </label>
+            <DimensionInput
+              key={f.key}
+              label={f.label}
+              min={f.min}
+              max={f.max}
+              step={f.step}
+              value={spec[f.key] as number}
+              onChange={(v) => set(f.key, v)}
+            />
           )
         )}
       </div>
@@ -130,6 +120,78 @@ export default function PartBuilder({
         />
       )}
     </div>
+  );
+}
+
+// Number entry for a dimension. Holds its own text buffer so partial
+// input ("12.", "") is preserved while typing; only a valid parse is
+// pushed up to the spec. Clamps to [min, max] on blur.
+function DimensionInput({
+  label,
+  min,
+  max,
+  step,
+  value,
+  onChange,
+}: {
+  label: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+
+  // Keep the buffer in sync when the value changes from outside (e.g. a
+  // different spec loads), but don't stomp what the user is mid-typing.
+  useEffect(() => {
+    if (parseFloat(text) !== value) setText(String(value));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const commit = () => {
+    const n = parseFloat(text);
+    if (Number.isNaN(n)) {
+      setText(String(value));
+      return;
+    }
+    const clamped = Math.min(max, Math.max(min, n));
+    setText(String(clamped));
+    if (clamped !== value) onChange(clamped);
+  };
+
+  return (
+    <label className="block">
+      <span className="mb-1.5 flex items-baseline justify-between">
+        <span className="text-xs uppercase tracking-wider text-muted">
+          {label}
+        </span>
+        <span className="text-[10px] text-muted/70">
+          {min}–{max}&Prime;
+        </span>
+      </span>
+      <div className="relative">
+        <input
+          type="number"
+          inputMode="decimal"
+          className="h-9 w-full border border-border bg-card pl-3 pr-7 font-mono text-sm text-foreground focus:border-accent focus:outline-none"
+          min={min}
+          max={max}
+          step={step}
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            const n = parseFloat(e.target.value);
+            if (!Number.isNaN(n) && n >= min && n <= max) onChange(n);
+          }}
+          onBlur={commit}
+        />
+        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-sm text-muted">
+          &Prime;
+        </span>
+      </div>
+    </label>
   );
 }
 
