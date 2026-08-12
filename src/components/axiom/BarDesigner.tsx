@@ -459,29 +459,49 @@ export default function BarDesigner() {
             Bartender access
           </span>
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => set("accessGap", !spec.accessGap)}
-              className={
-                spec.accessGap
-                  ? "h-9 flex-1 border border-accent bg-accent text-sm font-medium text-background"
-                  : "h-9 flex-1 border border-border bg-card text-sm text-foreground transition-colors hover:border-accent hover:text-accent"
-              }
-            >
-              {spec.accessGap ? "Opening on" : "No opening"}
-            </button>
-            <div className="w-28">
-              <NumField
-                label="Width"
-                suffix="in"
-                value={spec.accessGapIn}
-                onChange={(v) => set("accessGapIn", v)}
-                min={18}
-                max={60}
-                step={1}
-              />
+            <div className="flex flex-1">
+              <button
+                type="button"
+                onClick={() => set("accessGap", true)}
+                className={
+                  spec.accessGap
+                    ? "h-9 flex-1 border border-accent bg-accent text-sm font-medium text-background"
+                    : "h-9 flex-1 border border-border bg-card text-sm text-foreground transition-colors hover:border-accent hover:text-accent"
+                }
+              >
+                Opening
+              </button>
+              <button
+                type="button"
+                onClick={() => set("accessGap", false)}
+                className={
+                  !spec.accessGap
+                    ? "h-9 flex-1 border border-accent bg-accent text-sm font-medium text-background"
+                    : "h-9 flex-1 border border-l-0 border-border bg-card text-sm text-foreground transition-colors hover:border-accent hover:text-accent"
+                }
+              >
+                None
+              </button>
             </div>
+            {spec.accessGap && (
+              <div className="w-28">
+                <NumField
+                  label="Width"
+                  suffix="in"
+                  value={spec.accessGapIn}
+                  onChange={(v) => set("accessGapIn", v)}
+                  min={18}
+                  max={60}
+                  step={1}
+                />
+              </div>
+            )}
           </div>
+          {!spec.accessGap && (
+            <p className="mt-1.5 text-[11px] text-muted">
+              Fully enclosed — no entrance (freestanding / served from outside).
+            </p>
+          )}
         </div>
         <div>
           <span className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
