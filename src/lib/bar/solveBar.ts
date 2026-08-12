@@ -100,8 +100,11 @@ export interface BarSpec {
   cornerStyle: CornerStyle; // how hard corners are built
   cornerSizeIn: number; // radius / chamfer leg / column size
   frontStyle: FrontStyle; // patron-side skin finish
+  reedSpacingIn: number; // reed pitch (reeded front)
+  panelStileIn: number; // stile/rail width (paneled front)
   removableTop: boolean; // top lifts off (cleated, not fixed)
   insertedPanel: boolean; // front skin is a swappable insert in a frame
+  insertRevealIn: number; // reveal around a swappable insert
   coating: Coating;
   maxPanelIn: number; // max section width before it splits (for transport)
   curvedFronts: boolean; // true curved build for arced runs
@@ -131,8 +134,11 @@ export const BAR_DEFAULTS: BarSpec = {
   cornerStyle: "miter",
   cornerSizeIn: 6,
   frontStyle: "flat",
+  reedSpacingIn: 0.75,
+  panelStileIn: 2.5,
   removableTop: false,
   insertedPanel: false,
+  insertRevealIn: 0.25,
   coating: "none",
   maxPanelIn: 48,
   curvedFronts: false,
@@ -220,6 +226,8 @@ export interface BarSolve {
   toeKicks: CutItem[];
   tops: CutItem[];
   endPanels: CutItem[]; // the (max 2) exposed-end panels
+  insertPanels: CutItem[]; // swappable front inserts (inserted-panel option)
+  frontSeq: { widthIn: number; kind: string }[]; // sections in order, entrance-first
   endPanel: {
     widthIn: number;
     heightIn: number;
@@ -556,6 +564,7 @@ interface Layout {
   seams: SeamPt[]; // interior subdivision joints
   corners: SeamPt[]; // shape corners / straight-to-curve joints
   entrance: { ax: number; ay: number; bx: number; by: number } | null;
+  entranceStartIdx: number; // index in panels where the run after the gap begins (-1 none)
   gapApplied: boolean;
   gapNote?: string;
 }
@@ -593,6 +602,7 @@ function layoutSections(
   const panels: RawPanel[] = [];
   const seams: SeamPt[] = [];
   let entrance: Layout["entrance"] = null;
+  let entranceStartIdx = -1;
   let gapApplied = false;
   let gapNote: string | undefined;
 
@@ -665,6 +675,7 @@ function layoutSections(
       entrance = { ax: aPt.x, ay: aPt.y, bx: bPt.x, by: bPt.y };
       gapApplied = true;
       // right part: b -> end (entrance at its START, remainder at end/corner)
+      entranceStartIdx = panels.length;
       const [, rl] = pushRun(seg, b, sizeRun(seg.len - b, spec.maxPanelIn, false));
       if (endMiter != null && panels[rl]) panels[rl].rightCut = endMiter;
     } else {
@@ -674,7 +685,7 @@ function layoutSections(
     }
   });
 
-  return { panels, seams, corners, entrance, gapApplied, gapNote };
+  return { panels, seams, corners, entrance, entranceStartIdx, gapApplied, gapNote };
 }
 
 function faceNote(p: RawPanel): string | undefined {
@@ -762,6 +773,8 @@ const emptySolve = (error: string): BarSolve => ({
   toeKicks: [],
   tops: [],
   endPanels: [],
+  insertPanels: [],
+  frontSeq: [],
   endPanel: { widthIn: 0, heightIn: 0, holeDiaIn: BOLT_HOLE_DIA_IN, holes: [], count: 0, through: false },
   boltPoints: [],
   plyAreaSqft: 0,
@@ -805,9 +818,18 @@ export function solveBar(spec: BarSpec): BarSolve {
     seams,
     corners,
     entrance,
+    entranceStartIdx,
     gapApplied,
     gapNote,
   } = layoutSections(geo.outline, spec, frontSkinHeightIn, geo.bboxW / 2, geo.bboxH);
+
+  // Sections in display order for the unrolled front elevation: start just
+  // after the entrance so the drawing reads jamb → around → jamb.
+  const seqSource =
+    entranceStartIdx >= 0
+      ? [...rawFaces.slice(entranceStartIdx), ...rawFaces.slice(0, entranceStartIdx)]
+      : rawFaces;
+  const frontSeq = seqSource.map((p) => ({ widthIn: round16(p.w), kind: p.kind }));
   const panelCount = rawFaces.length;
   const facetCount = rawFaces.filter((p) => p.kind !== "straight").length;
 
@@ -837,6 +859,21 @@ export function solveBar(spec: BarSpec): BarSolve {
   const shelves = group(rawShelves, "S", () => "Shelf");
   const toeKicks = group(rawToe, "K", () => "Recessed toe kick");
   const tops = group(rawTops, "T", () => undefined);
+
+  // Swappable front inserts: each section's face becomes an insert that
+  // drops into a frame with a reveal all around, so a bar's look can be
+  // changed without rebuilding it.
+  const rev = spec.insertRevealIn;
+  const rawInserts: RawPanel[] = spec.insertedPanel
+    ? rawFaces.map((p) => ({
+        w: Math.max(1, p.w - 2 * rev),
+        h: Math.max(1, frontSkinHeightIn - 2 * rev),
+        kind: p.kind,
+      }))
+    : [];
+  const insertPanels = spec.insertedPanel
+    ? group(rawInserts, "I", () => `Swappable insert · ${rev}″ reveal`)
+    : [];
 
   // End panels: a full bar needs only TWO — on the inside of the bartender
   // entrance section, or the two open ends of an open-ended bar. (Break the
@@ -1104,6 +1141,8 @@ export function solveBar(spec: BarSpec): BarSolve {
     toeKicks,
     tops,
     endPanels,
+    insertPanels,
+    frontSeq,
     endPanel: {
       widthIn: round16(endPanelW),
       heightIn: round16(endPanelH),

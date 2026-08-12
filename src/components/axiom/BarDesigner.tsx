@@ -354,6 +354,45 @@ export default function BarDesigner() {
             );
           })}
         </div>
+        {(spec.frontStyle === "reeded" ||
+          spec.frontStyle === "paneled" ||
+          spec.insertedPanel) && (
+          <div className="mt-3 grid gap-3 sm:grid-cols-3">
+            {spec.frontStyle === "reeded" && (
+              <NumField
+                label="Reed spacing"
+                suffix="in"
+                value={spec.reedSpacingIn}
+                onChange={(v) => set("reedSpacingIn", v)}
+                min={0.25}
+                max={3}
+                step={0.125}
+              />
+            )}
+            {spec.frontStyle === "paneled" && (
+              <NumField
+                label="Stile / rail"
+                suffix="in"
+                value={spec.panelStileIn}
+                onChange={(v) => set("panelStileIn", v)}
+                min={1}
+                max={6}
+                step={0.25}
+              />
+            )}
+            {spec.insertedPanel && (
+              <NumField
+                label="Insert reveal"
+                suffix="in"
+                value={spec.insertRevealIn}
+                onChange={(v) => set("insertRevealIn", v)}
+                min={0}
+                max={1}
+                step={0.0625}
+              />
+            )}
+          </div>
+        )}
         <div className="mt-2 flex flex-wrap gap-2">
           <button
             type="button"
@@ -378,7 +417,6 @@ export default function BarDesigner() {
             Inserted panel
           </button>
         </div>
-        <FrontFacePreview style={spec.frontStyle} inserted={spec.insertedPanel} />
       </div>
 
       {/* Curved upgrade */}
@@ -703,6 +741,19 @@ export default function BarDesigner() {
             <Elevation spec={spec} faceHeightIn={result.faceHeightIn} />
           </div>
 
+          {/* Front elevation */}
+          <div className="mb-5 border border-border bg-card p-4">
+            <span className="mb-3 block text-[10px] uppercase tracking-wider text-muted">
+              Front elevation — unrolled ({FRONT_STYLES.find((f) => f.value === spec.frontStyle)?.label})
+            </span>
+            <FrontElevation
+              seq={result.frontSeq}
+              skinH={result.frontSkinHeightIn}
+              toeKickIn={spec.toeKickIn}
+              spec={spec}
+            />
+          </div>
+
           {/* Summary stats */}
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
             {[
@@ -791,6 +842,14 @@ export default function BarDesigner() {
                 </h3>
                 <CutTable items={result.endPanels} />
                 <EndPanelDiagram ep={result.endPanel} />
+              </div>
+            )}
+            {result.insertPanels.length > 0 && (
+              <div>
+                <h3 className="mb-2 text-sm font-heading font-bold text-foreground">
+                  Swappable inserts
+                </h3>
+                <CutTable items={result.insertPanels} />
               </div>
             )}
           </div>
@@ -985,42 +1044,103 @@ function Elevation({ spec, faceHeightIn }: { spec: BarSpec; faceHeightIn: number
   );
 }
 
-// Representative front-face swatch showing the chosen finish on one panel.
-function FrontFacePreview({ style, inserted }: { style: FrontStyle; inserted: boolean }) {
-  const W = 120;
-  const H = 60;
-  const m = inserted ? 6 : 0; // inset reveal for a swappable insert
-  const iw = W - m * 2;
-  const ih = H - m * 2;
-  let content: ReactNode = null;
-  if (style === "reeded") {
-    const n = 16;
-    content = Array.from({ length: n }, (_, i) => {
-      const x = m + ((i + 0.5) * iw) / n;
-      return <line key={i} x1={x} y1={m + 3} x2={x} y2={H - m - 3} stroke="currentColor" className="text-accent/50" strokeWidth="1.5" />;
-    });
-  } else if (style === "paneled") {
-    content = (
-      <>
-        <rect x={m + 6} y={m + 5} width={iw / 2 - 10} height={ih - 10} fill="none" stroke="currentColor" className="text-accent/60" strokeWidth="1.5" />
-        <rect x={m + iw / 2 + 4} y={m + 5} width={iw / 2 - 10} height={ih - 10} fill="none" stroke="currentColor" className="text-accent/60" strokeWidth="1.5" />
-      </>
+// Draw the chosen finish inside one section rectangle (x..x+w, 0..h).
+function finishGraphics(
+  style: FrontStyle,
+  x: number,
+  w: number,
+  h: number,
+  spec: BarSpec
+): ReactNode {
+  const inset = spec.insertedPanel ? spec.insertRevealIn : 0;
+  const ix = x + inset;
+  const iw = Math.max(1, w - 2 * inset);
+  const iy = inset;
+  const ih = Math.max(1, h - 2 * inset);
+  const nodes: ReactNode[] = [];
+  if (spec.insertedPanel) {
+    nodes.push(
+      <rect key="rev" x={ix} y={iy} width={iw} height={ih} fill="none" strokeDasharray="2 1.5" stroke="currentColor" className="text-muted" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
     );
-  } else if (style === "trimmed") {
-    content = <rect x={m + 4} y={m + 4} width={iw - 8} height={ih - 8} fill="none" stroke="currentColor" className="text-accent/60" strokeWidth="2" />;
-  } else if (style === "cement") {
-    content = <rect x={m} y={m} width={iw} height={ih} className="fill-muted/25" />;
   }
+  if (style === "reeded") {
+    const pitch = Math.max(0.25, spec.reedSpacingIn);
+    const n = Math.max(1, Math.round(iw / pitch));
+    for (let i = 1; i < n; i++) {
+      const rx = ix + (i * iw) / n;
+      nodes.push(<line key={`r${i}`} x1={rx} y1={iy + 1} x2={rx} y2={iy + ih - 1} stroke="currentColor" className="text-accent/45" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />);
+    }
+  } else if (style === "paneled") {
+    const s = Math.min(spec.panelStileIn, iw / 2 - 1, ih / 2 - 1);
+    nodes.push(<rect key="pnl" x={ix + s} y={iy + s} width={iw - 2 * s} height={ih - 2 * s} fill="none" stroke="currentColor" className="text-accent/55" strokeWidth="0.75" vectorEffect="non-scaling-stroke" />);
+  } else if (style === "trimmed") {
+    const t = Math.min(2, iw / 2 - 1, ih / 2 - 1);
+    nodes.push(<rect key="trm" x={ix + t} y={iy + t} width={iw - 2 * t} height={ih - 2 * t} fill="none" stroke="currentColor" className="text-accent/55" strokeWidth="1" vectorEffect="non-scaling-stroke" />);
+  } else if (style === "cement") {
+    nodes.push(<rect key="cem" x={ix} y={iy} width={iw} height={ih} className="fill-muted/25" />);
+  }
+  return nodes;
+}
+
+// Unrolled front elevation — every section drawn left to right at its true
+// width, with the finish, section seams, bolt marks, and the recessed toe
+// kick. Reads jamb → around → jamb.
+function FrontElevation({
+  seq,
+  skinH,
+  toeKickIn,
+  spec,
+}: {
+  seq: { widthIn: number; kind: string }[];
+  skinH: number;
+  toeKickIn: number;
+  spec: BarSpec;
+}) {
+  if (!seq.length) return <p className="text-sm text-muted">No sections.</p>;
+  const total = seq.reduce((s, p) => s + p.widthIn, 0);
+  const H = skinH + toeKickIn;
+  const pad = Math.max(total, H) * 0.03 + 2;
+  const kickSetback = 3;
+
+  let x = 0;
+  const sections: ReactNode[] = [];
+  const seams: ReactNode[] = [];
+  const bolts: ReactNode[] = [];
+  const boltR = Math.max(0.6, H * 0.02);
+  seq.forEach((p, i) => {
+    sections.push(
+      <g key={i} transform={`translate(${x} 0)`}>
+        {finishGraphics(spec.frontStyle, 0, p.widthIn, skinH, spec)}
+      </g>
+    );
+    if (i > 0) {
+      seams.push(<line key={`s${i}`} x1={x} y1={0} x2={x} y2={skinH} stroke="currentColor" className="text-accent" strokeWidth="0.75" vectorEffect="non-scaling-stroke" />);
+      // two bolt marks per joint (upper/lower)
+      bolts.push(<circle key={`b${i}a`} cx={x} cy={skinH * 0.25} r={boltR} fill="none" stroke="currentColor" className="text-amber-400" strokeWidth="0.6" vectorEffect="non-scaling-stroke" />);
+      bolts.push(<circle key={`b${i}b`} cx={x} cy={skinH * 0.75} r={boltR} fill="none" stroke="currentColor" className="text-amber-400" strokeWidth="0.6" vectorEffect="non-scaling-stroke" />);
+    }
+    x += p.widthIn;
+  });
+
   return (
-    <div className="mt-3 max-w-xs border border-border bg-card p-3">
-      <svg viewBox={`-2 -2 ${W + 4} ${H + 4}`} className="block h-auto w-full" role="img" aria-label="Front finish preview">
-        <rect x={0} y={0} width={W} height={H} className="fill-muted/10 stroke-accent" strokeWidth="1" vectorEffect="non-scaling-stroke" />
-        {inserted && <rect x={m} y={m} width={iw} height={ih} fill="none" strokeDasharray="3 2" stroke="currentColor" className="text-muted" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
-        {content}
+    <div className="overflow-x-auto">
+      <svg
+        viewBox={`${-pad} ${-pad} ${total + pad * 2} ${H + pad * 2}`}
+        preserveAspectRatio="xMidYMid meet"
+        className="mx-auto block h-auto max-h-[38vh] w-full min-w-[520px]"
+        role="img"
+        aria-label="Front elevation"
+      >
+        {/* skin band */}
+        <rect x={0} y={0} width={total} height={skinH} fill="currentColor" className="text-muted/10" stroke="currentColor" strokeWidth="0.75" vectorEffect="non-scaling-stroke" />
+        {sections}
+        {seams}
+        {bolts}
+        {/* recessed toe kick */}
+        <rect x={kickSetback} y={skinH} width={total - kickSetback} height={toeKickIn} className="fill-muted/20 stroke-accent" strokeWidth="0.5" vectorEffect="non-scaling-stroke" />
       </svg>
-      <p className="mt-1.5 text-center text-[10px] text-muted">
-        {FRONT_STYLES.find((f) => f.value === style)?.label}
-        {inserted ? " · swappable insert" : ""} — front face
+      <p className="mt-2 text-[10px] text-muted">
+        {seq.length} sections · {(total / 12).toFixed(1)}′ of front · amber = bolt joints · ends are the entrance jambs
       </p>
     </div>
   );
