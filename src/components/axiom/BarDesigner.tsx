@@ -189,6 +189,7 @@ export default function BarDesigner() {
   const arced =
     spec.shape === "round" || spec.shape === "oval" || spec.shape === "radius";
   const isRound = spec.shape === "round";
+  const isStraight = spec.shape === "straight";
 
   const exportPanels = (format: "dxf" | "svg") => {
     if (result.error) return;
@@ -315,7 +316,7 @@ export default function BarDesigner() {
           minFt={2}
           maxFt={40}
         />
-        {!isRound && (
+        {!isRound && !isStraight && (
           <FtInField
             label="Depth (std 2′)"
             value={spec.widthFt}
@@ -559,6 +560,7 @@ export default function BarDesigner() {
 
       {/* Access gap + light rail */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2">
+        {!isStraight && (
         <div>
           <span className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
             Bartender access
@@ -608,6 +610,7 @@ export default function BarDesigner() {
             </p>
           )}
         </div>
+        )}
         <div>
           <span className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
             Light rail under lip
@@ -716,6 +719,31 @@ export default function BarDesigner() {
                   strokeWidth="1.5"
                   vectorEffect="non-scaling-stroke"
                 />
+                {result.isStraight && (
+                  <g>
+                    {/* open bartender side (back edge) */}
+                    <line
+                      x1={0}
+                      y1={result.bboxH}
+                      x2={result.bboxW}
+                      y2={result.bboxH}
+                      stroke="currentColor"
+                      className="text-muted"
+                      strokeWidth="1.5"
+                      strokeDasharray="6 4"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                    <text
+                      x={result.bboxW / 2}
+                      y={result.bboxH * 0.5}
+                      textAnchor="middle"
+                      fontSize={Math.max(result.bboxW, result.bboxH) * 0.05}
+                      className="fill-muted"
+                    >
+                      open (bartender side)
+                    </text>
+                  </g>
+                )}
                 {result.innerOutline && (
                   <g transform={`translate(${result.innerInsetIn} ${result.innerInsetIn})`}>
                     <path

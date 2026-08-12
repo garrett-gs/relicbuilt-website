@@ -30,7 +30,7 @@ export interface SeamPt {
   ny: number;
 }
 
-export type BarShape = "rect" | "radius" | "hex" | "round" | "oval";
+export type BarShape = "straight" | "rect" | "radius" | "hex" | "round" | "oval";
 export type Coating = "none" | "paint" | "epoxy" | "concrete";
 // How a hard corner (square / hex vertex) is built. miter/butt keep the
 // sharp corner; radius/chamfer reshape the outline; column drops a post at
@@ -65,6 +65,7 @@ export const FRONT_STYLES: {
 ];
 
 export const BAR_SHAPES: { value: BarShape; label: string }[] = [
+  { value: "straight", label: "Straight" },
   { value: "rect", label: "Square / rect" },
   { value: "radius", label: "Curved corners" },
   { value: "hex", label: "Hexagon" },
@@ -208,6 +209,7 @@ export interface BarSolve {
   outline: string;
   innerOutline: string | null; // hollow standing space (perimeter inset by counter depth)
   innerInsetIn: number;
+  isStraight: boolean;
   bboxW: number;
   bboxH: number;
   perimeterIn: number;
@@ -457,6 +459,8 @@ function shapeGeometry(spec: BarSpec):
         notes,
       };
     }
+    default:
+      return { error: "Unsupported shape." };
   }
 }
 
@@ -755,6 +759,7 @@ const emptySolve = (error: string): BarSolve => ({
   outline: "",
   innerOutline: null,
   innerInsetIn: 0,
+  isStraight: false,
   bboxW: 0,
   bboxH: 0,
   perimeterIn: 0,
@@ -810,18 +815,57 @@ export function solveBar(spec: BarSpec): BarSolve {
     spec.serviceHeightIn - spec.topThicknessIn - spec.workingHeightIn
   );
 
-  const geo = shapeGeometry(spec);
-  if ("error" in geo) return emptySolve(geo.error);
+  const isStraight = spec.shape === "straight";
+  let outline: string;
+  let bboxW: number;
+  let bboxH: number;
+  let geoNotes: string[];
+  let rawFaces: RawPanel[];
+  let seams: SeamPt[];
+  let corners: SeamPt[];
+  let entrance: BarSolve["entrance"];
+  let entranceStartIdx: number;
+  let gapApplied: boolean;
+  let gapNote: string | undefined;
 
-  const {
-    panels: rawFaces,
-    seams,
-    corners,
-    entrance,
-    entranceStartIdx,
-    gapApplied,
-    gapNote,
-  } = layoutSections(geo.outline, spec, frontSkinHeightIn, geo.bboxW / 2, geo.bboxH);
+  if (isStraight) {
+    // A straight run: one front face, open back, two exposed ends. Only the
+    // front is sectioned — no wrap-around, no corners, no access opening.
+    const L = spec.lengthFt * 12;
+    const D = spec.counterDepthIn;
+    bboxW = L;
+    bboxH = D;
+    outline = `M 0 0 L ${fmt(L)} 0 L ${fmt(L)} ${fmt(D)} L 0 ${fmt(D)} Z`;
+    geoNotes = [];
+    rawFaces = [];
+    seams = [];
+    corners = [];
+    entrance = null;
+    entranceStartIdx = -1;
+    gapApplied = false;
+    gapNote = undefined;
+    let x = 0;
+    sizeEven(L, spec.maxPanelIn).forEach((w, i) => {
+      if (i > 0) seams.push({ x, y: 0, nx: 0, ny: -1 });
+      rawFaces.push({ w, h: frontSkinHeightIn, kind: "straight" });
+      x += w;
+    });
+  } else {
+    const geo = shapeGeometry(spec);
+    if ("error" in geo) return emptySolve(geo.error);
+    outline = geo.outline;
+    bboxW = geo.bboxW;
+    bboxH = geo.bboxH;
+    geoNotes = geo.notes;
+    const layout = layoutSections(outline, spec, frontSkinHeightIn, bboxW / 2, bboxH);
+    rawFaces = layout.panels;
+    seams = layout.seams;
+    corners = layout.corners;
+    entrance = layout.entrance;
+    entranceStartIdx = layout.entranceStartIdx;
+    gapApplied = layout.gapApplied;
+    gapNote = layout.gapNote;
+  }
 
   // Sections in display order for the unrolled front elevation: start just
   // after the entrance so the drawing reads jamb → around → jamb.
@@ -882,7 +926,7 @@ export function solveBar(spec: BarSpec): BarSolve {
   // panels are threaded / set-screw (not through) so panels interchange.
   const endPanelW = spec.counterDepthIn;
   const endPanelH = frontSkinHeightIn;
-  const endPanelCount = entrance ? 2 : 0;
+  const endPanelCount = isStraight || entrance ? 2 : 0;
   const inset = Math.min(BOLT_INSET_IN, endPanelW / 2 - 1, endPanelH / 2 - 1);
   const holes = [
     { x: inset, y: inset }, // front-top
@@ -1068,7 +1112,11 @@ export function solveBar(spec: BarSpec): BarSolve {
   const labor = laborCost;
   const total = materials + labor;
 
-  const notes = [...geo.notes];
+  const notes = [...geoNotes];
+  if (isStraight)
+    notes.push(
+      `Straight run — single front, open back, two exposed ends. ${panelCount} section${panelCount === 1 ? "" : "s"} along the front.`
+    );
   notes.push(
     `${panelCount} transport sections · ${spec.counterDepthIn}″ counter depth · two-tier ${spec.serviceHeightIn}″ service / ${spec.workingHeightIn}″ working (${stepDownIn}″ step-down).`
   );
@@ -1117,14 +1165,15 @@ export function solveBar(spec: BarSpec): BarSolve {
       `⚠ ~${Math.round(weightPerSectionLb)} lb per section — heavy for a rental. Consider a smaller max section width or a lighter top finish.`
     );
 
-  const inner = innerOutline(spec, spec.counterDepthIn);
+  const inner = isStraight ? null : innerOutline(spec, spec.counterDepthIn);
 
   return {
-    outline: geo.outline,
+    outline,
     innerOutline: inner,
     innerInsetIn: spec.counterDepthIn,
-    bboxW: geo.bboxW,
-    bboxH: geo.bboxH,
+    isStraight,
+    bboxW,
+    bboxH,
     perimeterIn,
     perimeterFt,
     builtFaceIn,
@@ -1166,10 +1215,10 @@ export function solveBar(spec: BarSpec): BarSolve {
     cornerSizeIn: spec.cornerSizeIn,
     entrance,
     dims: {
-      outerW: geo.bboxW,
-      outerH: geo.bboxH,
-      innerW: inner ? geo.bboxW - 2 * spec.counterDepthIn : 0,
-      innerH: inner ? geo.bboxH - 2 * spec.counterDepthIn : 0,
+      outerW: bboxW,
+      outerH: bboxH,
+      innerW: inner ? bboxW - 2 * spec.counterDepthIn : 0,
+      innerH: inner ? bboxH - 2 * spec.counterDepthIn : 0,
     },
     gap: {
       active: gapApplied && spec.accessGap,
