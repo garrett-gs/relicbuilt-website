@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, useEffect, type ReactNode } from "react";
 import Button from "@/components/ui/Button";
 import { buildSvg, buildDxf, downloadSvg, downloadDxf } from "@/lib/partSvg";
 import {
@@ -82,6 +82,97 @@ function NumField({
         <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-muted">
           {suffix}
         </span>
+      </div>
+    </label>
+  );
+}
+
+// Feet + inches entry. Stores/returns a decimal-feet value but lets you
+// type feet and inches separately (e.g., 8 ft 6 in).
+function FtInField({
+  label,
+  value,
+  onChange,
+  minFt = 0,
+  maxFt = 40,
+}: {
+  label: string;
+  value: number; // decimal feet
+  onChange: (v: number) => void;
+  minFt?: number;
+  maxFt?: number;
+}) {
+  const split = (v: number) => {
+    let ft = Math.floor(v + 1e-6);
+    let inch = Math.round((v - ft) * 12);
+    if (inch >= 12) {
+      ft += 1;
+      inch = 0;
+    }
+    return { ft, inch };
+  };
+  const init = split(value);
+  const [ftText, setFtText] = useState(String(init.ft));
+  const [inText, setInText] = useState(String(init.inch));
+
+  useEffect(() => {
+    const cur = (parseFloat(ftText) || 0) + (parseFloat(inText) || 0) / 12;
+    if (Math.abs(cur - value) > 1e-3) {
+      const s = split(value);
+      setFtText(String(s.ft));
+      setInText(String(s.inch));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const push = (ftStr: string, inStr: string) => {
+    const f = parseFloat(ftStr);
+    const ic = parseFloat(inStr);
+    const combined = (Number.isNaN(f) ? 0 : f) + (Number.isNaN(ic) ? 0 : ic) / 12;
+    onChange(Math.min(maxFt, Math.max(minFt, combined)));
+  };
+
+  const box =
+    "h-9 w-full border border-border bg-card pl-3 pr-7 font-mono text-sm text-foreground focus:border-accent focus:outline-none";
+  const suffix = "pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-muted";
+
+  return (
+    <label className="block">
+      <span className="mb-1 block text-[11px] uppercase tracking-wider text-muted">
+        {label}
+      </span>
+      <div className="flex gap-1.5">
+        <div className="relative flex-1">
+          <input
+            type="number"
+            inputMode="numeric"
+            className={box}
+            min={0}
+            step={1}
+            value={ftText}
+            onChange={(e) => {
+              setFtText(e.target.value);
+              push(e.target.value, inText);
+            }}
+          />
+          <span className={suffix}>ft</span>
+        </div>
+        <div className="relative flex-1">
+          <input
+            type="number"
+            inputMode="decimal"
+            className={box}
+            min={0}
+            max={11.75}
+            step={0.25}
+            value={inText}
+            onChange={(e) => {
+              setInText(e.target.value);
+              push(ftText, e.target.value);
+            }}
+          />
+          <span className={suffix}>in</span>
+        </div>
       </div>
     </label>
   );
@@ -199,24 +290,20 @@ export default function BarDesigner() {
 
       {/* Dimensions */}
       <div className="mb-6 grid gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        <NumField
+        <FtInField
           label={isRound ? "Diameter" : "Length"}
-          suffix="ft"
           value={spec.lengthFt}
           onChange={(v) => set("lengthFt", v)}
-          min={2}
-          max={40}
-          step={0.5}
+          minFt={2}
+          maxFt={40}
         />
         {!isRound && (
-          <NumField
+          <FtInField
             label="Depth (std 2′)"
-            suffix="ft"
             value={spec.widthFt}
             onChange={(v) => set("widthFt", v)}
-            min={1}
-            max={20}
-            step={0.5}
+            minFt={1}
+            maxFt={20}
           />
         )}
         {spec.shape === "radius" && (
