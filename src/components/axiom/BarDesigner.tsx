@@ -181,6 +181,7 @@ function FtInField({
 export default function BarDesigner() {
   const [spec, setSpec] = useState<BarSpec>(BAR_DEFAULTS);
   const [rotated, setRotated] = useState(false);
+  const [showBolts, setShowBolts] = useState(false);
   const result = useMemo(() => solveBar(spec), [spec]);
   const set = <K extends keyof BarSpec>(key: K, value: BarSpec[K]) =>
     setSpec((s) => ({ ...s, [key]: value }));
@@ -217,6 +218,23 @@ export default function BarDesigner() {
 
   return (
     <div className="w-full">
+      {/* Print-only title block */}
+      <div className="mb-4 hidden print:block">
+        <h1 className="text-xl font-bold">
+          {BAR_SHAPES.find((s) => s.value === spec.shape)?.label} bar —{" "}
+          {ftIn(spec.lengthFt * 12)}
+          {spec.shape !== "round" ? ` × ${ftIn(spec.widthFt * 12)}` : ""}
+        </h1>
+        <p className="text-sm">
+          {result.sections} sections · {result.builtFaceFt.toFixed(1)}′ front ·{" "}
+          {spec.serviceHeightIn}″ service / {spec.workingHeightIn}″ working ·{" "}
+          {FRONT_STYLES.find((f) => f.value === spec.frontStyle)?.label} front ·{" "}
+          {Math.round(result.weightLb)} lb · {usd(result.price.total)}
+        </p>
+      </div>
+
+      {/* Screen controls */}
+      <div className="print:hidden">
       {/* Shape picker */}
       <div className="mb-5">
         <span className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
@@ -620,6 +638,7 @@ export default function BarDesigner() {
           </div>
         </div>
       </div>
+      </div>
 
       {result.error ? (
         <p className="border border-amber-500/50 bg-amber-500/10 p-3 text-sm text-amber-400">
@@ -637,6 +656,7 @@ export default function BarDesigner() {
                   <span className="text-amber-400"> · {result.gap.widthIn}″ access</span>
                 )}
               </span>
+              <span className="flex gap-2 print:hidden">
               <button
                 type="button"
                 onClick={() => setRotated(false)}
@@ -659,6 +679,18 @@ export default function BarDesigner() {
               >
                 Portrait
               </button>
+              <button
+                type="button"
+                onClick={() => setShowBolts((b) => !b)}
+                className={
+                  showBolts
+                    ? "border border-amber-400 bg-amber-400/20 px-2.5 py-1 text-[11px] font-medium text-amber-400"
+                    : "border border-border bg-card px-2.5 py-1 text-[11px] text-muted transition-colors hover:border-accent hover:text-accent"
+                }
+              >
+                Bolts
+              </button>
+              </span>
             </div>
             <svg
               viewBox={`${-pad} ${-pad} ${vbW} ${vbH}`}
@@ -753,7 +785,8 @@ export default function BarDesigner() {
                   );
                 })}
                 {/* section-joint bolt positions */}
-                {(() => {
+                {showBolts &&
+                (() => {
                   const r = Math.max(1.2, Math.min(result.bboxW, result.bboxH) * 0.012);
                   return result.boltPoints.map((b, i) => (
                     <circle
@@ -962,7 +995,7 @@ export default function BarDesigner() {
           </div>
 
           {/* Rates */}
-          <div className="mb-5">
+          <div className="mb-5 print:hidden">
             <span className="mb-1.5 block text-[11px] uppercase tracking-wider text-muted">
               Rates
             </span>
@@ -1036,8 +1069,11 @@ export default function BarDesigner() {
           ))}
 
           {/* Exports */}
-          <div className="mt-5 flex flex-wrap gap-2">
-            <Button onClick={() => exportPanels("dxf")} className="flex-1">
+          <div className="mt-5 flex flex-wrap gap-2 print:hidden">
+            <Button onClick={() => window.print()} className="flex-1">
+              Print shop drawing
+            </Button>
+            <Button variant="outline" onClick={() => exportPanels("dxf")} className="flex-1">
               Panels DXF
             </Button>
             <Button variant="outline" onClick={() => exportPanels("svg")} className="flex-1">
@@ -1050,13 +1086,20 @@ export default function BarDesigner() {
               End panel DXF
             </Button>
           </div>
-          <p className="mt-2 text-xs text-muted">
-            Panels DXF is one cut sheet of every unique face panel (qty noted in the
-            list). End panel DXF has the 3/8″ bolt holes on a separate “HOLES” layer
-            for CNC. Plan SVG is the top-down outline. DXF for Fusion/CAM.
+          <p className="mt-2 text-xs text-muted print:hidden">
+            Print shop drawing lays out the plan, section, front elevation, and parts
+            schedule on one page (use “Save as PDF”). Panels DXF is one cut sheet of every
+            unique face panel. End panel DXF has the 3/8″ bolt holes on a separate “HOLES”
+            layer for CNC. DXF for Fusion/CAM.
           </p>
         </>
       )}
+      <style>{`
+        @media print {
+          @page { margin: 0.5in; }
+          .bar-designer-svg, svg { max-height: none !important; }
+        }
+      `}</style>
     </div>
   );
 }
