@@ -705,6 +705,23 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const [rev, setRev] = useState(0);
+  const [w9State, setW9State] = useState<"idle" | "confirm" | "sending" | "sent" | "error">("idle");
+  const [w9Msg, setW9Msg] = useState("");
+  async function sendW9() {
+    setW9State("sending");
+    try {
+      const res = await fetch("/api/send-w9", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customer_id: customer.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setW9State("error"); setW9Msg(data.error || "Send failed"); return; }
+      setW9State("sent"); setW9Msg(data.sentTo || "");
+    } catch {
+      setW9State("error"); setW9Msg("Network error");
+    }
+  }
   function markDirty() { setDirty(true); setSaved(false); setRev((r) => r + 1); }
   const set = (k: string, v: string) => { setForm((f) => ({ ...f, [k]: v })); markDirty(); };
   const totalSpend = projects.reduce((s, p) => s + (p.quoted_amount || 0), 0);
@@ -745,6 +762,30 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {w9State === "confirm" ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted">Send W-9 to {customer.email}?</span>
+              <button onClick={sendW9} className="text-xs border border-accent text-accent px-2 py-1 hover:bg-accent/10">Yes</button>
+              <button onClick={() => setW9State("idle")} className="text-xs border border-border text-muted px-2 py-1">No</button>
+            </div>
+          ) : w9State === "sending" ? (
+            <span className="text-xs text-muted">Sending W-9…</span>
+          ) : w9State === "sent" ? (
+            <span className="text-xs text-accent">W-9 sent to {w9Msg} ✓</span>
+          ) : w9State === "error" ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-red-500">{w9Msg}</span>
+              <button onClick={() => setW9State("idle")} className="text-xs border border-border text-muted px-2 py-1">Dismiss</button>
+            </div>
+          ) : (
+            <button
+              onClick={() => (customer.email ? setW9State("confirm") : (setW9Msg("No email on file — add one first."), setW9State("error")))}
+              title="Send our signed W-9 to this customer"
+              className="text-xs border border-border text-muted px-2 py-1 hover:text-accent hover:border-accent"
+            >
+              Send W-9
+            </button>
+          )}
           <SaveButton dirty={dirty} saved={saved} onClick={save} size="sm" />
           {confirmDel ? (
             <div className="flex items-center gap-2">
