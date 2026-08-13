@@ -162,6 +162,10 @@ export async function POST(req: NextRequest) {
     </p>
     ` : ""}
 
+    <p style="font-size:12px;color:#999;margin:16px 0 0;text-align:center;line-height:1.6;">
+      Need our W-9 for your records? <a href="${origin}/api/w9" style="color:#5b642e;font-weight:600;text-decoration:none;">Download it here</a> — it opens as our signed PDF, dated the day you grab it.
+    </p>
+
     <p style="font-size:13px;color:#888;margin:24px 0 0;line-height:1.6;">
       Questions? Just reply to this email or call ${bizPhone ? escape(bizPhone) : "us"}.
     </p>
