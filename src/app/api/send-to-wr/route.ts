@@ -124,7 +124,75 @@ export async function POST(req: NextRequest) {
       .update({ sent_to_wr_at: new Date().toISOString() })
       .eq("id", estimate.id);
 
-    return NextResponse.json({ success: true, wr_id: wrData.id });
+    // ── Auto-append this build onto a linked Nexus quote's items[] ──
+    // If the estimate's work order references a Nexus quote (nexus_ref), the
+    // build appears on that quote automatically — no manual "WR Builds" picker
+    // step. Idempotent on relic_build_id (the relic_builds row id, which is the
+    // exact key the Nexus picker uses). Nexus recomputes quotes.total on next
+    // open, so we deliberately do NOT touch it here.
+    //
+    // GATED: the live write only happens when NEXUS_QUOTE_AUTOPUSH === "true".
+    // Off by default → dry-run: we resolve the target + payload and report it
+    // in the response, but write nothing. Flip the env var on once verified.
+    let quoteAppend: Record<string, unknown> | null = null;
+    try {
+      const { data: wo } = await axiom
+        .from("wallflower_work_orders")
+        .select("nexus_ref")
+        .eq("estimate_id", estimate.id)
+        .not("nexus_ref", "is", null)
+        .limit(1)
+        .maybeSingle();
+      const ref = (wo?.nexus_ref ?? null) as { type?: string; id?: string } | null;
+
+      if (ref?.type === "quote" && ref.id) {
+        const buildItem = {
+          name: estimate.project_name || estimate.estimate_number,
+          qty: 1,
+          price: String(total),
+          image_url: mainImage || "",
+          relic_build_id: wrData.id,
+          taxable: true,
+        };
+        const enabled = process.env.NEXUS_QUOTE_AUTOPUSH === "true";
+
+        if (!enabled) {
+          quoteAppend = {
+            enabled: false,
+            dry_run: true,
+            quote_id: ref.id,
+            would_append: buildItem,
+          };
+        } else {
+          const { data: q } = await wr
+            .from("quotes")
+            .select("id, items")
+            .eq("id", ref.id)
+            .maybeSingle();
+          if (!q) {
+            quoteAppend = { enabled: true, error: "linked quote not found in Nexus", quote_id: ref.id };
+          } else {
+            const items = Array.isArray(q.items) ? [...q.items] : [];
+            const idx = items.findIndex(
+              (it: { relic_build_id?: string }) => it?.relic_build_id === wrData.id
+            );
+            if (idx >= 0) items[idx] = { ...items[idx], ...buildItem };
+            else items.push(buildItem);
+            const { error: qErr } = await wr
+              .from("quotes")
+              .update({ items, updated_at: new Date().toISOString() })
+              .eq("id", ref.id);
+            quoteAppend = qErr
+              ? { enabled: true, error: qErr.message, quote_id: ref.id }
+              : { enabled: true, quote_id: ref.id, action: idx >= 0 ? "updated" : "appended", relic_build_id: wrData.id };
+          }
+        }
+      }
+    } catch (e) {
+      quoteAppend = { error: e instanceof Error ? e.message : "quote append failed" };
+    }
+
+    return NextResponse.json({ success: true, wr_id: wrData.id, quote_append: quoteAppend });
   } catch (err) {
     console.error("send-to-wr error:", err);
     return NextResponse.json(
