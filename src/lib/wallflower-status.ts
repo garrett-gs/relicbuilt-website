@@ -103,6 +103,9 @@ export async function notifyWallflowerStatus(
       },
       body: JSON.stringify({
         work_order_id: row.wallflower_order_id,
+        // The RELIC-side work order id, so Nexus can map/link the row and
+        // surface a "received by RELIC" indicator against its own order.
+        relic_work_order_id: row.id,
         status,
         ...(opts?.completed != null ? { completed: opts.completed } : {}),
       }),
