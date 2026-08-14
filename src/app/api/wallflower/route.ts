@@ -36,6 +36,11 @@ export async function POST(req: NextRequest) {
       submitted_by,
       item_image_url,
       reference_images,
+      // nexus_ref links this work order back to the originating Nexus
+      // quote/order: { type: "quote" | "order", id, number }. Storing it is
+      // what closes the custom-build loop — when Axiom later finalizes the
+      // estimate, send-to-wr auto-appends the price onto this same quote.
+      nexus_ref,
     } = body;
 
     if (!item_name?.trim()) {
@@ -64,6 +69,10 @@ export async function POST(req: NextRequest) {
         submitted_by: submitted_by || "Wallflower",
         item_image_url: item_image_url || null,
         reference_images: Array.isArray(reference_images) ? reference_images : [],
+        nexus_ref:
+          nexus_ref && typeof nexus_ref === "object" && nexus_ref.id
+            ? nexus_ref
+            : null,
       })
       .select()
       .single();
