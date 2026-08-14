@@ -701,6 +701,7 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
     phone: customer.phone ?? "",
     address: customer.address ?? "",
     company_id: customer.company_id ?? "",
+    status: customer.status ?? "active",
   });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -738,6 +739,7 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
       address: form.address || undefined,
       company_id: (form.company_id || null) as unknown as string,
       company_name: (linkedCompany?.name || null) as unknown as string,
+      status: form.status as Customer["status"],
     });
     setDirty(false);
     setSaved(true);
@@ -817,6 +819,14 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
         {(customer.type === "Contact" || form.company_id) && (
           <div><label className={lbl}>Title / Role</label><input value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Event Coordinator, Project Manager" className={inp} /></div>
         )}
+        <div>
+          <label className={lbl}>Status</label>
+          <select value={form.status} onChange={(e) => set("status", e.target.value)} className={inp}>
+            <option value="prospect">Prospect</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className={lbl}>Email</label><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inp} /></div>
           <div><label className={lbl}>Phone</label><input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>

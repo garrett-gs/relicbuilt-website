@@ -187,7 +187,7 @@ export interface Customer {
   address?: string;
   website?: string;
   industry?: string;
-  status: "active" | "inactive";
+  status: "active" | "inactive" | "prospect";
   notes: CustomerNote[];
   company_id?: string;
   company_name?: string;
@@ -718,44 +718,6 @@ export interface InventoryTransaction {
   // joined
   item_description?: string;
   project_name?: string;
-}
-
-// ── Leads ────────────────────────────────────────────────────
-
-export interface LeadNote {
-  id: string;
-  text: string;
-  author: string;
-  created_at: string;
-}
-
-export interface LeadFollowUp {
-  id: string;
-  due_date: string; // ISO yyyy-mm-dd
-  text: string;
-  completed: boolean;
-  completed_at?: string;
-  created_by: string;
-  created_at: string;
-}
-
-export interface Lead {
-  id: string;
-  name: string; // customer / contact name
-  project_name?: string; // headline for the lead — also carried to the estimate
-  email?: string;
-  phone?: string;
-  description?: string;
-  budget_range?: string;
-  inspiration_photos: string[];
-  status: "new" | "contacted" | "quoted" | "lost";
-  estimate_id?: string;
-  source?: string;
-  notes?: string;
-  notes_log?: LeadNote[];
-  follow_ups?: LeadFollowUp[];
-  created_at: string;
-  updated_at: string;
 }
 
 // ── Axiom Navigation ────────────────────────────────────────
