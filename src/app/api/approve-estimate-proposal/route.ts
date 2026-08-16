@@ -108,6 +108,35 @@ export async function POST(req: NextRequest) {
     // Nexus quote. Best-effort — never blocks the approval.
     await notifyNexusApproval(supabase, estimate, signatureName, totalAmount);
 
+    // Approval auto-creates the Axiom project (custom_work) if one isn't linked
+    // yet, so approved builds land in Projects automatically (no manual "Send
+    // to Project"). Fabrication is greenlit later, on payment. Best-effort.
+    if (!estimate.custom_work_id) {
+      try {
+        const carried = (estimate.images || estimate.proposal_images || []) as string[];
+        const { data: proj } = await supabase
+          .from("custom_work")
+          .insert({
+            project_name: estimate.project_name || estimate.estimate_number,
+            client_name: estimate.client_name || "",
+            client_email: estimate.client_email || null,
+            client_phone: estimate.client_phone || null,
+            customer_id: estimate.customer_id || null,
+            quoted_amount: totalAmount,
+            project_description: estimate.notes || null,
+            inspiration_images: Array.isArray(carried) && carried.length ? carried : undefined,
+            status: "new",
+          })
+          .select("id")
+          .single();
+        if (proj?.id) {
+          await supabase.from("estimates").update({ custom_work_id: proj.id }).eq("id", estimate.id);
+        }
+      } catch (e) {
+        console.error("[approve] auto-create project failed:", e);
+      }
+    }
+
     // ── Internal notification: tell the team the client signed ────────
     // Sends an email to biz_email plus any team member with portal_updates
     // notifications enabled. Non-blocking — failures are logged and we still
