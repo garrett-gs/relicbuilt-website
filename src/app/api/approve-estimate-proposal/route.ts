@@ -4,6 +4,7 @@ import { generateEstimateProposalHtml } from "@/lib/proposal-html";
 import { renderHtmlToPdf } from "@/lib/render-pdf";
 import { logProposalEvent, ipFromHeaders, sha256 } from "@/lib/audit";
 import { notifyWallflowerStatus } from "@/lib/wallflower-status";
+import { notifyNexusApproval } from "@/lib/notify-nexus-approval";
 import type { Estimate, ProposalHighlight, ProposalScope } from "@/types/axiom";
 
 export const runtime = "nodejs";
@@ -101,6 +102,11 @@ export async function POST(req: NextRequest) {
 
     // Tell Wallflower the client signed — no-op for non-Wallflower estimates.
     await notifyWallflowerStatus(supabase, { estimateId: estimate.id }, "accepted");
+
+    // Design+price approval → push to Nexus so it marks the build approved and
+    // moves it toward invoice/payment. No-op unless the build is linked to a
+    // Nexus quote. Best-effort — never blocks the approval.
+    await notifyNexusApproval(supabase, estimate, signatureName, totalAmount);
 
     // ── Internal notification: tell the team the client signed ────────
     // Sends an email to biz_email plus any team member with portal_updates
