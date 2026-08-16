@@ -88,7 +88,70 @@ export async function POST(req: NextRequest) {
       await notifyWallflowerStatus(supabase, { workOrderId: data.id }, "received");
     }
 
-    return NextResponse.json({ ok: true, id: data.id });
+    // Auto-spawn a draft estimate for the work order so it's ready to price
+    // immediately — no manual "Create Estimate" click. Link it and flip the
+    // work order to "estimated". Best-effort — never fails the intake.
+    let spawnedEstimateId: string | null = null;
+    try {
+      const year = new Date().getFullYear();
+      const woImages = Array.isArray(reference_images)
+        ? (reference_images as { url?: string }[]).map((r) => r?.url).filter((u): u is string => !!u)
+        : [];
+      const seedNotes = [
+        `Work Order: ${item_name.trim()}`,
+        `Type: ${work_type || "Repair"}`,
+        `Scope: ${scope || "External"}`,
+        description ? `Description: ${description}` : "",
+        quantity && quantity > 1 ? `Quantity: ${quantity}` : "",
+      ].filter(Boolean).join("\n");
+
+      // estimate_number is unique with no DB sequence — retry on collision.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { data: latest } = await supabase
+          .from("estimates")
+          .select("estimate_number")
+          .like("estimate_number", `EST-${year}-%`)
+          .order("estimate_number", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const lastNum = latest?.estimate_number
+          ? parseInt(String(latest.estimate_number).split("-").pop() || "0", 10)
+          : 0;
+        const estimate_number = `EST-${year}-${String(lastNum + 1).padStart(4, "0")}`;
+        const { data: est, error: estErr } = await supabase
+          .from("estimates")
+          .insert({
+            estimate_number,
+            project_name: item_name.trim(),
+            client_name: "",
+            status: "draft",
+            line_items: [],
+            labor_items: [],
+            markup_percent: 0,
+            notes: seedNotes,
+            images: woImages.length ? woImages : item_image_url ? [item_image_url] : undefined,
+          })
+          .select("id")
+          .single();
+        if (!estErr && est?.id) {
+          spawnedEstimateId = est.id;
+          break;
+        }
+        if (estErr?.code !== "23505") break; // only retry number collisions
+      }
+
+      if (spawnedEstimateId) {
+        await supabase
+          .from("wallflower_work_orders")
+          .update({ estimate_id: spawnedEstimateId, status: "estimated", updated_at: new Date().toISOString() })
+          .eq("id", data.id);
+        await notifyWallflowerStatus(supabase, { workOrderId: data.id }, "estimated");
+      }
+    } catch (e) {
+      console.error("[wallflower] auto-spawn estimate failed:", e);
+    }
+
+    return NextResponse.json({ ok: true, id: data.id, estimate_id: spawnedEstimateId });
   } catch (err) {
     console.error("wallflower API error:", err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
