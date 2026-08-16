@@ -11,6 +11,16 @@ export interface ProposalScope {
   included?: boolean;
 }
 
+export interface ProposalScheduleItem {
+  phase: string; // e.g. "Design & approval", "Fabrication", "Delivery"
+  timing: string; // free text, e.g. "1–2 weeks", "By Aug 30"
+}
+
+export interface ProposalSchedule {
+  items: ProposalScheduleItem[];
+  included?: boolean;
+}
+
 export interface ProposalCostItem {
   description: string;
   cost: number;
@@ -264,6 +274,10 @@ export interface Estimate {
   // URL of the cover image — renders as a full-page hero on page 1
   // of the proposal PDF with project + client name beneath
   proposal_cover_image_url?: string;
+  // Design-proposal enrichment: the final build drawing (image URL) and an
+  // optional phase/timing schedule.
+  proposal_final_drawing_url?: string;
+  proposal_schedule?: ProposalSchedule;
   proposal_token?: string;
   proposal_status?: "draft" | "sent" | "approved";
   proposal_sent_at?: string;

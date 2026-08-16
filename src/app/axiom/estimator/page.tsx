@@ -7,7 +7,7 @@ import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAxiomRole } from "@/components/axiom/useAxiomRole";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { persistEstimate, deleteEstimateById } from "@/lib/estimate-actions";
-import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, SalesNote } from "@/types/axiom";
+import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, ProposalScheduleItem, SalesNote } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
@@ -698,6 +698,9 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [proposalImages, setProposalImages] = useState<string[]>(estimate.proposal_images || []);
   const [coverImageUrl, setCoverImageUrl] = useState<string>(estimate.proposal_cover_image_url || "");
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [proposalFinalDrawing, setProposalFinalDrawing] = useState<string>(estimate.proposal_final_drawing_url || "");
+  const [uploadingDrawing, setUploadingDrawing] = useState(false);
+  const [proposalSchedule, setProposalSchedule] = useState<ProposalScheduleItem[]>(estimate.proposal_schedule?.items || []);
   const [depositPercent, setDepositPercent] = useState<string>(
     estimate.deposit_percent != null ? String(estimate.deposit_percent) : ""
   );
@@ -793,6 +796,29 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       markDirty();
     } finally {
       setUploadingImage(false);
+    }
+  }
+
+  async function uploadFinalDrawing(file: File) {
+    if (!file.type.startsWith("image/")) {
+      alert("Please pick an image file (JPG, PNG, etc.) — export the drawing as an image.");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      alert("Image must be under 15 MB.");
+      return;
+    }
+    setUploadingDrawing(true);
+    try {
+      const ext = (file.name.split(".").pop() || "png").toLowerCase();
+      const path = `proposal-images/${estimate.id}/drawing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await axiom.storage.from("portal-images").upload(path, file, { upsert: false, contentType: file.type });
+      if (upErr) { alert(`Upload failed: ${upErr.message}`); return; }
+      const { data } = axiom.storage.from("portal-images").getPublicUrl(path);
+      setProposalFinalDrawing(data.publicUrl);
+      markDirty();
+    } finally {
+      setUploadingDrawing(false);
     }
   }
 
@@ -957,6 +983,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
         proposal_images_included: proposalImagesIncluded,
       proposal_images: proposalImages,
       proposal_cover_image_url: coverImageUrl || undefined,
+      proposal_final_drawing_url: proposalFinalDrawing || undefined,
+      proposal_schedule: proposalSchedule.length ? { items: proposalSchedule, included: true } : undefined,
         deposit_percent: depositPercent !== "" ? Number(depositPercent) : undefined,
         pay_in_full: payInFull || undefined,
       } as Estimate,
@@ -1327,6 +1355,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       proposal_images_included: proposalImagesIncluded,
       proposal_images: proposalImages,
       proposal_cover_image_url: coverImageUrl || undefined,
+      proposal_final_drawing_url: proposalFinalDrawing || undefined,
+      proposal_schedule: proposalSchedule.length ? { items: proposalSchedule, included: true } : undefined,
       proposal_status: proposalStatus,
       deposit_percent: depositPercent !== "" ? Number(depositPercent) : undefined,
       pay_in_full: payInFull,
@@ -2007,6 +2037,86 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
             placeholder="Describe what's included in the project — materials, dimensions, finish, delivery, etc."
             className="w-full bg-background border border-border px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-accent min-h-[100px] resize-y"
           />
+        </div>
+
+        {/* Final Drawing — the approved build drawing shown on the proposal */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs uppercase tracking-wider text-muted">Final Drawing</p>
+            <label className="text-accent text-xs flex items-center gap-1 cursor-pointer hover:text-accent/80">
+              <Plus size={12} /> {uploadingDrawing ? "Uploading…" : proposalFinalDrawing ? "Replace" : "Upload Drawing"}
+              <input
+                type="file"
+                accept="image/*"
+                disabled={uploadingDrawing}
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFinalDrawing(f); e.target.value = ""; }}
+              />
+            </label>
+          </div>
+          {proposalFinalDrawing ? (
+            <div className="relative border border-border group">
+              <img src={proposalFinalDrawing} alt="Final drawing" className="w-full object-contain max-h-64 bg-background" />
+              <button
+                type="button"
+                onClick={() => { setProposalFinalDrawing(""); markDirty(); }}
+                className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                title="Remove drawing"
+              >
+                <X size={10} />
+              </button>
+            </div>
+          ) : (
+            <p className="text-muted text-xs italic">
+              Upload the approved build drawing (export from the bar designer / parts studio as an image, or a CAD render). Shown prominently on the proposal so the client approves the design, not just the words.
+            </p>
+          )}
+        </div>
+
+        {/* Schedule — optional phase/timing rows */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs uppercase tracking-wider text-muted">Schedule <span className="text-muted/60 normal-case ml-1.5">(optional)</span></p>
+            <button
+              type="button"
+              onClick={() => { setProposalSchedule([...proposalSchedule, { phase: "", timing: "" }]); markDirty(); }}
+              className="text-accent text-xs flex items-center gap-1 hover:text-accent/80"
+            >
+              <Plus size={12} /> Add Phase
+            </button>
+          </div>
+          {proposalSchedule.length === 0 ? (
+            <p className="text-muted text-xs italic">
+              Optional. Add phases (Design &amp; approval, Fabrication, Delivery…) with a timing so the client sees the timeline alongside the design and price.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {proposalSchedule.map((row, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    value={row.phase}
+                    placeholder="Phase (e.g. Fabrication)"
+                    onChange={(e) => { const next = [...proposalSchedule]; next[i] = { ...next[i], phase: e.target.value }; setProposalSchedule(next); markDirty(); }}
+                    className="flex-1 bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+                  />
+                  <input
+                    value={row.timing}
+                    placeholder="Timing (e.g. 1–2 weeks)"
+                    onChange={(e) => { const next = [...proposalSchedule]; next[i] = { ...next[i], timing: e.target.value }; setProposalSchedule(next); markDirty(); }}
+                    className="w-40 bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setProposalSchedule(proposalSchedule.filter((_, j) => j !== i)); markDirty(); }}
+                    className="text-muted hover:text-red-500"
+                    title="Remove phase"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Project Images — uploads for the proposal cover + body gallery */}

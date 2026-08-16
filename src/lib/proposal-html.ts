@@ -350,6 +350,35 @@ export function generateEstimateProposalHtml({
   </section>
   ` : "";
 
+  // Final drawing: the approved build drawing, shown prominently so the
+  // customer approves the design, not just the words.
+  const finalDrawing = estimate.proposal_final_drawing_url || "";
+  const finalDrawingHtml = finalDrawing ? `
+  <section style="margin-bottom:32px;page-break-inside:avoid;">
+    <p style="margin:0 0 12px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Final Drawing</p>
+    <img src="${finalDrawing}" alt="Final drawing" style="width:100%;border:1px solid #e5e5e5;display:block;" />
+  </section>
+  ` : "";
+
+  // Schedule: optional phase/timing rows so the customer sees the timeline
+  // alongside the design and price.
+  const scheduleItems = estimate.proposal_schedule?.included !== false
+    ? (estimate.proposal_schedule?.items || []).filter((s) => s.phase || s.timing)
+    : [];
+  const scheduleHtml = scheduleItems.length > 0 ? `
+  <section style="margin-bottom:32px;page-break-inside:avoid;">
+    <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Schedule</p>
+    <table style="width:100%;border-collapse:collapse;">
+      ${scheduleItems.map((s) => `
+        <tr style="border-bottom:1px solid #eee;">
+          <td style="padding:9px 0;font-size:13px;color:#111;font-weight:bold;">${esc(s.phase)}</td>
+          <td style="padding:9px 0;text-align:right;font-size:13px;color:#666;">${esc(s.timing)}</td>
+        </tr>
+      `).join("")}
+    </table>
+  </section>
+  ` : "";
+
   // Project images: dedicated proposal images, excluding the cover (which
   // gets its own page). Two-column gallery in the body of the proposal.
   const projectImagesHtml = projectImages.length > 0 ? `
@@ -481,8 +510,10 @@ export function generateEstimateProposalHtml({
 
   ${highlightsHtml}
   ${scopeHtml}
+  ${finalDrawingHtml}
   ${projectImagesHtml}
   ${fieldNoteImagesHtml}
+  ${scheduleHtml}
   ${costHtml}
   ${termsHtml}
   ${acceptanceSection}
