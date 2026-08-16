@@ -30,7 +30,10 @@ export async function notifyNexusApproval(
       .limit(1)
       .maybeSingle();
     const ref = (wo?.nexus_ref ?? null) as { type?: string; id?: string } | null;
-    if (!ref || ref.type !== "quote" || !ref.id) return; // not a Nexus-linked build
+    // Fire for builds linked to a Nexus quote OR order. Nexus only creates the
+    // invoice on this approval event — never before — so scope-approval-first
+    // is enforced by the handoff, not a premature invoice.
+    if (!ref || !ref.id || (ref.type !== "quote" && ref.type !== "order")) return;
 
     // relic_build_id = the relic_builds row id in Nexus (seeded by send-to-wr),
     // which keys the exact quotes.items[] line to stamp as approved.
@@ -48,7 +51,7 @@ export async function notifyNexusApproval(
     }
 
     const payload = {
-      nexus_ref: { type: "quote", id: ref.id },
+      nexus_ref: { type: ref.type, id: ref.id },
       relic_build_id: relicBuildId,
       approved: true,
       approved_amount: approvedAmount,
