@@ -16,7 +16,7 @@ import { cn, formatPhone, formatDueDate, suggestStartDate } from "@/lib/utils";
 import { resolveClientEmail } from "@/lib/resolve-email";
 import DateField from "@/components/ui/DateField";
 import FileUpload from "@/components/ui/FileUpload";
-import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee, ChevronDown, ChevronRight } from "lucide-react";
+import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee, ChevronDown, ChevronRight, Clock } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { useRouter } from "next/navigation";
 import { generateProposalHtml } from "@/lib/proposal-html";
@@ -1369,7 +1369,20 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   function addLabor() { setLabor([...labor, { date: new Date().toISOString().split("T")[0], description: "", clock_in: "", clock_out: "", hours: 0, rate: 60, cost: 0 }]); markDirty(); }
   function updateLabor(i: number, field: keyof LaborEntry, value: string | number) {
     const updated = [...labor];
-    (updated[i] as unknown as Record<string, string | number>)[field] = value;
+    const prev = labor[i];
+    // First hand-edit of a timeclock-sourced entry: leave an audit note of what
+    // it was originally clocked at, so an adjusted entry is never mistaken for
+    // the raw clocked time.
+    const tracked = field === "clock_in" || field === "clock_out" || field === "hours" || field === "rate";
+    if (tracked && prev.source === "timeclock" && !updated[i].edited) {
+      const clockPart = (prev.clock_in || prev.clock_out) ? `clocked ${prev.clock_in || "—"}–${prev.clock_out || "—"}` : "";
+      const hoursPart = prev.hours ? `${prev.hours}h` : "";
+      const orig = [clockPart, hoursPart].filter(Boolean).join(", ");
+      const stamp = new Date().toISOString().split("T")[0];
+      const note = orig ? `Edited ${stamp} — originally ${orig}` : `Edited ${stamp}`;
+      updated[i] = { ...updated[i], edited: true, notes: updated[i].notes ? `${updated[i].notes}; ${note}` : note };
+    }
+    (updated[i] as unknown as Record<string, string | number | boolean>)[field] = value;
     // Clock in/out drive hours when both are present; otherwise hours stays
     // manual. Rate/hours edits just recompute cost.
     if (field === "clock_in" || field === "clock_out") {
@@ -1967,6 +1980,15 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                   </button>
                   <button onClick={() => removeLabor(i)} className="text-muted hover:text-red-500 shrink-0"><Trash2 size={14} /></button>
                 </div>
+                {(l.notes || l.source === "timeclock") && (
+                  <p className="text-[10px] text-muted pl-1 flex items-center gap-1.5 flex-wrap">
+                    {l.source === "timeclock" && (
+                      <span className="text-accent/70 inline-flex items-center gap-1"><Clock size={9} /> from timeclock</span>
+                    )}
+                    {l.edited && <span className="text-amber-400/90">✎ edited</span>}
+                    {l.notes && <span>{l.notes}</span>}
+                  </p>
+                )}
                 {breakRowIdx === i && (
                   <div className="flex gap-2 items-center pl-3 pr-16 py-2 bg-amber-950/20 border border-amber-800/30">
                     <Coffee size={12} className="text-amber-400 shrink-0" />

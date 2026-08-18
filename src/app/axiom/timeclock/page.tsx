@@ -39,6 +39,13 @@ function hoursFromEntry(entry: TimeEntry) {
   return Math.round((ms / 3600000) * 100) / 100;
 }
 
+// Local "HH:MM" (24h) from an ISO timestamp — carried onto the project labor
+// log so the clock in/out times ride along with the hours.
+function hhmmLocal(iso: string) {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
 export default function TimeClockPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [projects, setProjects] = useState<CustomWork[]>([]);
@@ -206,11 +213,14 @@ export default function TimeClockPage() {
         const baseDesc = selectedTasks.length ? `${selectedMember!.name} — ${selectedTasks.join(", ")}` : selectedMember!.name;
         const newEntry = {
           date: new Date().toISOString().split("T")[0],
+          clock_in: hhmmLocal(activeEntry.clock_in),
+          clock_out: hhmmLocal(clockOut),
           hours,
           rate,
           cost,
           description: `${baseDesc}${breakNote}`,
           tasks: selectedTasks,
+          source: "timeclock",
         };
         const updatedLog = [...(project.labor_log || []), newEntry];
         const newActualCost = (project.actual_cost || 0) + cost;
@@ -275,11 +285,14 @@ export default function TimeClockPage() {
       if (pw) {
         const newEntry = {
           date: manualDate,
+          clock_in: hhmmLocal(clockIn),
+          clock_out: hhmmLocal(clockOut),
           hours,
           rate,
           cost,
           description: `${taskDesc}${notesPart}${breakNote}`,
           tasks: manualTasks,
+          source: "timeclock",
         };
         const updatedLog = [...(pw.labor_log || []), newEntry];
         const newActualCost = (pw.actual_cost || 0) + cost;

@@ -138,6 +138,15 @@ export interface LaborEntry {
   hours: number;
   rate: number;
   cost: number;
+  // "timeclock" for entries pushed here by the clock-in/out or manual-entry
+  // flow; absent for rows added directly on the project. Used to decide whether
+  // a hand-edit should leave an audit note.
+  source?: string;
+  // Set true once a timeclock-sourced entry is hand-edited on the project;
+  // `notes` then records what it was originally clocked at.
+  edited?: boolean;
+  notes?: string;
+  tasks?: string[];
 }
 
 // ── Receipts ─────────────────────────────────────────────────
