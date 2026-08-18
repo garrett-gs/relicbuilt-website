@@ -130,6 +130,11 @@ export interface Material {
 export interface LaborEntry {
   date: string;
   description?: string;
+  // Clock in/out times ("HH:MM", local to the entry's date). Optional — when
+  // both are set, `hours` is auto-computed from them (overnight-aware). Entries
+  // logged as a net figure leave these blank and keep hours as the source.
+  clock_in?: string;
+  clock_out?: string;
   hours: number;
   rate: number;
   cost: number;

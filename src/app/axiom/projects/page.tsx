@@ -1354,11 +1354,36 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     setMaterials(updated); markDirty();
   }
 
-  function addLabor() { setLabor([...labor, { date: new Date().toISOString().split("T")[0], description: "", hours: 0, rate: 60, cost: 0 }]); markDirty(); }
+  // Net hours between two "HH:MM" clock times, overnight-aware (clock-out
+  // earlier than clock-in rolls to the next day). Null unless both are valid.
+  function hoursBetween(cin?: string, cout?: string): number | null {
+    if (!cin || !cout) return null;
+    const [h1, m1] = cin.split(":").map(Number);
+    const [h2, m2] = cout.split(":").map(Number);
+    if ([h1, m1, h2, m2].some((n) => Number.isNaN(n))) return null;
+    let mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+    if (mins < 0) mins += 24 * 60;
+    return Math.round((mins / 60) * 100) / 100;
+  }
+
+  function addLabor() { setLabor([...labor, { date: new Date().toISOString().split("T")[0], description: "", clock_in: "", clock_out: "", hours: 0, rate: 60, cost: 0 }]); markDirty(); }
   function updateLabor(i: number, field: keyof LaborEntry, value: string | number) {
     const updated = [...labor];
     (updated[i] as unknown as Record<string, string | number>)[field] = value;
-    if (field === "hours" || field === "rate") {
+    // Clock in/out drive hours when both are present; otherwise hours stays
+    // manual. Rate/hours edits just recompute cost.
+    if (field === "clock_in" || field === "clock_out") {
+      const gross = hoursBetween(updated[i].clock_in, updated[i].clock_out);
+      if (gross !== null) {
+        // Preserve any break already deducted (tagged on the description) so
+        // re-editing a clock time doesn't silently restore break hours.
+        const m = (updated[i].description || "").match(/\[break:\s*-([\d.]+)h/);
+        const brk = m ? parseFloat(m[1]) || 0 : 0;
+        const net = Math.max(0, Math.round((gross - brk) * 100) / 100);
+        updated[i].hours = net;
+        updated[i].cost = Math.round(net * Number(updated[i].rate || 0) * 100) / 100;
+      }
+    } else if (field === "hours" || field === "rate") {
       updated[i].cost = Number(updated[i].hours) * Number(updated[i].rate);
     }
     setLabor(updated); markDirty();
@@ -1924,7 +1949,10 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                     className="w-36 shrink-0"
                   />
                   <input type="text" value={l.description || ""} onChange={(e) => updateLabor(i, "description", e.target.value)} placeholder="Description…" className="flex-1 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent min-w-0" />
-                  <input type="number" value={l.hours || ""} onChange={(e) => updateLabor(i, "hours", Number(e.target.value))} placeholder="Hrs" className="w-16 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right shrink-0" />
+                  <input type="time" value={l.clock_in || ""} onChange={(e) => updateLabor(i, "clock_in", e.target.value)} title="Clock in" aria-label="Clock in" className="w-[108px] bg-card border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:border-accent shrink-0" />
+                  <span className="text-muted text-xs shrink-0">→</span>
+                  <input type="time" value={l.clock_out || ""} onChange={(e) => updateLabor(i, "clock_out", e.target.value)} title="Clock out" aria-label="Clock out" className="w-[108px] bg-card border border-border px-2 py-2 text-sm text-foreground focus:outline-none focus:border-accent shrink-0" />
+                  <input type="number" value={l.hours || ""} onChange={(e) => updateLabor(i, "hours", Number(e.target.value))} placeholder="Hrs" title={l.clock_in && l.clock_out ? "Auto-calculated from clock in/out — edit to override" : "Net hours"} className="w-16 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right shrink-0" />
                   <input type="number" value={l.rate || ""} onChange={(e) => updateLabor(i, "rate", Number(e.target.value))} placeholder="Rate" className="w-20 bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent text-right shrink-0" />
                   <span className="text-sm font-mono text-right w-20 shrink-0">{money(l.cost || 0)}</span>
                   <button
