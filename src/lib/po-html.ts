@@ -4,12 +4,45 @@ function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 }
 
+// Standing instructions that must print on EVERY purchase order to a given
+// vendor — RELIC's recurring, vendor-facing terms that travel on the printed
+// and emailed PO. Keyed by vendor id (stable) with a name fallback so older
+// POs that predate the id link still resolve.
+const LIBERTY_HARDWOODS_STANDING = [
+  "Confirm order acceptance / receipt of this order.",
+  "Call one (1) hour ahead of delivery.",
+  "Email any changes to this purchase order — including pricing and delivery date.",
+];
+
+const VENDOR_STANDING_INSTRUCTIONS: {
+  ids: Record<string, string[]>;
+  names: Record<string, string[]>;
+} = {
+  ids: {
+    "1e9b81d2-8cf3-4dbd-8fef-ddb5bbb130af": LIBERTY_HARDWOODS_STANDING, // Liberty Hardwoods
+  },
+  names: {
+    "liberty hardwoods": LIBERTY_HARDWOODS_STANDING,
+    "liberty hardwood": LIBERTY_HARDWOODS_STANDING,
+  },
+};
+
+function standingInstructionsFor(po: PurchaseOrder): string[] {
+  if (po.vendor_id && VENDOR_STANDING_INSTRUCTIONS.ids[po.vendor_id]) {
+    return VENDOR_STANDING_INSTRUCTIONS.ids[po.vendor_id];
+  }
+  const key = (po.vendor_name || "").trim().toLowerCase();
+  return VENDOR_STANDING_INSTRUCTIONS.names[key] || [];
+}
+
 export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
   const lines: POLineItem[] = po.line_items && po.line_items.length > 0
     ? po.line_items
     : [{ item_number: "", description: po.item_description || "", quantity: po.quantity, unit_price: po.unit_price, unit: "ea" }];
 
   const total = lines.reduce((s, li) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
+
+  const standing = standingInstructionsFor(po);
 
   const wrapper = forEmail
     ? 'style="max-width:640px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;padding:40px;"'
@@ -107,6 +140,15 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
               </div>
             ` : ""}
           </div>
+        </div>
+      ` : ""}
+
+      ${standing.length > 0 ? `
+        <div style="margin-bottom:24px;padding:16px 18px;background:#fff9e6;border:2px solid #5b642e;">
+          <p style="margin:0 0 10px;font-size:11px;text-transform:uppercase;letter-spacing:0.15em;color:#8a6a1f;font-weight:bold;">⚑ Standing Instructions — Please Read</p>
+          <ul style="margin:0;padding-left:22px;font-size:13px;color:#111;font-weight:bold;text-transform:uppercase;letter-spacing:0.02em;line-height:1.7;">
+            ${standing.map((s) => `<li style="margin-bottom:4px;">${s}</li>`).join("")}
+          </ul>
         </div>
       ` : ""}
 
