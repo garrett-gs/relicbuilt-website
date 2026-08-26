@@ -68,7 +68,21 @@ export default function AddToPOModal({ item, onClose, onAdded }: Props) {
     ? openPOs.filter((p) => p.vendor_id === selectedVendorId)
     : openPOs;
 
+  // Normalize descriptions so "  Red Oak 4/4 " and "red oak 4/4" count as the
+  // same line — a PO shouldn't carry the same item twice.
+  const normalize = (s: string) => (s || "").trim().toLowerCase().replace(/\s+/g, " ");
+
+  // The existing PO being appended to (null when creating a new one).
+  const targetPO = selectedPOId !== "new" ? openPOs.find((p) => p.id === selectedPOId) : null;
+
+  // True when the item is already a line on the chosen PO.
+  const isDuplicate = !!targetPO && (targetPO.line_items || []).some(
+    (li) => normalize(li.description) === normalize(description)
+  );
+
   async function confirm() {
+    // Guard: never append an item that's already on the selected PO.
+    if (isDuplicate) return;
     setSaving(true);
     const lineItem = { description, quantity: qty, unit_price: unitPrice, unit: "each" };
 
@@ -235,13 +249,22 @@ export default function AddToPOModal({ item, onClose, onAdded }: Props) {
               </div>
             </div>
 
+            {isDuplicate && targetPO && (
+              <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/40 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+                <span className="mt-0.5">⚠</span>
+                <span>
+                  &ldquo;{description.trim()}&rdquo; is already on {targetPO.po_number}. Adjust its quantity by editing that P.O. instead of adding it again.
+                </span>
+              </div>
+            )}
+
             <div className="flex gap-2 pt-1">
               <button
                 onClick={confirm}
-                disabled={saving || !description.trim()}
+                disabled={saving || !description.trim() || isDuplicate}
                 className="flex-1 bg-accent text-white py-2 text-sm font-medium hover:bg-accent/80 disabled:opacity-50 transition-colors"
               >
-                {saving ? "Adding…" : selectedPOId === "new" ? "Create P.O." : "Add to P.O."}
+                {saving ? "Adding…" : isDuplicate ? "Already on this P.O." : selectedPOId === "new" ? "Create P.O." : "Add to P.O."}
               </button>
               <button onClick={onClose} className="px-4 py-2 border border-border text-sm text-muted hover:text-foreground">
                 Cancel
