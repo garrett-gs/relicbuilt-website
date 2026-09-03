@@ -27,7 +27,22 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 const STATUS_OPTIONS = ["pending", "accepted", "in_progress", "estimated", "complete", "cancelled"];
-const WORK_TYPES = ["Repair", "Fabrication", "Refinish", "Install", "Custom Build", "Modification", "Other"];
+// Union of Nexus's work-type vocabulary (the source for inbound orders:
+// New Build, Touch-Up, Clean, Repaint, Structural Fix, Upholstery,
+// Hardware Replace) and Axiom's own local types (Fabrication, Install, …),
+// so a category set in Nexus always has a matching option here.
+const WORK_TYPES = [
+  "New Build", "Repair", "Touch-Up", "Refinish", "Clean", "Repaint",
+  "Structural Fix", "Upholstery", "Hardware Replace",
+  "Fabrication", "Install", "Custom Build", "Modification",
+  "Other",
+];
+// If a stored value isn't in the list (e.g. a new Nexus category we don't
+// know yet), surface it as its own option so the select never silently
+// falls back to showing the wrong type.
+function workTypeOptions(current?: string): string[] {
+  return current && !WORK_TYPES.includes(current) ? [current, ...WORK_TYPES] : WORK_TYPES;
+}
 const SCOPES = ["Internal", "External", "Client-Facing", "Warranty"];
 
 // One display label per status value, shared by the board columns and the
@@ -416,7 +431,7 @@ function CreateModal({ teamMembers, onSubmit, onClose }: {
             <div>
               <label className={lbl}>Work Type</label>
               <select className={inp} value={form.work_type} onChange={(e) => setForm((f) => ({ ...f, work_type: e.target.value }))}>
-                {WORK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                {workTypeOptions(form.work_type).map((t) => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div>
@@ -642,7 +657,7 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
         <div>
           <label className={lbl}>Work Type</label>
           <select className={inp} value={workType} onChange={(e) => { setWorkType(e.target.value); markDirty(); }}>
-            {WORK_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+            {workTypeOptions(workType).map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
         <div>
