@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
@@ -14,7 +14,7 @@ import EstimateDrawer from "@/components/axiom/EstimateDrawer";
 import { cn, formatDueDate } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2, Calculator, ClipboardList,
-  Image as ImageIcon, Loader2, Upload, Paperclip,
+  Image as ImageIcon, Loader2, Upload, Paperclip, GripVertical,
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -231,6 +231,62 @@ export default function WallflowerPage() {
     }
   }
 
+  // ── Drag a card between columns to change its status ─────────
+  // One Pointer Events path covers mouse, touch (iPad) and pencil. Drag is
+  // initiated from the grip handle only, so tapping a card still opens it and
+  // a column still scrolls normally under touch. setPointerCapture keeps the
+  // move/up events flowing to the handle even as the finger leaves it.
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragOverCol, setDragOverCol] = useState<string | null>(null);
+  const dragRef = useRef<{ id: string; from: string } | null>(null);
+  const overColRef = useRef<string | null>(null);
+  const cloneRef = useRef<HTMLDivElement | null>(null);
+  const clonePos = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragWo = dragId ? orders.find((o) => o.id === dragId) || null : null;
+
+  function resetDrag() {
+    dragRef.current = null;
+    overColRef.current = null;
+    setDragId(null);
+    setDragOverCol(null);
+  }
+
+  function onHandleDown(e: React.PointerEvent, wo: WallflowerWorkOrder) {
+    e.preventDefault();
+    e.stopPropagation();
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* noop */ }
+    dragRef.current = { id: wo.id, from: wo.status };
+    overColRef.current = wo.status;
+    clonePos.current = { x: e.clientX, y: e.clientY };
+    setDragId(wo.id);
+    setDragOverCol(wo.status);
+  }
+
+  function onHandleMove(e: React.PointerEvent) {
+    if (!dragRef.current) return;
+    const x = e.clientX, y = e.clientY;
+    clonePos.current = { x, y };
+    if (cloneRef.current) cloneRef.current.style.transform = `translate(${x + 12}px, ${y + 12}px) rotate(2deg)`;
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const key = el?.closest("[data-col-key]")?.getAttribute("data-col-key") || null;
+    if (key !== overColRef.current) { overColRef.current = key; setDragOverCol(key); }
+  }
+
+  function onHandleUp(e: React.PointerEvent) {
+    if (!dragRef.current) return;
+    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
+    const d = dragRef.current;
+    const target = overColRef.current;
+    resetDrag();
+    // Drop onto a real, different status column → move it there. "__other" and
+    // the source column are no-ops.
+    if (target && COLUMN_KEYS.has(target) && target !== d.from) {
+      const status = target as WallflowerWorkOrder["status"];
+      setOrders((prev) => prev.map((o) => (o.id === d.id ? { ...o, status } : o))); // optimistic
+      updateOrder(d.id, { status }); // persists + notifies Nexus + reloads
+    }
+  }
+
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
       {/* Header */}
@@ -270,7 +326,16 @@ export default function WallflowerPage() {
             const items = grouped[col.key] || [];
             const dot = STATUS_COLORS[col.key] || "#6b7280";
             return (
-              <div key={col.key} className="w-72 shrink-0 flex flex-col border border-border bg-card/20 min-h-0">
+              <div
+                key={col.key}
+                data-col-key={col.key}
+                className={cn(
+                  "w-72 shrink-0 flex flex-col border bg-card/20 min-h-0 transition-colors",
+                  dragId && dragOverCol === col.key && col.key !== "__other"
+                    ? "border-accent bg-accent/5"
+                    : "border-border"
+                )}
+              >
                 <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full" style={{ background: dot }} />
@@ -291,11 +356,26 @@ export default function WallflowerPage() {
                         key={wo.id}
                         onClick={() => setSelected(wo)}
                         className={cn(
-                          "bg-card border border-border p-3 cursor-pointer transition-colors",
-                          active ? "border-accent" : "hover:border-accent/40"
+                          "bg-card border p-3 cursor-pointer transition-colors",
+                          active ? "border-accent" : "border-border hover:border-accent/40",
+                          dragId === wo.id ? "opacity-40" : ""
                         )}
                       >
                         <div className="flex items-start gap-2">
+                          <button
+                            type="button"
+                            onPointerDown={(e) => onHandleDown(e, wo)}
+                            onPointerMove={onHandleMove}
+                            onPointerUp={onHandleUp}
+                            onPointerCancel={resetDrag}
+                            onClick={(e) => e.stopPropagation()}
+                            title="Drag to move to another column"
+                            aria-label="Drag to move"
+                            className="shrink-0 -ml-1 mt-0.5 text-muted/50 hover:text-foreground cursor-grab active:cursor-grabbing"
+                            style={{ touchAction: "none" }}
+                          >
+                            <GripVertical size={14} />
+                          </button>
                           {thumbUrl && (
                             <div className="relative shrink-0">
                               <img src={thumbUrl} alt="" className="w-10 h-10 object-cover border border-border" />
@@ -331,6 +411,18 @@ export default function WallflowerPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Floating drag preview — follows the pointer, ignores hit-testing */}
+      {dragWo && (
+        <div
+          ref={cloneRef}
+          className="fixed left-0 top-0 z-[60] w-60 pointer-events-none bg-card border border-accent p-3 shadow-2xl"
+          style={{ transform: `translate(${clonePos.current.x + 12}px, ${clonePos.current.y + 12}px) rotate(2deg)` }}
+        >
+          <p className="font-medium text-sm truncate">{dragWo.item_name}</p>
+          <p className="text-muted text-xs truncate">{dragWo.work_type} · {dragWo.scope}</p>
         </div>
       )}
 
