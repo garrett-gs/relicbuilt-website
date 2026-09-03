@@ -30,6 +30,20 @@ const STATUS_OPTIONS = ["pending", "accepted", "in_progress", "estimated", "comp
 const WORK_TYPES = ["Repair", "Fabrication", "Refinish", "Install", "Custom Build", "Modification", "Other"];
 const SCOPES = ["Internal", "External", "Client-Facing", "Warranty"];
 
+// Board columns, left→right in workflow order. Each maps to a status value.
+// "pending" is the status inbound Nexus orders land in, so we label it "New".
+// "In Progress" is included so accepted-and-underway orders aren't hidden —
+// every possible status has a home here (nothing silently drops off the board).
+const COLUMNS: { key: WallflowerWorkOrder["status"]; label: string }[] = [
+  { key: "pending", label: "New" },
+  { key: "estimated", label: "Estimated" },
+  { key: "accepted", label: "Accepted" },
+  { key: "in_progress", label: "In Progress" },
+  { key: "complete", label: "Complete" },
+  { key: "cancelled", label: "Canceled" },
+];
+const COLUMN_KEYS = new Set<string>(COLUMNS.map((c) => c.key));
+
 const inp = "w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent";
 const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
 
@@ -39,7 +53,6 @@ export default function WallflowerPage() {
   const [selected, setSelected] = useState<WallflowerWorkOrder | null>(null);
   const [drawerEstimateId, setDrawerEstimateId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showCreate, setShowCreate] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
 
@@ -60,7 +73,6 @@ export default function WallflowerPage() {
   }, []);
 
   const filtered = orders.filter((o) => {
-    if (filterStatus !== "all" && o.status !== filterStatus) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -71,6 +83,16 @@ export default function WallflowerPage() {
     }
     return true;
   });
+
+  // Bucket orders into their status column. Any unexpected status value lands
+  // in a trailing "Other" column so an order can never vanish from the board.
+  const grouped = filtered.reduce<Record<string, WallflowerWorkOrder[]>>((acc, o) => {
+    const key = COLUMN_KEYS.has(o.status) ? o.status : "__other";
+    (acc[key] ||= []).push(o);
+    return acc;
+  }, {});
+  const boardColumns: { key: string; label: string }[] = [...COLUMNS];
+  if (grouped["__other"]?.length) boardColumns.push({ key: "__other", label: "Other" });
 
   async function createOrder(form: Partial<WallflowerWorkOrder>) {
     const { data } = await axiom.from("wallflower_work_orders").insert({
@@ -184,120 +206,132 @@ export default function WallflowerPage() {
   }
 
   return (
-    <div className="flex gap-6 h-[calc(100vh-8rem)]">
-      {/* Left — list */}
-      <div className="w-80 flex-shrink-0 flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-heading font-bold flex items-center gap-2">
-              <ClipboardList size={22} className="text-accent" />
-              Work Orders
-            </h1>
-            <p className="text-muted text-sm mt-0.5">{orders.length} work orders</p>
-          </div>
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus size={14} className="mr-1" /> New
-          </Button>
+    <div className="flex flex-col h-[calc(100vh-8rem)]">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4 gap-4">
+        <div>
+          <h1 className="text-2xl font-heading font-bold flex items-center gap-2">
+            <ClipboardList size={22} className="text-accent" />
+            Work Orders
+          </h1>
+          <p className="text-muted text-sm mt-0.5">{orders.length} work orders</p>
         </div>
-
-        {/* Search + filter */}
-        <div className="flex gap-2 mb-3">
-          <div className="relative flex-1">
+        <div className="flex items-center gap-2">
+          <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search work orders..."
-              className="w-full bg-card border border-border pl-9 pr-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-accent"
+              className="w-56 bg-card border border-border pl-9 pr-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-accent"
             />
           </div>
-          <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="bg-card border border-border px-2 py-2 text-xs text-foreground focus:outline-none focus:border-accent"
-          >
-            <option value="all">All</option>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>{s.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())}</option>
-            ))}
-          </select>
+          <Button size="sm" onClick={() => setShowCreate(true)}>
+            <Plus size={14} className="mr-1" /> New
+          </Button>
         </div>
+      </div>
 
-        {/* List */}
-        <div className="flex-1 overflow-y-auto space-y-2">
-          {filtered.length === 0 && (
-            <p className="text-muted text-sm text-center py-8">
-              {orders.length === 0 ? "No work orders yet." : "No matches."}
-            </p>
-          )}
-          {filtered.map((wo) => {
-            const active = selected?.id === wo.id;
-            const thumbUrl = wo.item_image_url || wo.reference_images?.[0]?.url;
-            const imgCount = (wo.item_image_url ? 1 : 0) + (wo.reference_images?.length || 0);
+      {/* Board — one column per status */}
+      {orders.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-muted text-sm gap-3">
+          <ClipboardList size={48} className="text-muted/20" />
+          <p>No work orders yet. They arrive from Nexus, or add one with “New”.</p>
+        </div>
+      ) : (
+        <div className="flex-1 flex gap-4 overflow-x-auto pb-2 min-h-0">
+          {boardColumns.map((col) => {
+            const items = grouped[col.key] || [];
+            const dot = STATUS_COLORS[col.key] || "#6b7280";
             return (
-              <div
-                key={wo.id}
-                onClick={() => setSelected(wo)}
-                className={cn(
-                  "bg-card border border-border p-3 cursor-pointer transition-colors",
-                  active ? "border-accent" : "hover:border-accent/40"
-                )}
-              >
-                <div className="flex items-start gap-2">
-                  {thumbUrl && (
-                    <div className="relative shrink-0">
-                      <img src={thumbUrl} alt="" className="w-10 h-10 object-cover border border-border" />
-                      {imgCount > 1 && (
-                        <span className="absolute -bottom-1 -right-1 bg-background border border-border text-[9px] leading-none px-1 py-0.5 text-muted flex items-center gap-0.5">
-                          <Paperclip size={8} />{imgCount}
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium text-sm truncate">{wo.item_name}</p>
-                    <p className="text-muted text-xs">{wo.work_type} · {wo.scope}</p>
-                    {wo.deadline && (() => {
-                      const due = formatDueDate(wo.deadline);
-                      return (
-                        <p className={`text-xs mt-0.5 ${due.soon ? "text-orange-400 font-medium" : "text-muted"}`}>
-                          Due: {due.text}
-                        </p>
-                      );
-                    })()}
+              <div key={col.key} className="w-72 shrink-0 flex flex-col border border-border bg-card/20 min-h-0">
+                <div className="flex items-center justify-between px-3 py-2.5 border-b border-border">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full" style={{ background: dot }} />
+                    <span className="text-xs uppercase tracking-wider font-medium text-foreground">{col.label}</span>
                   </div>
-                  <span
-                    className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 border shrink-0"
-                    style={{ color: STATUS_COLORS[wo.status], borderColor: STATUS_COLORS[wo.status] + "40" }}
-                  >
-                    {wo.status.replace("_", " ")}
-                  </span>
+                  <span className="text-xs text-muted tabular-nums">{items.length}</span>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-0">
+                  {items.length === 0 && (
+                    <p className="text-muted/50 text-xs text-center py-6">—</p>
+                  )}
+                  {items.map((wo) => {
+                    const active = selected?.id === wo.id;
+                    const thumbUrl = wo.item_image_url || wo.reference_images?.[0]?.url;
+                    const imgCount = (wo.item_image_url ? 1 : 0) + (wo.reference_images?.length || 0);
+                    return (
+                      <div
+                        key={wo.id}
+                        onClick={() => setSelected(wo)}
+                        className={cn(
+                          "bg-card border border-border p-3 cursor-pointer transition-colors",
+                          active ? "border-accent" : "hover:border-accent/40"
+                        )}
+                      >
+                        <div className="flex items-start gap-2">
+                          {thumbUrl && (
+                            <div className="relative shrink-0">
+                              <img src={thumbUrl} alt="" className="w-10 h-10 object-cover border border-border" />
+                              {imgCount > 1 && (
+                                <span className="absolute -bottom-1 -right-1 bg-background border border-border text-[9px] leading-none px-1 py-0.5 text-muted flex items-center gap-0.5">
+                                  <Paperclip size={8} />{imgCount}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-sm truncate">{wo.item_name}</p>
+                            <p className="text-muted text-xs truncate">{wo.work_type} · {wo.scope}</p>
+                            {wo.nexus_ref && (
+                              <p className="text-accent/80 text-[11px] mt-0.5 truncate" title={`Nexus ${wo.nexus_ref.type} ${wo.nexus_ref.number}`}>
+                                ↗ {wo.nexus_ref.number}
+                              </p>
+                            )}
+                            {wo.deadline && (() => {
+                              const due = formatDueDate(wo.deadline);
+                              return (
+                                <p className={`text-xs mt-0.5 ${due.soon ? "text-orange-400 font-medium" : "text-muted"}`}>
+                                  Due: {due.text}
+                                </p>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );
           })}
         </div>
-      </div>
+      )}
 
-      {/* Right — detail */}
-      <div className="flex-1 overflow-y-auto">
-        {!selected ? (
-          <div className="h-full flex flex-col items-center justify-center text-muted text-sm gap-3">
-            <ClipboardList size={48} className="text-muted/20" />
-            <p>Select a work order or create a new one</p>
+      {/* Detail — slide-over drawer */}
+      {selected && (
+        <>
+          <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setSelected(null)} />
+          <div className="fixed top-0 right-0 h-full w-full max-w-2xl bg-background border-l border-border z-40 overflow-y-auto p-6">
+            <button
+              onClick={() => setSelected(null)}
+              className="absolute top-4 right-4 text-muted hover:text-foreground"
+              title="Close"
+            >
+              <X size={20} />
+            </button>
+            <OrderDetail
+              key={selected.id}
+              order={selected}
+              teamMembers={teamMembers}
+              onUpdate={(u) => updateOrder(selected.id, u)}
+              onDelete={() => deleteOrder(selected.id)}
+              onCreateEstimate={() => createEstimate(selected)}
+              onViewEstimate={() => selected.estimate_id && setDrawerEstimateId(selected.estimate_id)}
+            />
           </div>
-        ) : (
-          <OrderDetail
-            key={selected.id}
-            order={selected}
-            teamMembers={teamMembers}
-            onUpdate={(u) => updateOrder(selected.id, u)}
-            onDelete={() => deleteOrder(selected.id)}
-            onCreateEstimate={() => createEstimate(selected)}
-            onViewEstimate={() => selected.estimate_id && setDrawerEstimateId(selected.estimate_id)}
-          />
-        )}
-      </div>
+        </>
+      )}
 
       {/* Create modal */}
       {showCreate && (
