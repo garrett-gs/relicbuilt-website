@@ -30,17 +30,28 @@ const STATUS_OPTIONS = ["pending", "accepted", "in_progress", "estimated", "comp
 const WORK_TYPES = ["Repair", "Fabrication", "Refinish", "Install", "Custom Build", "Modification", "Other"];
 const SCOPES = ["Internal", "External", "Client-Facing", "Warranty"];
 
+// One display label per status value, shared by the board columns and the
+// detail status dropdown so they never drift. "pending" reads as "New"
+// (inbound Nexus orders land here); "cancelled" reads as "Canceled".
+const STATUS_LABELS: Record<string, string> = {
+  pending: "New",
+  estimated: "Estimated",
+  accepted: "Accepted",
+  in_progress: "In Progress",
+  complete: "Complete",
+  cancelled: "Canceled",
+};
+
 // Board columns, left→right in workflow order. Each maps to a status value.
-// "pending" is the status inbound Nexus orders land in, so we label it "New".
 // "In Progress" is included so accepted-and-underway orders aren't hidden —
 // every possible status has a home here (nothing silently drops off the board).
 const COLUMNS: { key: WallflowerWorkOrder["status"]; label: string }[] = [
-  { key: "pending", label: "New" },
-  { key: "estimated", label: "Estimated" },
-  { key: "accepted", label: "Accepted" },
-  { key: "in_progress", label: "In Progress" },
-  { key: "complete", label: "Complete" },
-  { key: "cancelled", label: "Canceled" },
+  { key: "pending", label: STATUS_LABELS.pending },
+  { key: "estimated", label: STATUS_LABELS.estimated },
+  { key: "accepted", label: STATUS_LABELS.accepted },
+  { key: "in_progress", label: STATUS_LABELS.in_progress },
+  { key: "complete", label: STATUS_LABELS.complete },
+  { key: "cancelled", label: STATUS_LABELS.cancelled },
 ];
 const COLUMN_KEYS = new Set<string>(COLUMNS.map((c) => c.key));
 
@@ -570,7 +581,7 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
           style={{ color: STATUS_COLORS[status] }}
         >
           {STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>{s.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())}</option>
+            <option key={s} value={s}>{STATUS_LABELS[s] || s}</option>
           ))}
         </select>
       </div>

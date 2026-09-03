@@ -141,11 +141,14 @@ export async function POST(req: NextRequest) {
       }
 
       if (spawnedEstimateId) {
+        // Link the ready-to-price draft estimate, but leave the work order in
+        // "pending" — every inbound Nexus order should land in the New column
+        // and only move once someone actually works it. (We intentionally do
+        // NOT flip to "estimated" or notify Nexus "estimated" on intake.)
         await supabase
           .from("wallflower_work_orders")
-          .update({ estimate_id: spawnedEstimateId, status: "estimated", updated_at: new Date().toISOString() })
+          .update({ estimate_id: spawnedEstimateId, updated_at: new Date().toISOString() })
           .eq("id", data.id);
-        await notifyWallflowerStatus(supabase, { workOrderId: data.id }, "estimated");
       }
     } catch (e) {
       console.error("[wallflower] auto-spawn estimate failed:", e);
