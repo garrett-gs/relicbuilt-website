@@ -5,7 +5,7 @@ import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
-import { WallflowerWorkOrder, TeamMember, NexusRef } from "@/types/axiom";
+import { WallflowerWorkOrder, TeamMember, NexusRef, Material, LaborEntry, InventoryItem } from "@/types/axiom";
 import NexusRefPicker from "@/components/axiom/NexusRefPicker";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
@@ -15,6 +15,7 @@ import { cn, formatDueDate } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2, Calculator, ClipboardList,
   Image as ImageIcon, Loader2, Upload, Paperclip, GripVertical,
+  Clock, Play, Square, Package, DollarSign,
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -72,6 +73,31 @@ const COLUMN_KEYS = new Set<string>(COLUMNS.map((c) => c.key));
 
 const inp = "w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent";
 const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
+
+function money(n: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
+}
+// Local "HH:MM" (24h) from an ISO timestamp — carried onto labor entries.
+function hhmmLocal(iso: string) {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+// Net hours between two "HH:MM" times, overnight-aware. Null unless both valid.
+function hoursBetween(cin?: string, cout?: string): number | null {
+  if (!cin || !cout) return null;
+  const [h1, m1] = cin.split(":").map(Number);
+  const [h2, m2] = cout.split(":").map(Number);
+  if ([h1, m1, h2, m2].some((n) => Number.isNaN(n))) return null;
+  let mins = (h2 * 60 + m2) - (h1 * 60 + m1);
+  if (mins < 0) mins += 24 * 60;
+  return Math.round((mins / 60) * 100) / 100;
+}
+// Live HH:MM:SS elapsed since an ISO clock-in.
+function formatElapsed(clockIn: string, nowMs: number) {
+  const diff = Math.max(0, Math.floor((nowMs - new Date(clockIn).getTime()) / 1000));
+  const h = Math.floor(diff / 3600), m = Math.floor((diff % 3600) / 60), s = diff % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
 
 export default function WallflowerPage() {
   const { userEmail } = useAuth();
@@ -582,6 +608,7 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
   onCreateEstimate: () => void;
   onViewEstimate: () => void;
 }) {
+  const { userEmail } = useAuth();
   const [itemName, setItemName] = useState(order.item_name);
   const [itemSource, setItemSource] = useState(order.item_source);
   const [workType, setWorkType] = useState(order.work_type);
@@ -600,7 +627,151 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
   const [rev, setRev] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  // ── Time & materials ──────────────────────────────────────
+  const [materials, setMaterials] = useState<Material[]>(order.materials || []);
+  const [labor, setLabor] = useState<LaborEntry[]>(order.labor_log || []);
+  const [activeClock, setActiveClock] = useState(order.active_clock || null);
+  const [clockMember, setClockMember] = useState("");
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [quotedTotal, setQuotedTotal] = useState(0);
+  // Inventory allocation modal
+  const [showAllocate, setShowAllocate] = useState(false);
+  const [invSearch, setInvSearch] = useState("");
+  const [invResults, setInvResults] = useState<InventoryItem[]>([]);
+  const [allocItem, setAllocItem] = useState<InventoryItem | null>(null);
+  const [allocQty, setAllocQty] = useState("");
+  const [allocSaving, setAllocSaving] = useState(false);
+  // Non-inventory expense form
+  const [showExpense, setShowExpense] = useState(false);
+  const [exDesc, setExDesc] = useState("");
+  const [exVendor, setExVendor] = useState("");
+  const [exCost, setExCost] = useState(0);
+
+  const materialTotal = materials.reduce((s, m) => s + (m.cost || 0), 0);
+  const laborTotal = labor.reduce((s, l) => s + (l.cost || 0), 0);
+  const actualCost = Math.round((materialTotal + laborTotal) * 100) / 100;
+  const margin = quotedTotal > 0 ? ((quotedTotal - actualCost) / quotedTotal) * 100 : 0;
+
+  // Live-tick the elapsed clock display once per second while clocked in.
+  useEffect(() => {
+    if (!activeClock) return;
+    const t = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [activeClock]);
+
+  // Pull the linked estimate's total to compare actual cost against.
+  useEffect(() => {
+    if (!order.estimate_id) return; // stays at its default 0
+    axiom.from("estimates").select("line_items,labor_items,markup_percent").eq("id", order.estimate_id).single().then(({ data }) => {
+      if (!data) return;
+      const mat = (data.line_items || []).reduce((s: number, li: { quantity?: number; unit_price?: number }) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
+      const lab = (data.labor_items || []).reduce((s: number, li: { cost?: number }) => s + (li.cost || 0), 0);
+      const markup = (mat + lab) * ((data.markup_percent || 0) / 100);
+      setQuotedTotal(Math.round((mat + lab + markup) * 100) / 100);
+    });
+  }, [order.estimate_id]);
+
   function markDirty() { setDirty(true); setSaved(false); setRev((r) => r + 1); }
+
+  // ── Clock in / out (attributed to a team member, their hourly_rate) ──
+  function clockIn() {
+    if (!clockMember) return;
+    const member = teamMembers.find((m) => m.name === clockMember);
+    const clock = { member_name: clockMember, hourly_rate: member?.hourly_rate || 60, clock_in: new Date().toISOString() };
+    setActiveClock(clock);
+    setNowMs(Date.now());
+    onUpdate({ active_clock: clock }); // persist immediately so a clock survives closing the drawer
+  }
+  function clockOut() {
+    if (!activeClock) return;
+    const outIso = new Date().toISOString();
+    const hours = Math.round(((new Date(outIso).getTime() - new Date(activeClock.clock_in).getTime()) / 3600000) * 100) / 100;
+    const rate = activeClock.hourly_rate || 60;
+    const entry: LaborEntry = {
+      date: activeClock.clock_in.split("T")[0],
+      description: activeClock.member_name,
+      clock_in: hhmmLocal(activeClock.clock_in),
+      clock_out: hhmmLocal(outIso),
+      hours, rate,
+      cost: Math.round(hours * rate * 100) / 100,
+      source: "timeclock",
+    };
+    const nextLabor = [...labor, entry];
+    setLabor(nextLabor);
+    setActiveClock(null);
+    onUpdate({ labor_log: nextLabor, active_clock: null, actual_cost: Math.round((materialTotal + nextLabor.reduce((s, l) => s + (l.cost || 0), 0)) * 100) / 100 });
+  }
+
+  // ── Labor rows ──
+  function addLabor() { setLabor([...labor, { date: new Date().toISOString().split("T")[0], description: "", clock_in: "", clock_out: "", hours: 0, rate: 60, cost: 0 }]); markDirty(); }
+  function updateLabor(i: number, field: keyof LaborEntry, value: string | number) {
+    const updated = [...labor];
+    (updated[i] as unknown as Record<string, string | number | boolean>)[field] = value;
+    if (field === "clock_in" || field === "clock_out") {
+      const gross = hoursBetween(updated[i].clock_in, updated[i].clock_out);
+      if (gross !== null) { updated[i].hours = gross; updated[i].cost = Math.round(gross * Number(updated[i].rate || 0) * 100) / 100; }
+    } else if (field === "hours" || field === "rate") {
+      updated[i].cost = Math.round(Number(updated[i].hours) * Number(updated[i].rate) * 100) / 100;
+    }
+    setLabor(updated); markDirty();
+  }
+  function removeLabor(i: number) { setLabor(labor.filter((_, idx) => idx !== i)); markDirty(); }
+
+  // ── Materials: inventory allocation + freeform expense (mirrors Projects) ──
+  async function searchInventory(q: string) {
+    setInvSearch(q);
+    if (q.trim().length < 2) { setInvResults([]); return; }
+    const { data } = await axiom.from("inventory_items").select("*").eq("active", true).ilike("description", `%${q.trim()}%`).order("description").limit(20);
+    if (data) setInvResults(data as InventoryItem[]);
+  }
+  async function allocateFromInventory() {
+    if (!allocItem || !allocQty) return;
+    const q = Number(allocQty);
+    if (q <= 0) return;
+    setAllocSaving(true);
+    const cost = Math.round(q * allocItem.unit_cost * 100) / 100;
+    // Log the stock movement and decrement on-hand (negative allowed), the same
+    // way Projects do. Attribution rides in `notes` since inventory_transactions
+    // keys on custom_work_id, not work orders.
+    await axiom.from("inventory_transactions").insert({
+      inventory_item_id: allocItem.id, type: "out", quantity: q, unit_cost: allocItem.unit_cost,
+      custom_work_id: null, notes: `Allocated to work order: ${order.item_name} (${order.id})`,
+      date: new Date().toISOString().split("T")[0], created_by: userEmail,
+    });
+    await axiom.from("inventory_items").update({ quantity_on_hand: allocItem.quantity_on_hand - q, updated_at: new Date().toISOString() }).eq("id", allocItem.id);
+    const newMaterial: Material = { description: `${allocItem.description} (×${q} ${allocItem.unit})`, vendor: "Inventory", cost, inventory_item_id: allocItem.id, quantity: q, unit_cost: allocItem.unit_cost, allocated_by: userEmail };
+    const updated = [...materials, newMaterial];
+    setMaterials(updated);
+    onUpdate({ materials: updated, actual_cost: Math.round((laborTotal + updated.reduce((s, m) => s + (m.cost || 0), 0)) * 100) / 100 });
+    await logActivity({ action: "updated", entity: "inventory", entity_id: allocItem.id, label: `Allocated ${q} ${allocItem.unit} of ${allocItem.description} → WO ${order.item_name}`, user_name: userEmail });
+    setAllocItem(null); setAllocQty(""); setInvSearch(""); setInvResults([]); setShowAllocate(false); setAllocSaving(false);
+    markDirty();
+  }
+  function addExpense() {
+    if (!exDesc.trim()) return;
+    const updated = [...materials, { description: exDesc.trim(), vendor: exVendor.trim(), cost: exCost, allocated_by: userEmail } as Material];
+    setMaterials(updated);
+    onUpdate({ materials: updated, actual_cost: Math.round((laborTotal + updated.reduce((s, m) => s + (m.cost || 0), 0)) * 100) / 100 });
+    setExDesc(""); setExVendor(""); setExCost(0); setShowExpense(false);
+    markDirty();
+  }
+  async function removeMaterial(i: number) {
+    const m = materials[i];
+    if (m.inventory_item_id && m.quantity) {
+      await axiom.from("inventory_transactions").insert({
+        inventory_item_id: m.inventory_item_id, type: "in", quantity: m.quantity, unit_cost: m.unit_cost || 0,
+        custom_work_id: null, notes: `Reversed allocation from work order: ${order.item_name} (${order.id})`,
+        date: new Date().toISOString().split("T")[0], created_by: userEmail,
+      });
+      const { data: invItem } = await axiom.from("inventory_items").select("quantity_on_hand").eq("id", m.inventory_item_id).single();
+      if (invItem) await axiom.from("inventory_items").update({ quantity_on_hand: invItem.quantity_on_hand + m.quantity, updated_at: new Date().toISOString() }).eq("id", m.inventory_item_id);
+      await logActivity({ action: "updated", entity: "inventory", entity_id: m.inventory_item_id, label: `Reversed ${m.quantity} of ${m.description} from WO ${order.item_name}`, user_name: userEmail });
+    }
+    const updated = materials.filter((_, idx) => idx !== i);
+    setMaterials(updated);
+    onUpdate({ materials: updated, actual_cost: Math.round((laborTotal + updated.reduce((s, mm) => s + (mm.cost || 0), 0)) * 100) / 100 });
+    markDirty();
+  }
 
   async function handleFiles(fileList: FileList | null) {
     if (!fileList || fileList.length === 0) return;
@@ -652,6 +823,9 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
       quantity,
       notes: notes || undefined,
       images: images.length > 0 ? images : undefined,
+      materials,
+      labor_log: labor,
+      actual_cost: actualCost,
     });
     setDirty(false);
     setSaved(true);
@@ -846,11 +1020,159 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
         <p className="text-xs text-muted mt-2">Photos transfer to the estimate and project when you convert this work order.</p>
       </div>
 
+      {/* ── Time Clock ── */}
+      <div className="bg-card border border-border p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Clock size={14} className="text-accent" />
+          <span className="text-xs uppercase tracking-wider text-muted">Time Clock</span>
+        </div>
+        {activeClock ? (
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">{activeClock.member_name} · clocked in</p>
+              <p className="text-3xl font-mono text-accent tabular-nums leading-tight">{formatElapsed(activeClock.clock_in, nowMs)}</p>
+              <p className="text-xs text-muted">Since {hhmmLocal(activeClock.clock_in)} · {money(activeClock.hourly_rate)}/hr</p>
+            </div>
+            <Button variant="outline" onClick={clockOut}><Square size={14} className="mr-1" /> Clock Out</Button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <select className={inp + " flex-1"} value={clockMember} onChange={(e) => setClockMember(e.target.value)}>
+              <option value="">— Who&apos;s working? —</option>
+              {teamMembers.map((m) => <option key={m.name} value={m.name}>{m.name}{m.hourly_rate ? ` (${money(m.hourly_rate)}/hr)` : ""}</option>)}
+            </select>
+            <Button onClick={clockIn} disabled={!clockMember}><Play size={14} className="mr-1" /> Clock In</Button>
+          </div>
+        )}
+      </div>
+
+      {/* ── Labor Log ── */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className={cn(lbl, "mb-0")}>Labor {labor.length > 0 && <span className="text-muted normal-case tracking-normal">· {money(laborTotal)}</span>}</label>
+          <button onClick={addLabor} className="text-xs text-accent hover:underline flex items-center gap-1"><Plus size={12} /> Add row</button>
+        </div>
+        {labor.length === 0 ? (
+          <p className="text-muted text-sm">No labor logged yet — clock in above, or add a row.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {labor.map((l, i) => (
+              <div key={i} className="bg-card border border-border p-2">
+                <div className="flex items-center gap-2">
+                  <input type="date" className="bg-transparent border border-border px-2 py-1 text-xs w-32 text-foreground" value={l.date} onChange={(e) => updateLabor(i, "date", e.target.value)} />
+                  <input className="bg-transparent border border-border px-2 py-1 text-sm flex-1 min-w-0 text-foreground" placeholder="Who / what" value={l.description || ""} onChange={(e) => updateLabor(i, "description", e.target.value)} />
+                  <input type="number" step="0.25" className="bg-transparent border border-border px-2 py-1 text-sm w-14 text-foreground" value={l.hours} onChange={(e) => updateLabor(i, "hours", parseFloat(e.target.value) || 0)} title="Hours" />
+                  <span className="text-muted text-xs">h ×</span>
+                  <input type="number" step="1" className="bg-transparent border border-border px-2 py-1 text-sm w-16 text-foreground" value={l.rate} onChange={(e) => updateLabor(i, "rate", parseFloat(e.target.value) || 0)} title="Rate ($/hr)" />
+                  <span className="w-20 text-right text-sm font-mono">{money(l.cost)}</span>
+                  <button onClick={() => removeLabor(i)} className="text-muted hover:text-red-500"><Trash2 size={13} /></button>
+                </div>
+                {(l.clock_in || l.clock_out) && (
+                  <p className="text-[11px] text-muted mt-1 pl-1">🕐 {l.clock_in || "—"}–{l.clock_out || "—"}{l.source === "timeclock" ? " · clocked" : ""}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Materials ── */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <label className={cn(lbl, "mb-0")}>Materials {materials.length > 0 && <span className="text-muted normal-case tracking-normal">· {money(materialTotal)}</span>}</label>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setShowAllocate(true)} className="text-xs text-accent hover:underline flex items-center gap-1"><Package size={12} /> From inventory</button>
+            <button onClick={() => setShowExpense((v) => !v)} className="text-xs text-accent hover:underline flex items-center gap-1"><Plus size={12} /> Expense</button>
+          </div>
+        </div>
+        {showExpense && (
+          <div className="flex items-center gap-2 mb-2 bg-card border border-border p-2">
+            <input className="bg-transparent border border-border px-2 py-1 text-sm flex-1 min-w-0 text-foreground" placeholder="Description" value={exDesc} onChange={(e) => setExDesc(e.target.value)} />
+            <input className="bg-transparent border border-border px-2 py-1 text-sm w-28 text-foreground" placeholder="Vendor" value={exVendor} onChange={(e) => setExVendor(e.target.value)} />
+            <input type="number" className="bg-transparent border border-border px-2 py-1 text-sm w-24 text-foreground" placeholder="Cost" value={exCost || ""} onChange={(e) => setExCost(parseFloat(e.target.value) || 0)} />
+            <Button size="sm" onClick={addExpense} disabled={!exDesc.trim()}>Add</Button>
+          </div>
+        )}
+        {materials.length === 0 ? (
+          <p className="text-muted text-sm">No materials yet.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {materials.map((m, i) => (
+              <div key={i} className="flex items-center gap-2 bg-card border border-border p-2 text-sm">
+                <div className="flex-1 min-w-0">
+                  <p className="truncate">{m.description}</p>
+                  {(m.vendor || m.allocated_by) && <p className="text-xs text-muted truncate">{m.vendor}{m.allocated_by ? ` · ${m.allocated_by}` : ""}</p>}
+                </div>
+                <span className="font-mono">{money(m.cost)}</span>
+                <button onClick={() => removeMaterial(i)} className="text-muted hover:text-red-500"><Trash2 size={13} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Cost Summary ── */}
+      <div className="bg-card border border-accent/30 p-4">
+        <div className="flex items-center gap-2 mb-3"><DollarSign size={14} className="text-accent" /><span className="text-xs uppercase tracking-wider text-muted">Cost Summary</span></div>
+        <div className="grid grid-cols-2 gap-y-2 text-sm">
+          <span className="text-muted">Materials</span><span className="text-right font-mono">{money(materialTotal)}</span>
+          <span className="text-muted">Labor</span><span className="text-right font-mono">{money(laborTotal)}</span>
+          <span className="font-medium border-t border-border pt-2">Actual Cost</span><span className="text-right font-mono font-medium border-t border-border pt-2">{money(actualCost)}</span>
+          {quotedTotal > 0 && (
+            <>
+              <span className="text-muted">Estimate</span><span className="text-right font-mono">{money(quotedTotal)}</span>
+              <span className="text-muted">Profit</span><span className={cn("text-right font-mono", quotedTotal - actualCost >= 0 ? "text-green-500" : "text-red-500")}>{money(quotedTotal - actualCost)}</span>
+              <span className="text-muted">Margin</span><span className={cn("text-right font-mono", margin >= 0 ? "text-green-500" : "text-red-500")}>{margin.toFixed(1)}%</span>
+            </>
+          )}
+        </div>
+        {!order.estimate_id && <p className="text-xs text-muted mt-2">Link or create an estimate to compare against a quote.</p>}
+      </div>
+
       {/* Nexus reference — link to a Nexus order or quote */}
       <NexusRefPicker
         value={order.nexus_ref ?? null}
         onChange={(ref) => onUpdate({ nexus_ref: ref })}
       />
+
+      {/* Allocate-from-inventory modal */}
+      {showAllocate && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-50" onClick={() => setShowAllocate(false)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-background border border-border p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-heading font-bold">Allocate from Inventory</h3>
+              <button onClick={() => setShowAllocate(false)} className="text-muted hover:text-foreground"><X size={18} /></button>
+            </div>
+            {!allocItem ? (
+              <>
+                <input autoFocus className={inp} placeholder="Search inventory…" value={invSearch} onChange={(e) => searchInventory(e.target.value)} />
+                <div className="mt-2 max-h-64 overflow-y-auto space-y-1">
+                  {invResults.map((it) => (
+                    <button key={it.id} onClick={() => setAllocItem(it)} className="w-full text-left bg-card border border-border p-2 hover:border-accent/50 text-sm">
+                      <p className="font-medium">{it.description}</p>
+                      <p className="text-xs text-muted">{money(it.unit_cost)}/{it.unit} · {it.quantity_on_hand} on hand</p>
+                    </button>
+                  ))}
+                  {invSearch.trim().length >= 2 && invResults.length === 0 && <p className="text-muted text-sm py-2">No matches.</p>}
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-medium">{allocItem.description}</p>
+                <p className="text-xs text-muted mb-3">{money(allocItem.unit_cost)}/{allocItem.unit} · {allocItem.quantity_on_hand} on hand</p>
+                <label className={lbl}>Quantity</label>
+                <input autoFocus type="number" step="any" className={inp} value={allocQty} onChange={(e) => setAllocQty(e.target.value)} />
+                {allocQty && Number(allocQty) > 0 && <p className="text-sm mt-2">Cost: <span className="font-mono">{money(Number(allocQty) * allocItem.unit_cost)}</span></p>}
+                <div className="flex gap-2 mt-4">
+                  <Button onClick={allocateFromInventory} disabled={allocSaving || !allocQty || Number(allocQty) <= 0}>{allocSaving ? "Allocating…" : "Allocate"}</Button>
+                  <Button variant="outline" onClick={() => { setAllocItem(null); setAllocQty(""); }}>Back</Button>
+                </div>
+              </>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Linked estimate */}
       {order.estimate_id && (

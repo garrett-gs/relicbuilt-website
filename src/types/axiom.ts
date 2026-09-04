@@ -507,6 +507,14 @@ export interface WallflowerWorkOrder {
   reference_images?: { url: string; name?: string; uploaded_at?: string }[];
   // Optional reference to a Nexus order/quote this work order relates to.
   nexus_ref?: NexusRef | null;
+  // Time & material tracking, mirroring custom_work (see migration v28).
+  // materials/labor_log are JSONB arrays; actual_cost is the rolled-up total
+  // (materials + labor); active_clock holds an in-progress clock between a
+  // clock-in and clock-out.
+  materials?: Material[];
+  labor_log?: LaborEntry[];
+  actual_cost?: number;
+  active_clock?: { member_name: string; hourly_rate: number; clock_in: string } | null;
   created_at: string;
   updated_at: string;
 }
