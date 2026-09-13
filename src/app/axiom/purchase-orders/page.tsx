@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity";
 import { syncInventoryUnitCost } from "@/lib/inventory-price-sync";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useEntity } from "@/components/axiom/EntityProvider";
+import { resolveEntityProfile, EntityProfile } from "@/lib/entity-profile";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { PurchaseOrder, POLineItem, Vendor, CatalogItem } from "@/types/axiom";
 import DateField from "@/components/ui/DateField";
@@ -1625,6 +1626,11 @@ function SendPOModal({ po, vendorEmail, onClose, onSent, userEmail }: {
   const [message, setMessage] = useState(`Hi,\n\nPlease find the attached purchase order ${po.po_number}.\n\nThank you,\nRELIC`);
   const [sending, setSending] = useState(false);
   const [status, setStatus] = useState<"idle" | "sent" | "error">("idle");
+  const [poProfile, setPoProfile] = useState<EntityProfile | undefined>(undefined);
+  useEffect(() => {
+    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,relic_profile").limit(1).single()
+      .then(({ data }) => setPoProfile(resolveEntityProfile(po.entity, data)));
+  }, [po.entity]);
 
   async function send() {
     setSending(true);
@@ -1632,7 +1638,7 @@ function SendPOModal({ po, vendorEmail, onClose, onSent, userEmail }: {
       <div style="font-family:Arial,sans-serif;color:#222;max-width:640px;margin:0 auto;">
         <div style="margin-bottom:24px;white-space:pre-wrap;font-size:14px;color:#444;">${message.replace(/\n/g, "<br>")}</div>
         <hr style="border:none;border-top:1px solid #ddd;margin:24px 0;">
-        ${generatePOHtml(po, true)}
+        ${generatePOHtml(po, true, poProfile)}
       </div>
     `;
     try {
@@ -1641,9 +1647,10 @@ function SendPOModal({ po, vendorEmail, onClose, onSent, userEmail }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to,
-          subject: `Purchase Order ${po.po_number} — RELIC`,
+          subject: `Purchase Order ${po.po_number} — ${poProfile?.name || "RELIC"}`,
           html,
-          from_name: "RELIC",
+          from_name: poProfile?.fromName || "RELIC",
+          from_email: poProfile?.fromEmail,
         }),
       });
       if (res.ok) {
@@ -1695,7 +1702,7 @@ function SendPOModal({ po, vendorEmail, onClose, onSent, userEmail }: {
 
           {/* Right — PO preview */}
           <div className="flex-1 overflow-y-auto bg-white">
-            <div className="min-h-full" dangerouslySetInnerHTML={{ __html: generatePOHtml(po, true) }} />
+            <div className="min-h-full" dangerouslySetInnerHTML={{ __html: generatePOHtml(po, true, poProfile) }} />
           </div>
         </div>
       </div>
@@ -1708,16 +1715,26 @@ function SendPOModal({ po, vendorEmail, onClose, onSent, userEmail }: {
 // ═══════════════════════════════════════════════════════════════
 
 function PrintPOView({ po, onClose }: { po: PurchaseOrder; onClose: () => void }) {
+  const [poProfile, setPoProfile] = useState<EntityProfile | undefined>(undefined);
+  const [ready, setReady] = useState(false);
+  // Resolve entity branding before printing so a Relic PO prints with Relic's
+  // identity rather than flashing the Wallflower default.
   useEffect(() => {
-    setTimeout(() => window.print(), 300);
-  }, []);
+    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,relic_profile").limit(1).single()
+      .then(({ data }) => { setPoProfile(resolveEntityProfile(po.entity, data)); setReady(true); });
+  }, [po.entity]);
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(() => window.print(), 300);
+    return () => clearTimeout(t);
+  }, [ready]);
 
   return (
     <div className="fixed inset-0 bg-white z-[100] overflow-auto print:relative">
       <button onClick={onClose} className="fixed top-4 right-4 bg-black text-white px-4 py-2 text-sm rounded print:hidden z-10">
         Close
       </button>
-      <div className="p-10 print:p-0" dangerouslySetInnerHTML={{ __html: generatePOHtml(po, false) }} />
+      <div className="p-10 print:p-0" dangerouslySetInnerHTML={{ __html: generatePOHtml(po, false, poProfile) }} />
     </div>
   );
 }

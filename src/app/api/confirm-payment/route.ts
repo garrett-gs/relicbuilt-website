@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getStripe } from "@/lib/stripe";
+import { resolveEntityProfile } from "@/lib/entity-profile";
 import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 import { notifyPaymentTeam } from "@/lib/notify-payment-team";
 
@@ -21,12 +22,16 @@ function receiptEmailHtml(opts: {
   amountPaid: number;
   method: string;
   date: string;
+  logoUrl?: string;
+  footer: string;
+  phone?: string;
+  website?: string;
 }) {
-  const { clientName, invoiceNumber, description, amountPaid, method, date } = opts;
+  const { clientName, invoiceNumber, description, amountPaid, method, date, logoUrl, footer, phone, website } = opts;
   return `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
   <div style="padding:20px 32px;border-bottom:3px solid #5b642e;margin-bottom:0;">
-    <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style="height:36px;object-fit:contain;display:block;" />
+    ${logoUrl ? `<img src="${logoUrl}" alt="" style="height:36px;object-fit:contain;display:block;" />` : ""}
   </div>
   <div style="padding:32px;">
     <h2 style="margin:0 0 6px;font-size:22px;color:#111;">Payment Received</h2>
@@ -66,11 +71,11 @@ function receiptEmailHtml(opts: {
       Your payment has been received and recorded. If you have any questions, don&apos;t hesitate to reach out.
     </p>
 
-    <p style="font-size:14px;color:#555;margin:0 0 8px;">Phone: <strong>(402) 235-8179</strong></p>
-    <p style="font-size:14px;color:#555;margin:0 0 8px;">Web: <a href="https://www.wallflower-relic.com" style="color:#5b642e;">wallflower-relic.com</a></p>
+    ${phone ? `<p style="font-size:14px;color:#555;margin:0 0 8px;">Phone: <strong>${phone}</strong></p>` : ""}
+    ${website ? `<p style="font-size:14px;color:#555;margin:0 0 8px;">Web: <a href="https://${website.replace(/^https?:\/\//, "")}" style="color:#5b642e;">${website}</a></p>` : ""}
 
     <p style="margin-top:32px;font-size:11px;color:#aaa;">
-      Wallflower RELIC &nbsp;&middot;&nbsp; wallflower-relic.com
+      ${footer}
     </p>
   </div>
 </div>`;
@@ -274,6 +279,12 @@ export async function POST(req: NextRequest) {
     // invoice. Identical content as before, now reflecting the actual
     // method (Card vs ACH Bank Transfer).
     if (invoice.client_email && resendKey) {
+      const { data: settingsRow } = await supabase
+        .from("settings")
+        .select("biz_name,biz_email,biz_phone,relic_profile")
+        .limit(1)
+        .single();
+      const profile = resolveEntityProfile(invoice.entity, settingsRow);
       const html = receiptEmailHtml({
         clientName: invoice.client_name || "there",
         invoiceNumber: invoice.invoice_number,
@@ -281,6 +292,10 @@ export async function POST(req: NextRequest) {
         amountPaid: totalPaid,
         method: sessionMethod,
         date: dateFormatted,
+        logoUrl: profile.logoUrl,
+        footer: profile.footer,
+        phone: profile.phone,
+        website: profile.website,
       });
       const receiptRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -289,7 +304,7 @@ export async function POST(req: NextRequest) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          from: "Wallflower RELIC <notifications@relicbuilt.com>",
+          from: `${profile.fromName} <${profile.fromEmail}>`,
           to: [invoice.client_email],
           subject: `Payment Receipt — ${invoice.invoice_number}`,
           html,

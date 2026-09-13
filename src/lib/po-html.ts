@@ -1,4 +1,5 @@
 import { PurchaseOrder, POLineItem } from "@/types/axiom";
+import { EntityProfile } from "@/lib/entity-profile";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -35,7 +36,7 @@ function standingInstructionsFor(po: PurchaseOrder): string[] {
   return VENDOR_STANDING_INSTRUCTIONS.names[key] || [];
 }
 
-export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
+export function generatePOHtml(po: PurchaseOrder, forEmail = false, profile?: EntityProfile) {
   const lines: POLineItem[] = po.line_items && po.line_items.length > 0
     ? po.line_items
     : [{ item_number: "", description: po.item_description || "", quantity: po.quantity, unit_price: po.unit_price, unit: "ea" }];
@@ -48,15 +49,21 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
     ? 'style="max-width:640px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;padding:40px;"'
     : 'style="max-width:700px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;padding:40px;"';
 
-  const logoSrc = forEmail
-    ? "https://relicbuilt.com/wr-logo-black.png"
-    : "/wr-logo-black.png";
+  // Entity branding. When a profile is passed, use its logo/name/footer;
+  // otherwise fall back to the historic Wallflower RELIC defaults.
+  const bizName = profile?.name || "Wallflower RELIC";
+  const logoSrc = profile
+    ? (profile.logoUrl || "")
+    : (forEmail ? "https://relicbuilt.com/wr-logo-black.png" : "/wr-logo-black.png");
+  const footer = profile?.footer || "Wallflower RELIC &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; wallflower-relic.com";
 
   return `
     <div ${wrapper}>
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;border-bottom:2px solid #5b642e;padding-bottom:20px;">
         <div>
-          <img src="${logoSrc}" alt="Wallflower RELIC" style="width:440px;max-width:78%;height:auto;display:block;" />
+          ${logoSrc
+            ? `<img src="${logoSrc}" alt="${bizName}" style="width:440px;max-width:78%;height:auto;display:block;" />`
+            : `<p style="margin:0;font-size:26px;font-weight:bold;color:#111;">${bizName}</p>`}
         </div>
         <div style="text-align:right;">
           <h2 style="margin:0;font-size:20px;color:#111;">PURCHASE ORDER</h2>
@@ -160,7 +167,7 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false) {
       ` : ""}
 
       <div style="margin-top:40px;padding-top:16px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center;">
-        Wallflower RELIC &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; wallflower-relic.com
+        ${footer}
       </div>
     </div>
   `;

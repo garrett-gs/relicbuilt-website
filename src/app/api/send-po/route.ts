@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { to, subject, html, from_name } = body;
+    const { to, subject, html, from_name, from_email } = body;
 
     if (!to || !subject || !html) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: `${from_name || "RELIC"} <notifications@relicbuilt.com>`,
+        from: `${from_name || "RELIC"} <${from_email || "notifications@relicbuilt.com"}>`,
         to: [to],
         subject,
         html,

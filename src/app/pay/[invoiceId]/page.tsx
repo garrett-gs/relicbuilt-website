@@ -16,6 +16,14 @@ interface Invoice {
   status: string;
 }
 
+interface Brand {
+  name: string;
+  logoUrl?: string;
+  footer?: string;
+  phone?: string;
+  website?: string;
+}
+
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
 }
@@ -41,6 +49,13 @@ export default function PayInvoicePage() {
   const [feeAgreed, setFeeAgreed] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Entity branding, defaulting to Wallflower RELIC until the invoice loads.
+  const [brand, setBrand] = useState<Brand>({
+    name: "Wallflower RELIC",
+    logoUrl: "https://relicbuilt.com/wr-logo-black.png",
+    phone: "(402) 235-8179",
+    website: "wallflower-relic.com",
+  });
 
   useEffect(() => {
     if (!invoiceId) return;
@@ -56,6 +71,7 @@ export default function PayInvoicePage() {
           return;
         }
         const body = await res.json();
+        if (body?.brand?.name) setBrand(body.brand as Brand);
         const data = body?.invoice as Invoice | undefined;
         if (!data) {
           setNotFound(true);
@@ -112,6 +128,12 @@ export default function PayInvoicePage() {
     }
   }
 
+  // Header logo (or the entity name as text if no logo is configured).
+  const logoEl = brand.logoUrl
+    ? <img src={brand.logoUrl} alt={brand.name} style={{ height: 32, objectFit: "contain", display: "block" }} />
+    : <span style={{ fontSize: 18, fontWeight: 700, color: "#111" }}>{brand.name}</span>;
+  const telHref = `tel:${(brand.phone || "").replace(/\D/g, "")}`;
+
   // --- Styles ---
   const pageStyle: React.CSSProperties = {
     minHeight: "100vh",
@@ -149,7 +171,7 @@ export default function PayInvoicePage() {
       <div style={pageStyle}>
         <div style={cardStyle}>
           <div style={headerStyle}>
-            <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style={{ height: 32, objectFit: "contain", display: "block" }} />
+            {logoEl}
             <span style={{ fontSize: 15, color: "#888", fontWeight: 600 }}>Invoice Payment</span>
           </div>
           <div style={{ ...bodyStyle, textAlign: "center", padding: "48px 28px", color: "#888" }}>
@@ -165,13 +187,13 @@ export default function PayInvoicePage() {
       <div style={pageStyle}>
         <div style={cardStyle}>
           <div style={headerStyle}>
-            <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style={{ height: 32, objectFit: "contain", display: "block" }} />
+            {logoEl}
             <span style={{ fontSize: 15, color: "#888", fontWeight: 600 }}>Invoice Payment</span>
           </div>
           <div style={bodyStyle}>
             <p style={{ fontSize: 16, color: "#555", textAlign: "center", marginTop: 16 }}>Invoice not found.</p>
             <p style={{ fontSize: 13, color: "#aaa", textAlign: "center", marginTop: 8 }}>
-              Please check your link or contact us at (402) 235-8179.
+              Please check your link{brand.phone ? ` or contact us at ${brand.phone}` : ""}.
             </p>
           </div>
         </div>
@@ -184,7 +206,7 @@ export default function PayInvoicePage() {
       <div style={pageStyle}>
         <div style={cardStyle}>
           <div style={headerStyle}>
-            <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style={{ height: 32, objectFit: "contain", display: "block" }} />
+            {logoEl}
             <span style={{ fontSize: 15, color: "#888", fontWeight: 600 }}>Invoice Payment</span>
           </div>
           <div style={bodyStyle}>
@@ -203,7 +225,7 @@ export default function PayInvoicePage() {
                 <p style={{ fontSize: 14, color: "#888", margin: "0 0 8px" }}>Invoice #{invoice.invoice_number}</p>
               )}
               <p style={{ fontSize: 13, color: "#aaa", marginTop: 12 }}>
-                Questions? Call us at (402) 235-8179.
+                Questions?{brand.phone ? ` Call us at ${brand.phone}.` : ""}
               </p>
             </div>
           </div>
@@ -219,7 +241,7 @@ export default function PayInvoicePage() {
       <div style={cardStyle}>
         {/* Header */}
         <div style={headerStyle}>
-          <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style={{ height: 32, objectFit: "contain", display: "block" }} />
+          {logoEl}
           <span style={{ fontSize: 15, color: "#888", fontWeight: 600 }}>Invoice Payment</span>
         </div>
 
@@ -378,8 +400,8 @@ export default function PayInvoicePage() {
 
             <p style={{ fontSize: 12, color: "#aaa", textAlign: "center", marginTop: 12, marginBottom: 0, lineHeight: "1.6" }}>
               Prefer to pay by check or other method?{" "}
-              <a href="tel:4022358179" style={{ color: "#5b642e", textDecoration: "none" }}>
-                Call us at (402) 235-8179
+              <a href={telHref} style={{ color: "#5b642e", textDecoration: "none" }}>
+                Call us at {brand.phone}
               </a>
             </p>
 
