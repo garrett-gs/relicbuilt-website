@@ -124,6 +124,32 @@ export default function SettingsPage() {
               />
             ))}
           </div>
+
+          {isSuperAdmin && (
+            <div className="pt-6 mt-6 border-t border-border space-y-4">
+              <div>
+                <h3 className="text-sm font-heading font-bold text-foreground">Relic Entity — Invoice Identity</h3>
+                <p className="text-xs text-muted mt-0.5">Branding for documents and email created under the separate Relic entity. Blank fields fall back to the Relic name.</p>
+              </div>
+              <Field label="Business Name" value={settings.relic_profile?.name || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), name: v })} />
+              <Field label="Email" value={settings.relic_profile?.email || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), email: v })} type="email" />
+              <Field label="Phone" value={settings.relic_profile?.phone || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), phone: formatPhone(v) })} type="tel" placeholder="(###) ###-####" />
+              <Field label="Street Address" value={settings.relic_profile?.address || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), address: v })} />
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="City" value={settings.relic_profile?.city || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), city: v })} />
+                <Field label="State" value={settings.relic_profile?.state || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), state: v })} />
+                <Field label="ZIP" value={settings.relic_profile?.zip || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), zip: v })} />
+              </div>
+              <Field label="Website" value={settings.relic_profile?.website || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), website: v })} placeholder="relic.com" />
+              <Field label="Logo URL" value={settings.relic_profile?.logo_url || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), logo_url: v })} placeholder="https://…/relic-logo.png" />
+              <Field label="Footer Line" value={settings.relic_profile?.footer || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), footer: v })} placeholder="RELIC · (###) ###-#### · relic.com" />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Email From Name" value={settings.relic_profile?.from_name || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), from_name: v })} placeholder="RELIC" />
+                <Field label="Email From Address" value={settings.relic_profile?.from_email || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), from_email: v })} placeholder="notifications@relicbuilt.com" />
+              </div>
+              <p className="text-xs text-muted">A custom From Address only sends once its domain is verified in Resend — otherwise leave it blank to send from the shared address under the Relic name.</p>
+            </div>
+          )}
         </div>
       )}
 

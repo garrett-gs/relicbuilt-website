@@ -61,7 +61,17 @@ export async function POST(req: NextRequest) {
     const feeCents = computeFeeCents(baseCents, method);
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://relicbuilt.com";
-    const stripe = getStripe();
+    // Route payment to the account that owns this invoice's entity. If a Relic
+    // invoice has no Relic Stripe key yet, refuse rather than bill Wallflower.
+    let stripe;
+    try {
+      stripe = getStripe(invoice.entity);
+    } catch {
+      return NextResponse.json(
+        { error: "Online payment isn't set up for this business yet." },
+        { status: 400 }
+      );
+    }
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",

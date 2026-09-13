@@ -83,7 +83,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing sessionId or invoiceId" }, { status: 400 });
     }
 
-    const stripe = getStripe();
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
+    );
+
+    // Load the invoice first so we can verify the session against the Stripe
+    // account that owns this invoice's entity (Wallflower vs Relic).
+    const { data: invoice, error } = await supabase
+      .from("invoices")
+      .select("*")
+      .eq("id", invoiceId)
+      .single();
+
+    if (error || !invoice) {
+      return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
+    }
+
+    if (invoice.status === "paid") {
+      return NextResponse.json({
+        ok: true,
+        already_paid: true,
+        invoice_number: invoice.invoice_number,
+        client_name: invoice.client_name,
+      });
+    }
+
+    let stripe;
+    try {
+      stripe = getStripe(invoice.entity);
+    } catch {
+      return NextResponse.json({ error: "Payment processor not configured for this business." }, { status: 400 });
+    }
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
     // For Card payments, payment_status flips to "paid" the moment the
@@ -108,30 +139,6 @@ export async function POST(req: NextRequest) {
 
     if (session.metadata?.invoice_id !== invoiceId) {
       return NextResponse.json({ error: "Session invoice mismatch" }, { status: 400 });
-    }
-
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
-
-    const { data: invoice, error } = await supabase
-      .from("invoices")
-      .select("*")
-      .eq("id", invoiceId)
-      .single();
-
-    if (error || !invoice) {
-      return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
-    }
-
-    if (invoice.status === "paid") {
-      return NextResponse.json({
-        ok: true,
-        already_paid: true,
-        invoice_number: invoice.invoice_number,
-        client_name: invoice.client_name,
-      });
     }
 
     const totalPaid = (session.amount_total ?? 0) / 100;

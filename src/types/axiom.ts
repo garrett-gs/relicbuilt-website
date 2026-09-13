@@ -553,6 +553,24 @@ export interface ActivityEntry {
 
 // ── Settings ────────────────────────────────────────────────
 
+// Relic entity's business identity (Phase 2). Wallflower RELIC keeps using the
+// biz_* fields on Settings; this JSONB blob holds Relic's separate branding for
+// invoices/POs/proposals and outbound email.
+export interface RelicProfile {
+  name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zip?: string;
+  website?: string;
+  logo_url?: string;
+  footer?: string;
+  from_name?: string;
+  from_email?: string;
+}
+
 export interface Settings {
   id: string;
   biz_name: string;
@@ -574,6 +592,7 @@ export interface Settings {
   inventory_locations: string[];
   delivery_addresses?: SavedAddress[];
   receipts_pin?: string;
+  relic_profile?: RelicProfile | null;
   created_at: string;
 }
 

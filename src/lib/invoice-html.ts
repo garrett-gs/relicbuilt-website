@@ -1,4 +1,5 @@
 import { Invoice, InvoiceLineItem } from "@/types/axiom";
+import { EntityProfile } from "@/lib/entity-profile";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -18,16 +19,7 @@ function fmtDate(d?: string) {
     : "";
 }
 
-interface BizInfo {
-  biz_name?: string;
-  biz_address?: string;
-  biz_city?: string;
-  biz_state?: string;
-  biz_zip?: string;
-  biz_phone?: string;
-}
-
-export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, biz?: BizInfo): string {
+export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, profile?: EntityProfile): string {
   const lineItems: InvoiceLineItem[] = inv.line_items && inv.line_items.length > 0 ? inv.line_items : [];
   const subtotal =
     lineItems.length > 0
@@ -41,30 +33,34 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
   const balance = total - paid;
   const amountDue = balance > 0 ? balance : total;
 
-  const bizName = biz?.biz_name || "RELIC LLC";
-  const logoUrl = "https://relicbuilt.com/wr-logo-black.png";
+  const bizName = profile?.name || "Wallflower RELIC";
+  const logoUrl = profile ? (profile.logoUrl || "") : "https://relicbuilt.com/wr-logo-black.png";
+  const website = profile ? (profile.website || "") : "wallflower-relic.com";
+  const footer = profile?.footer || "Wallflower RELIC  ·  (402) 235-8179  ·  wallflower-relic.com";
   const stripeColor = "#454d23";
 
   const wrap = forEmail
     ? `style="max-width:680px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;background:#fff;"`
     : `style="max-width:760px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;background:#fff;padding:48px;"`;
 
-  const addressLine2 = [biz?.biz_city, biz?.biz_state, biz?.biz_zip].filter(Boolean).join(", ");
+  const addressLine2 = [profile?.city, profile?.state, profile?.zip].filter(Boolean).join(", ");
 
   return `
 <div ${wrap}>
 
   <!-- Header: full logo left, INVOICE + address right -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
-    <img src="${logoUrl}" alt="Wallflower RELIC" style="height:36px;object-fit:contain;" />
+    ${logoUrl
+      ? `<img src="${logoUrl}" alt="${esc(bizName)}" style="height:36px;object-fit:contain;" />`
+      : `<p style="margin:0;font-size:22px;font-weight:bold;color:#111;letter-spacing:0.04em;">${esc(bizName)}</p>`}
     <div style="text-align:right;">
       <h1 style="margin:0 0 10px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">INVOICE</h1>
       <p style="margin:0;font-size:13px;font-weight:bold;color:#222;">${esc(bizName)}</p>
-      ${biz?.biz_address ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(biz.biz_address)}</p>` : ""}
+      ${profile?.address ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(profile.address)}</p>` : ""}
       ${addressLine2 ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(addressLine2)}</p>` : ""}
-      ${(biz?.biz_city || biz?.biz_state) ? `<p style="margin:2px 0;font-size:12px;color:#666;">United States</p>` : ""}
-      ${biz?.biz_phone ? `<p style="margin:6px 0 0;font-size:12px;color:#666;">${esc(biz.biz_phone)}</p>` : ""}
-      <p style="margin:2px 0;font-size:12px;color:#666;">wallflower-relic.com</p>
+      ${(profile?.city || profile?.state) ? `<p style="margin:2px 0;font-size:12px;color:#666;">United States</p>` : ""}
+      ${profile?.phone ? `<p style="margin:6px 0 0;font-size:12px;color:#666;">${esc(profile.phone)}</p>` : ""}
+      ${website ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(website)}</p>` : ""}
     </div>
   </div>
 
@@ -153,7 +149,7 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
 
   <!-- Footer -->
   <div style="margin-top:36px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#ccc;text-align:center;">
-    Wallflower RELIC &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; wallflower-relic.com
+    ${esc(footer)}
   </div>
 
 </div>`;

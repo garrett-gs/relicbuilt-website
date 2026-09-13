@@ -19,6 +19,7 @@ import { useRef } from "react";
 
 interface Customer { id: string; name: string; email?: string; phone?: string; }
 import { generateInvoiceHtml } from "@/lib/invoice-html";
+import { resolveEntityProfile } from "@/lib/entity-profile";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -592,7 +593,7 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
   const [sendResult, setSendResult] = useState<"success" | "error" | null>(null);
 
   useEffect(() => {
-    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text").limit(1).single()
+    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text,relic_profile").limit(1).single()
       .then(({ data }) => setBizSettings(data || {}));
   }, []);
 
@@ -629,11 +630,12 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
     if (!sendTo || !bizSettings) return;
     setSending(true); setSendResult(null);
     try {
-      const html = generateInvoiceHtml(invoice, bizSettings.terms_text || "", true, bizSettings);
+      const profile = resolveEntityProfile(invoice.entity, bizSettings);
+      const html = generateInvoiceHtml(invoice, bizSettings.terms_text || "", true, profile);
       const res = await fetch("/api/send-po", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: sendTo, subject: `Invoice ${invoice.invoice_number} from Wallflower RELIC`, html, from_name: "Wallflower RELIC" }),
+        body: JSON.stringify({ to: sendTo, subject: `Invoice ${invoice.invoice_number} from ${profile.name}`, html, from_name: profile.fromName }),
       });
       setSendResult(res.ok ? "success" : "error");
       if (res.ok) { setShowEmailForm(false); }
@@ -646,7 +648,8 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
   }
 
   const biz = bizSettings;
-  const addressLine2 = [biz.biz_city, biz.biz_state, biz.biz_zip].filter(Boolean).join(", ");
+  const profile = resolveEntityProfile(invoice.entity, bizSettings);
+  const addressLine2 = [profile.city, profile.state, profile.zip].filter(Boolean).join(", ");
 
   return (
     <div className="fixed inset-0 bg-gray-100 z-[100] overflow-auto">
@@ -702,17 +705,21 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
         {/* Header */}
         <div className="flex justify-between items-start px-10 pt-10 pb-8 print:px-8 print:pt-8">
           <div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/wr-logo-black.png" alt="Wallflower RELIC" className="h-10 object-contain object-left print:h-10" />
+            {profile.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={profile.logoUrl} alt={profile.name} className="h-10 object-contain object-left print:h-10" />
+            ) : (
+              <p className="text-2xl font-bold text-gray-900 tracking-wide">{profile.name}</p>
+            )}
           </div>
           <div className="text-right">
             <h1 className="text-4xl font-bold text-gray-900 mb-3 tracking-wide">INVOICE</h1>
-            {biz.biz_name && <p className="text-sm font-semibold text-gray-800">{biz.biz_name}</p>}
-            {biz.biz_address && <p className="text-xs text-gray-500 mt-0.5">{biz.biz_address}</p>}
+            {profile.name && <p className="text-sm font-semibold text-gray-800">{profile.name}</p>}
+            {profile.address && <p className="text-xs text-gray-500 mt-0.5">{profile.address}</p>}
             {addressLine2 && <p className="text-xs text-gray-500">{addressLine2}</p>}
-            {(biz.biz_state || biz.biz_city) && <p className="text-xs text-gray-500">United States</p>}
-            {biz.biz_phone && <p className="text-xs text-gray-500 mt-1">{biz.biz_phone}</p>}
-            <p className="text-xs text-gray-500">wallflower-relic.com</p>
+            {(profile.state || profile.city) && <p className="text-xs text-gray-500">United States</p>}
+            {profile.phone && <p className="text-xs text-gray-500 mt-1">{profile.phone}</p>}
+            {profile.website && <p className="text-xs text-gray-500">{profile.website}</p>}
           </div>
         </div>
 
@@ -811,7 +818,7 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
         {/* Footer */}
         <div className="px-10 pb-10 print:px-8 print:pb-8">
           <p className="text-xs text-gray-300 text-center">
-            Wallflower RELIC &middot; (402) 235-8179 &middot; wallflower-relic.com
+            {profile.footer}
           </p>
         </div>
 
