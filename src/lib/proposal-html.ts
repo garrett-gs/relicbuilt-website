@@ -26,6 +26,11 @@ interface BizInfo {
   biz_zip?: string;
   biz_phone?: string;
   terms_text?: string;
+  // Entity branding overrides (Phase 2b). When omitted, the templates fall
+  // back to the historic Wallflower RELIC logo / website / footer.
+  logo_url?: string;
+  website?: string;
+  footer?: string;
 }
 
 interface ProposalOptions {
@@ -47,7 +52,8 @@ export function generateProposalHtml(
   const costSection = project.proposal_cost_section?.included !== false ? project.proposal_cost_section : null;
   const images: string[] = project.proposal_images_included !== false ? (project.proposal_images || []) : [];
   const stripeColor = "#454d23";
-  const logoUrl = "https://relicbuilt.com/wr-logo-black.png";
+  const logoUrl = biz.logo_url ?? "https://relicbuilt.com/wr-logo-black.png";
+  const website = biz.website ?? "wallflower-relic.com";
 
   const quotedAmount = project.quoted_amount || 0;
 
@@ -62,7 +68,7 @@ export function generateProposalHtml(
 
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
-    <img src="${logoUrl}" alt="Wallflower RELIC" style="width:440px;max-width:64%;height:auto;object-fit:contain;" />
+    ${logoUrl ? `<img src="${logoUrl}" alt="${esc(biz.biz_name || "Wallflower RELIC")}" style="width:440px;max-width:64%;height:auto;object-fit:contain;" />` : `<p style="margin:0;font-size:26px;font-weight:bold;color:#111;letter-spacing:0.04em;">${esc(biz.biz_name || "RELIC")}</p>`}
     <div style="text-align:right;">
       <h1 style="margin:0 0 6px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
       <p style="margin:0 0 10px;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.16em;color:#454d23;">Custom Fabrication</p>
@@ -70,7 +76,7 @@ export function generateProposalHtml(
       ${addressLine2 ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(addressLine2)}</p>` : ""}
       ${(biz.biz_city || biz.biz_state) ? `<p style="margin:2px 0;font-size:12px;color:#666;">United States</p>` : ""}
       ${biz.biz_phone ? `<p style="margin:6px 0 0;font-size:12px;color:#666;">${esc(biz.biz_phone)}</p>` : ""}
-      <p style="margin:2px 0;font-size:12px;color:#666;">wallflower-relic.com</p>
+      ${website ? `<p style="margin:2px 0;font-size:12px;color:#666;">${esc(website)}</p>` : ""}
     </div>
   </div>
 
@@ -223,9 +229,7 @@ export function generateProposalHtml(
 
   <!-- Footer -->
   <div style="margin-top:36px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#ccc;text-align:center;">
-    Wallflower RELIC Creative Rentals and Custom Builds &nbsp;&middot;&nbsp; (402) 235-8179
-    <br/>
-    <span style="display:inline-block;margin-top:5px;">wallflower-relic.com</span>
+    ${biz.footer || `Wallflower RELIC Creative Rentals and Custom Builds &nbsp;&middot;&nbsp; (402) 235-8179<br/><span style="display:inline-block;margin-top:5px;">wallflower-relic.com</span>`}
   </div>
 
 </div>`;
@@ -272,7 +276,7 @@ export function generateEstimateProposalHtml({
   // the cover. Cover image is filtered out so it doesn't repeat.
   const coverImage = estimate.proposal_cover_image_url || "";
   const projectImages: string[] = (estimate.proposal_images || []).filter((u) => u !== coverImage);
-  const logoUrl = "https://relicbuilt.com/wr-logo-black.png";
+  const logoUrl = biz.logo_url ?? "https://relicbuilt.com/wr-logo-black.png";
 
   const sentDate = estimate.proposal_sent_at
     ? new Date(estimate.proposal_sent_at)
@@ -422,7 +426,7 @@ export function generateEstimateProposalHtml({
   // overflow into a second page before the page-break-after fires.
   const coverPageHtml = coverImage ? `
   <section class="proposal-page proposal-cover" style="${cardBaseStyle}page-break-after:always;display:flex;flex-direction:column;align-items:center;text-align:center;min-height:8.25in;">
-    <img src="${logoUrl}" alt="${esc(biz.biz_name || "RELIC")}" style="width:88%;max-width:660px;height:auto;object-fit:contain;margin-bottom:18px;" />
+    ${logoUrl ? `<img src="${logoUrl}" alt="${esc(biz.biz_name || "RELIC")}" style="width:88%;max-width:660px;height:auto;object-fit:contain;margin-bottom:18px;" />` : `<p style="margin:0 0 18px;font-size:34px;font-weight:bold;color:#111;">${esc(biz.biz_name || "RELIC")}</p>`}
     <div style="margin-bottom:18px;">
       <p style="margin:0;font-size:10px;text-transform:uppercase;letter-spacing:0.16em;color:#bbb;">Proposal</p>
       <p style="margin:4px 0 0;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.18em;color:#454d23;">Custom Fabrication</p>
@@ -479,7 +483,7 @@ export function generateEstimateProposalHtml({
 
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
-    <img src="${logoUrl}" alt="Wallflower RELIC" style="width:440px;max-width:64%;height:auto;object-fit:contain;" />
+    ${logoUrl ? `<img src="${logoUrl}" alt="${esc(biz.biz_name || "Wallflower RELIC")}" style="width:440px;max-width:64%;height:auto;object-fit:contain;" />` : `<p style="margin:0;font-size:26px;font-weight:bold;color:#111;letter-spacing:0.04em;">${esc(biz.biz_name || "RELIC")}</p>`}
     <div style="text-align:right;">
       <h1 style="margin:0 0 6px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
       <p style="margin:0 0 10px;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.16em;color:#454d23;">Custom Fabrication</p>
@@ -519,9 +523,7 @@ export function generateEstimateProposalHtml({
   ${acceptanceSection}
 
   <div style="margin-top:36px;padding-top:14px;border-top:1px solid #eee;font-size:11px;color:#ccc;text-align:center;">
-    Wallflower RELIC Creative Rentals and Custom Builds &nbsp;&middot;&nbsp; (402) 235-8179
-    <br/>
-    <span style="display:inline-block;margin-top:5px;">wallflower-relic.com</span>
+    ${biz.footer || `Wallflower RELIC Creative Rentals and Custom Builds &nbsp;&middot;&nbsp; (402) 235-8179<br/><span style="display:inline-block;margin-top:5px;">wallflower-relic.com</span>`}
   </div>
 
   </section>

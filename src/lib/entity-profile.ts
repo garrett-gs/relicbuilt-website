@@ -30,7 +30,26 @@ interface SettingsLike {
   biz_city?: string;
   biz_state?: string;
   biz_zip?: string;
+  terms_text?: string;
+  deposit_percent?: number;
   relic_profile?: RelicProfile | null;
+}
+
+// The `biz` shape the proposal/estimate-proposal templates accept, carrying
+// optional entity branding overrides (logo/footer/website).
+export interface ProposalBizInfo {
+  biz_name?: string;
+  biz_address?: string;
+  biz_city?: string;
+  biz_state?: string;
+  biz_zip?: string;
+  biz_phone?: string;
+  biz_email?: string;
+  terms_text?: string;
+  deposit_percent?: number;
+  logo_url?: string;
+  website?: string;
+  footer?: string;
 }
 
 // Shared transactional sender (relicbuilt.com is the verified Resend domain).
@@ -80,5 +99,45 @@ export function resolveEntityProfile(
     footer: "Wallflower RELIC  ·  (402) 235-8179  ·  wallflower-relic.com",
     fromName: "Wallflower RELIC",
     fromEmail: DEFAULT_FROM_EMAIL,
+  };
+}
+
+/**
+ * Build the `biz` object the proposal templates consume for a given entity.
+ * Wallflower keeps the templates' historic defaults (no logo/footer/website
+ * overrides, so its proposal wording is unchanged); Relic supplies its own
+ * identity and branding.
+ */
+export function proposalBiz(
+  entity: BusinessEntity | undefined,
+  settings: SettingsLike | null | undefined
+): ProposalBizInfo {
+  const s = settings || {};
+  const base: ProposalBizInfo = {
+    biz_name: s.biz_name,
+    biz_address: s.biz_address,
+    biz_city: s.biz_city,
+    biz_state: s.biz_state,
+    biz_zip: s.biz_zip,
+    biz_phone: s.biz_phone,
+    biz_email: s.biz_email,
+    terms_text: s.terms_text,
+    deposit_percent: s.deposit_percent,
+  };
+  if (entity !== "relic") return base; // Wallflower: template defaults apply
+  const p = resolveEntityProfile("relic", settings);
+  return {
+    biz_name: p.name,
+    biz_address: p.address,
+    biz_city: p.city,
+    biz_state: p.state,
+    biz_zip: p.zip,
+    biz_phone: p.phone,
+    biz_email: p.email,
+    terms_text: s.terms_text,
+    deposit_percent: s.deposit_percent,
+    logo_url: p.logoUrl,
+    footer: p.footer,
+    website: p.website,
   };
 }

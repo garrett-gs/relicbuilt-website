@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateEstimateProposalHtml } from "@/lib/proposal-html";
+import { proposalBiz } from "@/lib/entity-profile";
 import { renderHtmlToPdf } from "@/lib/render-pdf";
 import { logProposalEvent, ipFromHeaders, sha256 } from "@/lib/audit";
 import { notifyWallflowerStatus } from "@/lib/wallflower-status";
@@ -72,7 +73,7 @@ export async function POST(req: NextRequest) {
     // "client signed" notification — who gets the email).
     const { data: settings } = await supabase
       .from("settings")
-      .select("biz_name,biz_phone,biz_email,team_members")
+      .select("biz_name,biz_phone,biz_email,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text,team_members,relic_profile")
       .limit(1)
       .single();
 
@@ -236,7 +237,7 @@ export async function POST(req: NextRequest) {
           proposal_highlights?: ProposalHighlight[];
           proposal_scope?: ProposalScope;
         },
-        biz: settings || {},
+        biz: proposalBiz(estimate.entity, settings),
         totals: { materialTotal: totals.materialTotal, laborTotal: totals.laborTotal, markupAmount: totals.markup, total: totals.total },
         clientCompany,
       });

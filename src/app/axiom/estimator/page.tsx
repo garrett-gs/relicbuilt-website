@@ -6,6 +6,7 @@ import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAxiomRole } from "@/components/axiom/useAxiomRole";
 import { useEntity } from "@/components/axiom/EntityProvider";
+import { proposalBiz } from "@/lib/entity-profile";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { persistEstimate, deleteEstimateById } from "@/lib/estimate-actions";
 import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, ProposalScheduleItem, SalesNote } from "@/types/axiom";
@@ -969,7 +970,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     // Pull business info from settings so the proposal header is filled in
     const { data: settings } = await axiom
       .from("settings")
-      .select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text")
+      .select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text,relic_profile")
       .limit(1)
       .single();
 
@@ -994,7 +995,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
         deposit_percent: depositPercent !== "" ? Number(depositPercent) : undefined,
         pay_in_full: payInFull || undefined,
       } as Estimate,
-      biz: settings || {},
+      biz: proposalBiz(estimate.entity, settings),
       totals: { materialTotal, laborTotal, markupAmount, total },
       clientCompany: linkedCompanyName || undefined,
     });

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Estimate, Settings } from "@/types/axiom";
 import { generateEstimateProposalHtml } from "@/lib/proposal-html";
+import { proposalBiz, resolveEntityProfile } from "@/lib/entity-profile";
 
 interface ApprovalResult {
   project_name: string;
@@ -192,7 +193,7 @@ export default function ProposalPage() {
           dangerouslySetInnerHTML={{
             __html: generateEstimateProposalHtml({
               estimate,
-              biz: settings || {},
+              biz: proposalBiz(estimate.entity, settings),
               totals,
               clientCompany: clientCompany || undefined,
             }),
@@ -218,7 +219,7 @@ export default function ProposalPage() {
           </p>
 
           <p style={{ margin: "20px 0 0", textAlign: "center", color: "#999", fontSize: 11 }}>
-            {settings?.biz_name || "RELIC"} · {settings?.biz_phone || ""}
+            {resolveEntityProfile(estimate.entity, settings).name} · {resolveEntityProfile(estimate.entity, settings).phone || ""}
           </p>
         </div>
       </div>
@@ -236,7 +237,7 @@ export default function ProposalPage() {
         dangerouslySetInnerHTML={{
           __html: generateEstimateProposalHtml({
             estimate,
-            biz: settings || {},
+            biz: proposalBiz(estimate.entity, settings),
             totals,
             clientCompany: clientCompany || undefined,
           }),
@@ -250,7 +251,7 @@ export default function ProposalPage() {
         </h2>
         <p style={{ margin: "0 0 24px", color: "#666", fontSize: 14, lineHeight: 1.6 }}>
           By typing your name below and clicking Accept, you approve the scope and details
-          outlined in this proposal. Once approved, {settings?.biz_name || "RELIC"} will add it to your project.
+          outlined in this proposal. Once approved, {resolveEntityProfile(estimate.entity, settings).name} will add it to your project.
         </p>
 
         <div style={{ marginBottom: 16 }}>

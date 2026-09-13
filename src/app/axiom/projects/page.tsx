@@ -21,6 +21,7 @@ import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, C
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { useRouter } from "next/navigation";
 import { generateProposalHtml } from "@/lib/proposal-html";
+import { resolveEntityProfile, proposalBiz } from "@/lib/entity-profile";
 import { generateProjectRecapHtml } from "@/lib/project-recap-html";
 import { notifyPortal } from "@/lib/notify-portal";
 import { Settings } from "@/types/axiom";
@@ -2745,7 +2746,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
 
   useEffect(() => {
     axiom.from("settings")
-      .select("biz_name,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text")
+      .select("biz_name,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text,relic_profile")
       .limit(1).single()
       .then(({ data }) => setBiz(data || {}));
   }, []);
@@ -2793,7 +2794,8 @@ function ProposalPreview({ project, onClose, userEmail }: {
         proposal_status: "sent",
       }).eq("id", project.id);
 
-      const html = generateProposalHtml(project, biz, {
+      const profile = resolveEntityProfile(project.entity, biz);
+      const html = generateProposalHtml(project, proposalBiz(project.entity, biz), {
         proposalNum, validUntil, forEmail: true, approveUrl,
       });
       const res = await fetch("/api/send-po", {
@@ -2801,9 +2803,10 @@ function ProposalPreview({ project, onClose, userEmail }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           to: sendTo,
-          subject: `Proposal from Wallflower RELIC — ${project.project_name}`,
+          subject: `Proposal from ${profile.name} — ${project.project_name}`,
           html,
-          from_name: "Wallflower RELIC",
+          from_name: profile.fromName,
+          from_email: profile.fromEmail,
         }),
       });
       setSendResult(res.ok ? "success" : "error");
@@ -2816,7 +2819,8 @@ function ProposalPreview({ project, onClose, userEmail }: {
     return <div className="fixed inset-0 bg-gray-100 z-[100] flex items-center justify-center text-gray-500 text-sm">Loading…</div>;
   }
 
-  const addressLine2 = [biz.biz_city, biz.biz_state, biz.biz_zip].filter(Boolean).join(", ");
+  const profile = resolveEntityProfile(project.entity, biz);
+  const addressLine2 = [profile.city, profile.state, profile.zip].filter(Boolean).join(", ");
   const stripeColor = "#454d23";
 
   return (
@@ -2888,16 +2892,20 @@ function ProposalPreview({ project, onClose, userEmail }: {
 
         {/* Header */}
         <div className="flex justify-between items-start px-10 pt-10 pb-8 print:px-8 print:pt-8">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/wr-logo-black.png" alt="Wallflower RELIC" className="h-10 object-contain object-left print:h-10" />
+          {profile.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={profile.logoUrl} alt={profile.name} className="h-10 object-contain object-left print:h-10" />
+          ) : (
+            <p className="text-2xl font-bold text-gray-900 tracking-wide">{profile.name}</p>
+          )}
           <div className="text-right">
             <h1 className="text-4xl font-bold text-gray-900 mb-3 tracking-wide">PROPOSAL</h1>
-            {biz.biz_name && <p className="text-sm font-semibold text-gray-800">{biz.biz_name}</p>}
-            {biz.biz_address && <p className="text-xs text-gray-500 mt-0.5">{biz.biz_address}</p>}
+            {profile.name && <p className="text-sm font-semibold text-gray-800">{profile.name}</p>}
+            {profile.address && <p className="text-xs text-gray-500 mt-0.5">{profile.address}</p>}
             {addressLine2 && <p className="text-xs text-gray-500">{addressLine2}</p>}
-            {(biz.biz_state || biz.biz_city) && <p className="text-xs text-gray-500">United States</p>}
-            {biz.biz_phone && <p className="text-xs text-gray-500 mt-1">{biz.biz_phone}</p>}
-            <p className="text-xs text-gray-500">wallflower-relic.com</p>
+            {(profile.state || profile.city) && <p className="text-xs text-gray-500">United States</p>}
+            {profile.phone && <p className="text-xs text-gray-500 mt-1">{profile.phone}</p>}
+            {profile.website && <p className="text-xs text-gray-500">{profile.website}</p>}
           </div>
         </div>
 
@@ -3045,7 +3053,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
         {/* Footer */}
         <div className="px-10 pb-10 print:px-8 print:pb-8">
           <p className="text-xs text-gray-300 text-center">
-            Wallflower RELIC &middot; (402) 235-8179 &middot; wallflower-relic.com
+            {profile.footer}
           </p>
         </div>
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateEstimateProposalHtml } from "@/lib/proposal-html";
+import { proposalBiz, resolveEntityProfile } from "@/lib/entity-profile";
 import { renderHtmlToPdf } from "@/lib/render-pdf";
 import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 import type { Estimate, ProposalHighlight, ProposalScope } from "@/types/axiom";
@@ -71,12 +72,13 @@ export async function POST(req: NextRequest) {
 
     const { data: settings } = await supabase
       .from("settings")
-      .select("biz_name,biz_phone,biz_email,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text")
+      .select("biz_name,biz_phone,biz_email,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text,relic_profile")
       .limit(1)
       .single();
 
-    const bizName = settings?.biz_name || "Wallflower RELIC";
-    const bizPhone = settings?.biz_phone || "";
+    const profile = resolveEntityProfile(estimate.entity, settings);
+    const bizName = profile.name;
+    const bizPhone = profile.phone || "";
 
     const totals = calcTotals(estimate);
     const total = totals.total;
@@ -112,7 +114,7 @@ export async function POST(req: NextRequest) {
           proposal_highlights?: ProposalHighlight[];
           proposal_scope?: ProposalScope;
         },
-        biz: settings || {},
+        biz: proposalBiz(estimate.entity, settings),
         totals,
         clientCompany,
       });
@@ -129,7 +131,7 @@ export async function POST(req: NextRequest) {
     const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
   <div style="padding:20px 32px;border-bottom:3px solid #5b642e;">
-    <img src="https://relicbuilt.com/wr-logo-black.png" alt="${bizName}" style="height:36px;display:block;" />
+    ${profile.logoUrl ? `<img src="${profile.logoUrl}" alt="${bizName}" style="height:36px;display:block;" />` : `<span style="font-size:20px;font-weight:bold;color:#111;">${bizName}</span>`}
   </div>
   <div style="padding:32px;">
     <h2 style="margin:0 0 6px;font-size:22px;color:#111;">Your Proposal Is Ready</h2>
@@ -183,7 +185,7 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: `${bizName} <notifications@relicbuilt.com>`,
+        from: `${profile.fromName} <${profile.fromEmail}>`,
         to: [toEmail],
         subject: `Proposal for ${estimate.project_name || estimate.estimate_number}`,
         html,

@@ -60,7 +60,7 @@ export async function GET(
 
     const { data: settings } = await supabase
       .from("settings")
-      .select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text")
+      .select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text,relic_profile")
       .limit(1)
       .single();
 
