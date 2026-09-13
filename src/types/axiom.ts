@@ -208,6 +208,7 @@ export interface TaskComment {
 
 export interface Customer {
   id: string;
+  entity?: BusinessEntity;
   name: string;
   email?: string;
   phone?: string;
@@ -233,6 +234,7 @@ export interface CustomerNote {
 
 export interface Company {
   id: string;
+  entity?: BusinessEntity;
   name: string;
   address?: string;
   industry?: string;

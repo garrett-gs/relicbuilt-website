@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useEntity } from "@/components/axiom/EntityProvider";
 import { Company } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import { Plus, X, Trash2, Search } from "lucide-react";
@@ -11,14 +12,15 @@ import { cn } from "@/lib/utils";
 
 export default function CompaniesPage() {
   const { userEmail } = useAuth();
+  const { entity } = useEntity();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
-    const { data } = await axiom.from("companies").select("*").order("name");
+    const { data } = await axiom.from("companies").select("*").eq("entity", entity).order("name");
     if (data) setCompanies(data);
-  }, []);
+  }, [entity]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -27,7 +29,7 @@ export default function CompaniesPage() {
   );
 
   async function createCompany(form: Record<string, string>) {
-    const { data } = await axiom.from("companies").insert({ name: form.name, address: form.address, industry: form.industry }).select().single();
+    const { data } = await axiom.from("companies").insert({ entity, name: form.name, address: form.address, industry: form.industry }).select().single();
     if (data) {
       await logActivity({ action: "created", entity: "company", entity_id: data.id, label: `Added company: ${data.name}`, user_name: userEmail });
       load();

@@ -76,6 +76,7 @@ function ChangeOrderBadge({ projectId }: { projectId: string }) {
 }
 
 function CustomerSearch({ onSelect, initialName }: { onSelect: (c: SearchResult) => void; initialName?: string }) {
+  const { entity } = useEntity();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -113,9 +114,9 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (c: SearchResult)
     const trimmed = q.trim().replace(/[%,]/g, "");
     try {
       const [byName, byCompany, companiesRes] = await Promise.all([
-        axiom.from("customers").select("id,name,email,phone,company_name").ilike("name", `%${trimmed}%`).limit(8),
-        axiom.from("customers").select("id,name,email,phone,company_name").ilike("company_name", `%${trimmed}%`).limit(8),
-        axiom.from("companies").select("id,name,phone").ilike("name", `%${trimmed}%`).limit(4),
+        axiom.from("customers").select("id,name,email,phone,company_name").eq("entity", entity).ilike("name", `%${trimmed}%`).limit(8),
+        axiom.from("customers").select("id,name,email,phone,company_name").eq("entity", entity).ilike("company_name", `%${trimmed}%`).limit(8),
+        axiom.from("companies").select("id,name,phone").eq("entity", entity).ilike("name", `%${trimmed}%`).limit(4),
       ]);
       if (byName.error) console.error("[customer-search] byName failed:", byName.error);
       if (byCompany.error) console.error("[customer-search] byCompany failed:", byCompany.error);

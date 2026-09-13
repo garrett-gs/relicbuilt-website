@@ -664,6 +664,7 @@ type ClientSearchResult = {
 };
 
 function CustomerSearch({ onSelect, initialName }: { onSelect: (r: ClientSearchResult | null) => void; initialName?: string }) {
+  const { entity } = useEntity();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<ClientSearchResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -686,8 +687,8 @@ function CustomerSearch({ onSelect, initialName }: { onSelect: (r: ClientSearchR
     setQuery(q);
     if (!q.trim()) { setResults([]); setOpen(false); return; }
     const [cust, comp] = await Promise.all([
-      axiom.from("customers").select("id,name,email,phone").ilike("name", `%${q}%`).limit(6),
-      axiom.from("companies").select("id,name,phone").ilike("name", `%${q}%`).limit(6),
+      axiom.from("customers").select("id,name,email,phone").eq("entity", entity).ilike("name", `%${q}%`).limit(6),
+      axiom.from("companies").select("id,name,phone").eq("entity", entity).ilike("name", `%${q}%`).limit(6),
     ]);
     const combined: ClientSearchResult[] = [
       ...((cust.data || []).map((c) => ({ ...c, type: "customer" as const }))),

@@ -231,6 +231,7 @@ function SlideModal({ title, onClose, children, wide }: { title: string; onClose
 // ── Customer search dropdown ───────────────────────────────────────────────────
 
 function CustomerSearch({ onSelect }: { onSelect: (c: Customer) => void }) {
+  const { entity } = useEntity();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Customer[]>([]);
   const [open, setOpen] = useState(false);
@@ -248,7 +249,7 @@ function CustomerSearch({ onSelect }: { onSelect: (c: Customer) => void }) {
   async function search(q: string) {
     setQuery(q);
     if (!q.trim()) { setResults([]); setOpen(false); return; }
-    const { data } = await axiom.from("customers").select("*").ilike("name", `%${q}%`).limit(8);
+    const { data } = await axiom.from("customers").select("*").eq("entity", entity).ilike("name", `%${q}%`).limit(8);
     if (data) { setResults(data); setOpen(true); }
   }
 

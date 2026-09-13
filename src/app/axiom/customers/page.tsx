@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useEntity } from "@/components/axiom/EntityProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { Customer, CustomerNote, Company, CustomWork, Invoice } from "@/types/axiom";
 import Button from "@/components/ui/Button";
@@ -27,6 +28,7 @@ const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
 
 export default function CustomersPage() {
   const { userEmail } = useAuth();
+  const { entity } = useEntity();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
@@ -51,12 +53,12 @@ export default function CustomersPage() {
 
   const loadAll = useCallback(async () => {
     const [{ data: cos }, { data: custs }] = await Promise.all([
-      axiom.from("companies").select("*").order("name"),
-      axiom.from("customers").select("*").order("name"),
+      axiom.from("companies").select("*").eq("entity", entity).order("name"),
+      axiom.from("customers").select("*").eq("entity", entity).order("name"),
     ]);
     if (cos) setCompanies(cos as Company[]);
     if (custs) setCustomers(custs as Customer[]);
-  }, []);
+  }, [entity]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -161,6 +163,7 @@ export default function CustomersPage() {
 
   async function createCompany(form: Record<string, string>) {
     const { data } = await axiom.from("companies").insert({
+      entity,
       name: form.name, address: form.address, industry: form.industry,
       phone: form.phone, website: form.website,
     }).select().single();
@@ -174,6 +177,7 @@ export default function CustomersPage() {
 
   async function createIndividual(form: Record<string, string>) {
     const { data } = await axiom.from("customers").insert({
+      entity,
       name: form.name, email: form.email, phone: form.phone, type: "Individual",
     }).select().single();
     if (data) {
@@ -187,6 +191,7 @@ export default function CustomersPage() {
   async function createContact(companyId: string, form: Record<string, string>) {
     const co = companies.find((c) => c.id === companyId);
     const { data } = await axiom.from("customers").insert({
+      entity,
       name: form.name, email: form.email, phone: form.phone,
       title: form.title, company_id: companyId, company_name: co?.name ?? null,
       type: "Contact",
