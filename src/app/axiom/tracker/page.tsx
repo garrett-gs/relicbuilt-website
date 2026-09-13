@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { axiom } from "@/lib/axiom-supabase";
+import { useEntity } from "@/components/axiom/EntityProvider";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import {
@@ -585,6 +586,7 @@ function ShoppingItemRow({ item, onToggle, onDelete }: { item: ShoppingItem; onT
 // ─── Projects Tab ──────────────────────────────────────────────────────
 
 function ProjectsTab() {
+  const { entity } = useEntity();
   const [projects, setProjects] = useState<CustomWork[]>([]);
   const [loading, setLoading] = useState(true);
   const [undo, setUndo] = useState<{ projectId: string; itemId: string; itemText: string } | null>(null);
@@ -594,11 +596,12 @@ function ProjectsTab() {
     const { data } = await axiom
       .from("custom_work")
       .select("id, project_name, client_name, status, punch_list")
+      .eq("entity", entity)
       .neq("status", "complete")
       .order("project_name");
     setProjects((data as CustomWork[]) || []);
     setLoading(false);
-  }, []);
+  }, [entity]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => () => { if (undoTimer.current) window.clearTimeout(undoTimer.current); }, []);
 

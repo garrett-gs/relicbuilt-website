@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { AuthProvider, useAuth } from "@/components/axiom/AuthProvider";
+import { EntityProvider } from "@/components/axiom/EntityProvider";
 import Sidebar from "@/components/axiom/Sidebar";
 import AxiomLogin from "@/components/axiom/AxiomLogin";
 
@@ -43,7 +44,9 @@ export default function AxiomLayout({
 }) {
   return (
     <AuthProvider>
-      <AxiomShell>{children}</AxiomShell>
+      <EntityProvider>
+        <AxiomShell>{children}</AxiomShell>
+      </EntityProvider>
     </AuthProvider>
   );
 }

@@ -67,8 +67,13 @@ export interface ProjectChecklist {
 
 // ── Custom Work ──────────────────────────────────────────────
 
+// Which business a record belongs to. Defaults to Wallflower RELIC; "relic"
+// is the separate, access-gated entity. See migration v29.
+export type BusinessEntity = "wallflower_relic" | "relic";
+
 export interface CustomWork {
   id: string;
+  entity?: BusinessEntity;
   project_name: string;
   client_name: string;
   client_email: string;
@@ -258,6 +263,7 @@ export interface EstimateLaborItem {
 
 export interface Estimate {
   id: string;
+  entity?: BusinessEntity;
   estimate_number: string;
   project_name?: string;
   custom_work_id?: string;
@@ -334,6 +340,7 @@ export interface InvoiceLineItem {
 
 export interface Invoice {
   id: string;
+  entity?: BusinessEntity;
   invoice_number: string;
   custom_work_id?: string;
   estimate_id?: string;
@@ -408,6 +415,7 @@ export interface POLineItem {
 
 export interface PurchaseOrder {
   id: string;
+  entity?: BusinessEntity;
   po_number: string;
   vendor_name: string;
   vendor_id?: string;
@@ -438,6 +446,7 @@ export interface PurchaseOrder {
 
 export interface Expense {
   id: string;
+  entity?: BusinessEntity;
   date: string;
   description?: string;
   amount: number;
@@ -576,6 +585,9 @@ export interface TeamMember {
   email: string;
   phone?: string;
   role: "superadmin" | "admin" | "manager" | "staff";
+  // Grants access to the separate "Relic" business entity. Superadmins always
+  // have access; for everyone else this must be toggled on (Phase 1: UI-gated).
+  relic_access?: boolean;
   hourly_rate: number;
   pin?: string;
   color?: string;

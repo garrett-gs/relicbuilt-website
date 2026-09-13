@@ -5,6 +5,7 @@ import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAxiomRole } from "@/components/axiom/useAxiomRole";
+import { useEntity } from "@/components/axiom/EntityProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, ProposalScope, ProposalCostSection, ProposalCostItem, BuildComment, ApprovalRequest, ProjectChecklist, Invoice, InventoryItem, TeamMember, EstimateLineItem, EstimateLaborItem } from "@/types/axiom";
 import ChecklistPanel from "@/components/axiom/ChecklistPanel";
@@ -329,16 +330,18 @@ export default function ProjectsPage() {
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [projectsTab, setProjectsTab] = useState<"active" | "archive">("active");
   const { isSuperAdmin } = useAxiomRole(); // Archive is super-admin only
+  const { entity } = useEntity();
 
   const load = useCallback(async () => {
-    const { data } = await axiom.from("custom_work").select("*").order("created_at", { ascending: false });
+    const { data } = await axiom.from("custom_work").select("*").eq("entity", entity).order("created_at", { ascending: false });
     if (data) setProjects(data);
-  }, []);
+  }, [entity]);
 
   useEffect(() => { load(); }, [load]);
 
   async function createProject(form: Record<string, string>) {
     const { data } = await axiom.from("custom_work").insert({
+      entity,
       project_name: form.project_name,
       client_name: form.client_name,
       client_email: form.client_email,
@@ -409,6 +412,7 @@ export default function ProjectsPage() {
     const invoiceNumber = `INV-${y}-${n}`;
 
     const { data } = await axiom.from("invoices").insert({
+      entity: project.entity || "wallflower_relic",
       invoice_number: invoiceNumber,
       custom_work_id: project.id,
       client_name: project.client_name || "",

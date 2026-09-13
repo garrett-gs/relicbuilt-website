@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { axiom } from "@/lib/axiom-supabase";
+import { useEntity } from "@/components/axiom/EntityProvider";
 import { CustomWork } from "@/types/axiom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn, isWeekday, suggestStartDate } from "@/lib/utils";
@@ -37,6 +38,7 @@ function buildRange(
 }
 
 export default function BuildCalendarPage() {
+  const { entity } = useEntity();
   const [projects, setProjects] = useState<CustomWork[]>([]);
   // Map from custom_work_id → summed labor_items hours on its original
   // estimate (excluding change orders). Used to fall back to a computed
@@ -48,7 +50,7 @@ export default function BuildCalendarPage() {
 
   const load = useCallback(async () => {
     const [projectsRes, estimatesRes] = await Promise.all([
-      axiom.from("custom_work").select("*").order("due_date"),
+      axiom.from("custom_work").select("*").eq("entity", entity).order("due_date"),
       axiom.from("estimates")
         .select("custom_work_id, labor_items, change_order_for_id")
         .not("custom_work_id", "is", null)
@@ -65,7 +67,7 @@ export default function BuildCalendarPage() {
       }
       setEstimateHoursById(map);
     }
-  }, []);
+  }, [entity]);
 
   useEffect(() => { load(); }, [load]);
 

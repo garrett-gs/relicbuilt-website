@@ -5,6 +5,7 @@ import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAxiomRole } from "@/components/axiom/useAxiomRole";
+import { useEntity } from "@/components/axiom/EntityProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { persistEstimate, deleteEstimateById } from "@/lib/estimate-actions";
 import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, ProposalScheduleItem, SalesNote } from "@/types/axiom";
@@ -238,11 +239,12 @@ export default function EstimatorPage() {
   // Accepted = the client signed off, so we get it out of the day-to-day list.
   const [tab, setTab] = useState<"working" | "accepted" | "archive">("working");
   const { isSuperAdmin } = useAxiomRole(); // Archive is super-admin only
+  const { entity } = useEntity();
 
   const load = useCallback(async () => {
-    const { data } = await axiom.from("estimates").select("*").order("created_at", { ascending: false });
+    const { data } = await axiom.from("estimates").select("*").eq("entity", entity).order("created_at", { ascending: false });
     if (data) setEstimates(data);
-  }, []);
+  }, [entity]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -271,6 +273,7 @@ export default function EstimatorPage() {
     const lastNum = latest?.estimate_number ? parseInt(latest.estimate_number.split("-").pop() || "0", 10) : 0;
     const estimate_number = `${prefix}-${year}-${String(lastNum + 1).padStart(4, "0")}`;
     const { data } = await axiom.from("estimates").insert({
+      entity,
       estimate_number,
       project_name: form.project_name,
       client_name: form.client_name,
@@ -425,6 +428,7 @@ function CreateModal({ onSubmit, onClose }: {
   onSubmit: (f: { project_name: string; client_name: string; customer_id: string; change_order_for_id?: string }) => void;
   onClose: () => void;
 }) {
+  const { entity } = useEntity();
   const [form, setForm] = useState({ project_name: "", client_name: "", customer_id: "", change_order_for_id: "" });
   const [estimateType, setEstimateType] = useState<"new" | "change_order">("new");
   const [activeProjects, setActiveProjects] = useState<Array<{ id: string; project_name: string; client_name?: string }>>([]);
@@ -451,12 +455,13 @@ function CreateModal({ onSubmit, onClose }: {
     axiom
       .from("custom_work")
       .select("id,project_name,client_name")
+      .eq("entity", entity)
       .in("status", ["new", "in_review", "quoted", "in_progress"])
       .order("project_name")
       .then(({ data }) => {
         if (data) setActiveProjects(data as Array<{ id: string; project_name: string; client_name?: string }>);
       });
-  }, [estimateType]);
+  }, [estimateType, entity]);
 
   // When user picks a project for a change order, auto-fill the project_name
   // and client_name so they don't have to retype
@@ -1428,6 +1433,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     const carriedImages = (estimate as Estimate & { images?: string[] }).images || [];
 
     const { data } = await axiom.from("custom_work").insert({
+      entity: estimate.entity || "wallflower_relic",
       project_name: projectName || "Untitled Project",
       client_name: clientName || "",
       client_email: resolvedEmail,

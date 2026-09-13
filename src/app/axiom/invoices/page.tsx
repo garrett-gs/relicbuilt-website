@@ -5,6 +5,7 @@ import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { syncInventoryUnitCost } from "@/lib/inventory-price-sync";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useEntity } from "@/components/axiom/EntityProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { Invoice, InvoiceLineItem, Payment, Settings } from "@/types/axiom";
 import Button from "@/components/ui/Button";
@@ -65,15 +66,16 @@ function genInvoiceNum() {
 
 export default function InvoicesPage() {
   const { userEmail } = useAuth();
+  const { entity } = useEntity();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [selected, setSelected] = useState<Invoice | null>(null);
   const [showPreview, setShowPreview] = useState(false);
 
   const load = useCallback(async () => {
-    const { data } = await axiom.from("invoices").select("*").order("created_at", { ascending: false });
+    const { data } = await axiom.from("invoices").select("*").eq("entity", entity).order("created_at", { ascending: false });
     if (data) setInvoices(data);
-  }, []);
+  }, [entity]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -83,6 +85,7 @@ export default function InvoicesPage() {
     issued_date: string; due_date: string; tax_rate: number;
   }) {
     const { data } = await axiom.from("invoices").insert({
+      entity,
       invoice_number: genInvoiceNum(),
       client_name: form.client_name, client_email: form.client_email,
       client_phone: form.client_phone, description: form.description,

@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
+import { useEntity } from "./EntityProvider";
 import { axiom } from "@/lib/axiom-supabase";
 import { cn } from "@/lib/utils";
 import {
@@ -47,7 +48,7 @@ const navSections = [
     items: [
       { href: "/axiom/customers", icon: Users, label: "Customers" },
       { href: "/axiom/catalog", icon: Package, label: "Catalog" },
-      { href: "/axiom/wallflower", icon: ClipboardList, label: "Work Orders" },
+      { href: "/axiom/wallflower", icon: ClipboardList, label: "Work Orders", wallflowerOnly: true },
     ],
   },
   {
@@ -89,6 +90,7 @@ const navSections = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { signOut, userEmail } = useAuth();
+  const { entity, setEntity, hasRelicAccess } = useEntity();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAdminOrManager, setIsAdminOrManager] = useState(false);
   const [wfPendingCount, setWfPendingCount] = useState(0);
@@ -141,10 +143,36 @@ export default function Sidebar() {
             className="h-7 w-7"
           />
           <span className="text-base font-heading font-bold tracking-wide text-foreground">
-            Wallflower RELIC
+            {entity === "relic" ? "RELIC" : "Wallflower RELIC"}
           </span>
         </Link>
       </div>
+
+      {/* Business entity switcher — only for members granted Relic access */}
+      {hasRelicAccess && (
+        <div className="px-3 pt-3">
+          <div className="flex gap-1 bg-background border border-border rounded p-1">
+            <button
+              onClick={() => setEntity("wallflower_relic")}
+              className={cn(
+                "flex-1 text-[11px] py-1 rounded transition-colors",
+                entity === "wallflower_relic" ? "bg-accent/20 text-accent font-medium" : "text-muted hover:text-foreground"
+              )}
+            >
+              Wallflower
+            </button>
+            <button
+              onClick={() => setEntity("relic")}
+              className={cn(
+                "flex-1 text-[11px] py-1 rounded transition-colors",
+                entity === "relic" ? "bg-accent/20 text-accent font-medium" : "text-muted hover:text-foreground"
+              )}
+            >
+              Relic
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
@@ -153,7 +181,10 @@ export default function Sidebar() {
             <p className="px-3 mb-1.5 text-[10px] uppercase tracking-widest text-muted/60 font-medium">
               {section.label}
             </p>
-            {section.items.filter((item) => !("adminOnly" in item && item.adminOnly) || isAdminOrManager).map((item) => {
+            {section.items
+              .filter((item) => !("adminOnly" in item && item.adminOnly) || isAdminOrManager)
+              .filter((item) => !("wallflowerOnly" in item && item.wallflowerOnly && entity === "relic"))
+              .map((item) => {
               const active = pathname === item.href;
               const isSub = "sub" in item && item.sub;
               const isExternal = "external" in item && item.external;

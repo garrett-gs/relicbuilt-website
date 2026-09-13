@@ -262,6 +262,21 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
+                {isSuperAdmin && m.role !== "superadmin" && (
+                  <label className="flex items-center gap-2 mt-3 text-sm cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={m.relic_access === true}
+                      onChange={(e) => {
+                        const members = [...(settings.team_members || [])];
+                        members[i] = { ...members[i], relic_access: e.target.checked };
+                        updateField("team_members", members);
+                      }}
+                      className="accent-accent"
+                    />
+                    <span className="text-foreground">Relic access <span className="text-[10px] text-muted">— can see the private Relic entity</span></span>
+                  </label>
+                )}
               </div>
             ))}
           </div>

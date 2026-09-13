@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useEntity } from "@/components/axiom/EntityProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { Expense } from "@/types/axiom";
 import Button from "@/components/ui/Button";
@@ -21,14 +22,15 @@ const CATEGORIES = [
 
 export default function ExpensesPage() {
   const { userEmail } = useAuth();
+  const { entity } = useEntity();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [filter, setFilter] = useState("all");
 
   const load = useCallback(async () => {
-    const { data } = await axiom.from("expenses").select("*").order("date", { ascending: false });
+    const { data } = await axiom.from("expenses").select("*").eq("entity", entity).order("date", { ascending: false });
     if (data) setExpenses(data);
-  }, []);
+  }, [entity]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -44,6 +46,7 @@ export default function ExpensesPage() {
 
   async function createExpense(form: Record<string, string | number>) {
     const { data } = await axiom.from("expenses").insert({
+      entity,
       date: form.date || new Date().toISOString().split("T")[0],
       description: form.description,
       amount: Number(form.amount) || 0,

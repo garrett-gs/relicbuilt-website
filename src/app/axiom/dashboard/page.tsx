@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
+import { useEntity } from "@/components/axiom/EntityProvider";
 import { CustomWork, Invoice, PurchaseOrder, ActivityEntry } from "@/types/axiom";
 
 const statusColors: Record<string, string> = {
@@ -25,6 +26,7 @@ function money(n: number) {
 }
 
 export default function DashboardPage() {
+  const { entity } = useEntity();
   const [projects, setProjects] = useState<CustomWork[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
@@ -32,16 +34,16 @@ export default function DashboardPage() {
 
   const load = useCallback(async () => {
     const [p, i, po, a] = await Promise.all([
-      axiom.from("custom_work").select("*").order("created_at", { ascending: false }),
-      axiom.from("invoices").select("*").order("created_at", { ascending: false }),
-      axiom.from("purchase_orders").select("*").order("created_at", { ascending: false }),
+      axiom.from("custom_work").select("*").eq("entity", entity).order("created_at", { ascending: false }),
+      axiom.from("invoices").select("*").eq("entity", entity).order("created_at", { ascending: false }),
+      axiom.from("purchase_orders").select("*").eq("entity", entity).order("created_at", { ascending: false }),
       axiom.from("activity_log").select("*").order("created_at", { ascending: false }).limit(10),
     ]);
     if (p.data) setProjects(p.data);
     if (i.data) setInvoices(i.data);
     if (po.data) setPos(po.data);
     if (a.data) setActivity(a.data);
-  }, []);
+  }, [entity]);
 
   useEffect(() => { load(); }, [load]);
 

@@ -5,6 +5,7 @@ import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { syncInventoryUnitCost } from "@/lib/inventory-price-sync";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useEntity } from "@/components/axiom/EntityProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { PurchaseOrder, POLineItem, Vendor, CatalogItem } from "@/types/axiom";
 import DateField from "@/components/ui/DateField";
@@ -197,6 +198,7 @@ interface SimpleWorkOrder { id: string; item_name: string }
 
 function OrdersTab() {
   const { userEmail } = useAuth();
+  const { entity } = useEntity();
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [projects, setProjects] = useState<SimpleProject[]>([]);
@@ -220,10 +222,10 @@ function OrdersTab() {
 
   const load = useCallback(async () => {
     const [p, v, proj, wo] = await Promise.all([
-      axiom.from("purchase_orders").select("*").order("created_at", { ascending: false }),
+      axiom.from("purchase_orders").select("*").eq("entity", entity).order("created_at", { ascending: false }),
       axiom.from("vendors").select("*").eq("status", "active").order("name"),
-      // All projects (any status) so a derived project's name still resolves in the list.
-      axiom.from("custom_work").select("id,project_name").order("project_name"),
+      // Projects for the current entity (any status) so a derived project's name still resolves.
+      axiom.from("custom_work").select("id,project_name").eq("entity", entity).order("project_name"),
       // Work orders to assign a PO to (all, so an assigned one always resolves).
       axiom.from("wallflower_work_orders").select("id,item_name").order("created_at", { ascending: false }),
     ]);
@@ -231,7 +233,7 @@ function OrdersTab() {
     if (v.data) setVendors(v.data);
     if (proj.data) setProjects(proj.data as SimpleProject[]);
     if (wo.data) setWorkOrders(wo.data as SimpleWorkOrder[]);
-  }, []);
+  }, [entity]);
 
   // Resolve the project (custom_work) tied to a work order via its estimate, so
   // PO inventory allocation keeps working while the user only picks a work order.
@@ -263,6 +265,7 @@ function OrdersTab() {
     const total = lineItems.reduce((s, li) => s + li.quantity * li.unit_price, 0);
     const customWorkId = workOrderId ? await projectFromWorkOrder(workOrderId) : null;
     const { data } = await axiom.from("purchase_orders").insert({
+      entity,
       po_number: "PO-TEMP",
       vendor_id: vendorId || null,
       vendor_name: vendorName,
