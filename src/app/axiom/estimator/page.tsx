@@ -726,6 +726,9 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     estimate.proposal_approved_at || ""
   );
   const [sendingProposal, setSendingProposal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
 
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -848,6 +851,25 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     markDirty();
   }
 
+  // Open the editable email preview before sending. Prefills the subject and
+  // message the client will see; the branded header, Review & Sign button,
+  // PDF attachment, and footer are added automatically on send.
+  function openEmailPreview() {
+    if (sendingProposal) return;
+    if (!clientName || !clientEmail) {
+      alert("Add a client name and email above before sending the proposal.");
+      return;
+    }
+    setEmailSubject(`Proposal for ${projectName || estimate.estimate_number}`);
+    setEmailMessage(
+      `Hi ${clientName || "there"},\n\n` +
+        `Thanks for the opportunity to put this together. Your proposal for ` +
+        `${projectName || "your project"} is ready to review` +
+        `${total > 0 ? `, with a total investment of ${money(total)}` : ""}.`
+    );
+    setShowEmailModal(true);
+  }
+
   // Generate a public proposal URL token; copy a shareable link
   async function sendProposal() {
     if (sendingProposal) return;
@@ -901,7 +923,11 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       const emailRes = await fetch("/api/send-proposal-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estimate_id: estimate.id }),
+        body: JSON.stringify({
+          estimate_id: estimate.id,
+          subject: emailSubject || undefined,
+          message: emailMessage || undefined,
+        }),
       });
       const emailData = await emailRes.json();
       if (!emailRes.ok) {
@@ -2309,7 +2335,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
           <Button variant="outline" onClick={previewProposalPdf}>
             <FileText size={14} className="mr-1" /> Preview PDF
           </Button>
-          <Button onClick={sendProposal} disabled={sendingProposal || !clientName || !clientEmail}>
+          <Button onClick={openEmailPreview} disabled={sendingProposal || !clientName || !clientEmail}>
             {sendingProposal ? "Sending…" : proposalStatus === "draft" ? "Send Proposal to Client" : "Re-Send Proposal"}
           </Button>
           {proposalToken && (
@@ -2543,6 +2569,80 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
                 </button>
               </div>
               <p className="text-xs text-muted mt-1.5">Enter to send · Shift+Enter for new line</p>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Proposal email preview (editable, then send) ── */}
+      {showEmailModal && (
+        <>
+          <div className="fixed inset-0 bg-black/60 z-50" onClick={() => !sendingProposal && setShowEmailModal(false)} />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-background border border-border w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-border sticky top-0 bg-background">
+              <span className="font-semibold text-sm">Review &amp; Send Proposal Email</span>
+              <button onClick={() => !sendingProposal && setShowEmailModal(false)} className="text-muted hover:text-foreground" aria-label="Close">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">To</label>
+                <div className="bg-card border border-border px-3 py-2 text-sm text-foreground">{clientEmail}</div>
+              </div>
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Subject</label>
+                <input
+                  value={emailSubject}
+                  onChange={(e) => setEmailSubject(e.target.value)}
+                  className="w-full bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
+                />
+              </div>
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Message</label>
+                <textarea
+                  value={emailMessage}
+                  onChange={(e) => setEmailMessage(e.target.value)}
+                  rows={7}
+                  className="w-full bg-card border border-border px-3 py-2 text-sm text-foreground leading-relaxed focus:outline-none focus:border-accent resize-y"
+                />
+                <p className="text-xs text-muted mt-1.5">
+                  Your logo header, a <span className="text-foreground">Review &amp; Sign</span> button, the PDF proposal
+                  attachment, the validity date, and your footer are added automatically.
+                </p>
+              </div>
+
+              {/* Live preview of the client-facing email */}
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Preview</label>
+                <div className="border border-border bg-white text-[#222] text-sm">
+                  <div className="px-4 py-3 border-b-[3px]" style={{ borderColor: "var(--accent)" }}>
+                    <span className="font-bold text-[#111]">{estimate.entity === "relic" ? "RELIC" : "Wallflower RELIC"}</span>
+                  </div>
+                  <div className="px-4 py-4 space-y-3">
+                    <p className="font-semibold text-[#111] text-[15px] m-0">Your Proposal Is Ready</p>
+                    <p className="text-[#666] text-xs m-0">{estimate.estimate_number}</p>
+                    <div className="whitespace-pre-line text-[#555] leading-relaxed">{emailMessage}</div>
+                    <div className="text-center py-2">
+                      <span className="inline-block bg-[#5b642e] text-white px-5 py-2.5 text-xs font-bold uppercase tracking-wider" style={{ background: "var(--accent)" }}>
+                        Review &amp; Sign Proposal
+                      </span>
+                    </div>
+                    <p className="text-[#888] text-xs text-center m-0">📎 PDF proposal attached</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-border sticky bottom-0 bg-background">
+              <Button variant="outline" onClick={() => setShowEmailModal(false)} disabled={sendingProposal}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => { setShowEmailModal(false); sendProposal(); }}
+                disabled={sendingProposal || !emailSubject.trim() || !emailMessage.trim()}
+              >
+                {sendingProposal ? "Sending…" : "Send to Client"}
+              </Button>
             </div>
           </div>
         </>

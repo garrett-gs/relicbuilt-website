@@ -29,7 +29,7 @@ function calcTotals(est: { line_items?: LineItem[]; labor_items?: LaborItem[]; m
 
 export async function POST(req: NextRequest) {
   try {
-    const { estimate_id } = await req.json();
+    const { estimate_id, subject: subjectOverride, message: messageOverride } = await req.json();
     if (!estimate_id) {
       return NextResponse.json({ error: "estimate_id required" }, { status: 400 });
     }
@@ -140,6 +140,9 @@ export async function POST(req: NextRequest) {
     <h2 style="margin:0 0 6px;font-size:22px;color:#111;">Your Proposal Is Ready</h2>
     <p style="margin:0 0 24px;color:#666;font-size:14px;">${escape(estimate.estimate_number)}</p>
 
+    ${(typeof messageOverride === "string" && messageOverride.trim())
+      ? renderMessage(messageOverride)
+      : `
     <p style="font-size:15px;color:#333;margin:0 0 20px;">
       Hi ${escape(estimate.client_name || "there")},
     </p>
@@ -147,7 +150,7 @@ export async function POST(req: NextRequest) {
       Thanks for the opportunity to put this together. Your proposal for
       <strong>${escape(estimate.project_name || "your project")}</strong> is ready
       to review${total > 0 ? `, with a total investment of <strong>${money(total)}</strong>` : ""}.
-    </p>
+    </p>`}
 
     ${pdfBase64 ? `
     <p style="font-size:13px;color:#666;margin:0 0 24px;padding:12px 14px;background:#f8f6f0;border:1px solid #e5e0d8;line-height:1.6;">
@@ -190,7 +193,9 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         from: `${profile.fromName} <${profile.fromEmail}>`,
         to: [toEmail],
-        subject: `Proposal for ${estimate.project_name || estimate.estimate_number}`,
+        subject: (typeof subjectOverride === "string" && subjectOverride.trim())
+          ? subjectOverride.trim()
+          : `Proposal for ${estimate.project_name || estimate.estimate_number}`,
         html,
         reply_to: settings?.biz_email || "garrett@relicbuilt.com",
         ...(pdfBase64 ? {
@@ -238,6 +243,19 @@ export async function POST(req: NextRequest) {
     console.error("[send-proposal-email] error:", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Unknown error" }, { status: 500 });
   }
+}
+
+// Render a user-edited plain-text message into the email's message block:
+// blank lines start new paragraphs, single newlines become <br>.
+function renderMessage(message: string): string {
+  return message
+    .trim()
+    .split(/\n{2,}/)
+    .map(
+      (p) =>
+        `<p style="font-size:14px;color:#555;margin:0 0 18px;line-height:1.6;">${escape(p).replace(/\n/g, "<br>")}</p>`
+    )
+    .join("");
 }
 
 function escape(s: string): string {
