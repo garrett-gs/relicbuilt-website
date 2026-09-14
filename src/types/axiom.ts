@@ -275,6 +275,11 @@ export interface Estimate {
   client_name?: string;
   client_email?: string;
   client_phone?: string;
+  // Job-site address for the proposal's Project block. When
+  // site_same_as_client is true (default), the proposal uses the client's
+  // address instead; when false, site_address is shown.
+  site_address?: string;
+  site_same_as_client?: boolean;
   status: "draft" | "sent" | "accepted" | "rejected";
   line_items: EstimateLineItem[];
   labor_items: EstimateLaborItem[];

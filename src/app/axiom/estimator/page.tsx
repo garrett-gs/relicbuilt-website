@@ -676,6 +676,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [clientAddress, setClientAddress] = useState("");
   const [clientEmail, setClientEmail] = useState(estimate.client_email || "");
   const [clientPhone, setClientPhone] = useState(estimate.client_phone || "");
+  const [siteSameAsClient, setSiteSameAsClient] = useState(estimate.site_same_as_client !== false);
+  const [siteAddress, setSiteAddress] = useState(estimate.site_address || "");
   const [projectName, setProjectName] = useState(estimate.project_name || "");
   const [clientName, setClientName] = useState(estimate.client_name || "");
   const [status, setStatus] = useState<Estimate["status"]>(estimate.status);
@@ -981,6 +983,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
         ...estimate,
         project_name: projectName,
         client_name: clientName,
+        site_same_as_client: siteSameAsClient,
+        site_address: siteAddress || undefined,
         line_items: lineItems,
         labor_items: laborItems,
         markup_percent: markupPct,
@@ -1353,6 +1357,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       client_name: clientName,
       client_email: clientEmail || undefined,
       client_phone: clientPhone || undefined,
+      site_same_as_client: siteSameAsClient,
+      site_address: siteAddress || undefined,
       status,
       line_items: lineItems,
       labor_items: laborItems,
@@ -1642,6 +1648,36 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
               />
             </div>
           </div>
+          {/* Job-site address — Relic proposals show it in the Project block */}
+          {estimate.entity === "relic" && (
+            <div>
+              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">
+                Job-Site Address
+                <span className="text-[10px] text-muted/60 normal-case ml-1.5">(shown on the proposal)</span>
+              </label>
+              <label className="flex items-center gap-2 mb-2 text-sm text-foreground cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={siteSameAsClient}
+                  onChange={(e) => { setSiteSameAsClient(e.target.checked); markDirty(); }}
+                  className="accent-accent"
+                />
+                Same as client address
+              </label>
+              {siteSameAsClient ? (
+                <p className="text-xs text-muted italic">
+                  {clientAddress ? `Using client address: ${clientAddress}` : "Uses the client's address once one is on file."}
+                </p>
+              ) : (
+                <input
+                  value={siteAddress}
+                  onChange={(e) => { setSiteAddress(e.target.value); markDirty(); }}
+                  placeholder="123 Job Site Rd, City, ST 00000"
+                  className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+                />
+              )}
+            </div>
+          )}
           {/* Change Order badge — links back to parent project */}
           {estimate.change_order_for_id && (
             <ChangeOrderBadge projectId={estimate.change_order_for_id} />
