@@ -74,6 +74,7 @@ const KIND: Record<string, Kind> = {
   create_work_order: "write",
   update_work_order: "write",
   create_estimate: "write",
+  update_estimate: "write",
   create_invoice: "write",
   record_invoice_payment: "write",
   create_expense: "write",
@@ -83,6 +84,7 @@ const KIND: Record<string, Kind> = {
 
 const RISK: Record<string, Risk> = {
   create_estimate: "money",
+  update_estimate: "money",
   create_invoice: "money",
   record_invoice_payment: "money",
   create_expense: "money",
@@ -263,6 +265,23 @@ export const TOOLS = [
     },
   },
   {
+    name: "update_estimate",
+    description: "Update an existing estimate's details (by id): project/client name, job-site address, deposit %, or status. Does not change line items — those are edited in the Estimator.",
+    input_schema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        project_name: { type: "string" },
+        client_name: { type: "string" },
+        site_address: { type: "string", description: "Job-site address to show on the proposal's Project block" },
+        site_same_as_client: { type: "boolean", description: "True: proposal uses the client's address for the job site. False: uses site_address." },
+        deposit_percent: { type: "number" },
+        status: { type: "string", enum: ["draft", "sent", "accepted", "rejected"] },
+      },
+      required: ["id"],
+    },
+  },
+  {
     name: "create_invoice",
     description: "Create an invoice in the current workspace with line items. Money action.",
     input_schema: {
@@ -373,6 +392,18 @@ export function describeAction(name: string, input: In): { title: string; summar
       return { title: `Update work order`, summary: lines([["ID", input.id], ["Move to", input.status], ["Assigned", input.assigned_to], ["Deadline", input.deadline], ["Work type", input.work_type]]) };
     case "create_estimate":
       return { title: `Create draft estimate`, summary: lines([["Project", input.project_name], ["Client", input.client_name]]) };
+    case "update_estimate":
+      return {
+        title: `Update estimate`,
+        summary: lines([
+          ["ID", input.id],
+          ["Project", input.project_name],
+          ["Client", input.client_name],
+          ["Job site", input.site_same_as_client === true ? "Same as client address" : input.site_address],
+          ["Deposit %", input.deposit_percent],
+          ["Status", input.status],
+        ]),
+      };
     case "create_invoice": {
       const items = Array.isArray(input.line_items) ? (input.line_items as In[]) : [];
       const sub = items.reduce((s, li) => s + (num(li, "quantity") || 0) * (num(li, "unit_price") || 0), 0);
@@ -441,7 +472,7 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         return error ? { ok: false, error: error.message } : { ok: true, data };
       }
       case "find_estimates": {
-        let q = admin.from("estimates").select("id,estimate_number,project_name,client_name,status").eq("entity", entity).limit(25);
+        let q = admin.from("estimates").select("id,estimate_number,project_name,client_name,status,deposit_percent,site_address,site_same_as_client,customer_id").eq("entity", entity).limit(25);
         const query = str(input, "query");
         const status = str(input, "status");
         if (query) q = q.or(`project_name.ilike.%${query}%,client_name.ilike.%${query}%,estimate_number.ilike.%${query}%`);
@@ -583,6 +614,20 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         }).select("id,estimate_number").single();
         if (error) return { ok: false, error: error.message };
         await logActivity(ctx, { action: "created", entity: "estimate", entity_id: data.id, label: `Created estimate ${data.estimate_number}` });
+        return { ok: true, data };
+      }
+      case "update_estimate": {
+        const id = str(input, "id");
+        if (!id) return { ok: false, error: "id is required" };
+        const patch: In = { updated_at: new Date().toISOString() };
+        for (const k of ["project_name", "client_name", "site_address", "status"]) if (str(input, k)) patch[k] = str(input, k);
+        if (typeof input.site_same_as_client === "boolean") patch.site_same_as_client = input.site_same_as_client;
+        const dp = num(input, "deposit_percent");
+        if (dp !== undefined) patch.deposit_percent = dp;
+        if (Object.keys(patch).length <= 1) return { ok: false, error: "nothing to update" };
+        const { data, error } = await admin.from("estimates").update(patch).eq("id", id).eq("entity", entity).select("id,estimate_number").single();
+        if (error) return { ok: false, error: error.message };
+        await logActivity(ctx, { action: "updated", entity: "estimate", entity_id: id, label: `Updated estimate ${data?.estimate_number || id}` });
         return { ok: true, data };
       }
       case "create_invoice": {
