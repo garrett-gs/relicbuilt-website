@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
 
     ${pdfBase64 ? `
     <p style="font-size:13px;color:#666;margin:0 0 24px;padding:12px 14px;background:#f8f6f0;border:1px solid #e5e0d8;line-height:1.6;">
-      📎 A PDF copy is attached to this email for your records. When you&apos;re ready, click the button below to review and sign electronically.
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="${profile.accent}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>A PDF copy is attached to this email for your records. When you&apos;re ready, click the button below to review and sign electronically.
     </p>
     ` : ""}
 

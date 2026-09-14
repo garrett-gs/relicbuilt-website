@@ -14,7 +14,7 @@ import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
 import { generateEstimateProposalHtml, composeClientAddress } from "@/lib/proposal-html";
-import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const STATUS_STYLES: Record<Estimate["status"], { text: string; bg: string; border: string }> = {
@@ -2645,7 +2645,9 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
                         Review &amp; Sign Proposal
                       </span>
                     </div>
-                    <p className="text-[#888] text-xs text-center m-0">📎 PDF proposal attached</p>
+                    <p className="text-[#888] text-xs text-center m-0 flex items-center justify-center gap-1">
+                      <Paperclip size={12} className="text-accent" /> PDF proposal attached
+                    </p>
                   </div>
                 </div>
               </div>
