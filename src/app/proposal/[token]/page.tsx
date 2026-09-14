@@ -96,6 +96,12 @@ export default function ProposalPage() {
         setSubmitting(false);
         return;
       }
+      // Relic: a deposit invoice was created — send them straight to pay it.
+      // (Stays "submitting" through the redirect so the page doesn't flash.)
+      if (data.pay_url) {
+        window.location.href = data.pay_url;
+        return;
+      }
       if (data.already_approved) {
         setAlreadyApproved(true);
         setSubmitting(false);

@@ -28,9 +28,10 @@ function calcTotals(est: { line_items?: EstimateLineItem[]; labor_items?: Estima
 }
 
 /**
- * Proposals are APPROVAL-ONLY. Signing records the client's approval of the
- * scope — it does NOT create deposit/balance invoices or trigger any payment.
- * Payment/invoicing is handled in Nexus.
+ * Signing records the client's approval of the scope and auto-creates the
+ * Axiom project. For the WALLFLOWER entity, payment/invoicing is handled in
+ * Nexus (no invoice here). For the RELIC entity, we also create a deposit
+ * invoice and return a pay_url so the client goes straight to paying it.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -59,9 +60,23 @@ export async function POST(req: NextRequest) {
 
     // Already approved? — idempotent return
     if (estimate.proposal_status === "approved") {
+      // Relic: if a deposit invoice exists and isn't paid, route them to pay it.
+      let payUrl: string | null = null;
+      if (estimate.entity === "relic" && estimate.custom_work_id) {
+        const { data: dep } = await supabase
+          .from("invoices")
+          .select("id,status")
+          .eq("custom_work_id", estimate.custom_work_id)
+          .eq("invoice_type", "deposit")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (dep?.id && dep.status !== "paid") payUrl = `/pay/${dep.id}`;
+      }
       return NextResponse.json({
         already_approved: true,
         project_name: estimate.project_name,
+        pay_url: payUrl,
       });
     }
 
@@ -112,6 +127,7 @@ export async function POST(req: NextRequest) {
     // Approval auto-creates the Axiom project (custom_work) if one isn't linked
     // yet, so approved builds land in Projects automatically (no manual "Send
     // to Project"). Fabrication is greenlit later, on payment. Best-effort.
+    let projectId: string | null = (estimate.custom_work_id as string | null) ?? null;
     if (!estimate.custom_work_id) {
       try {
         const carried = (estimate.images || estimate.proposal_images || []) as string[];
@@ -131,10 +147,54 @@ export async function POST(req: NextRequest) {
           .select("id")
           .single();
         if (proj?.id) {
+          projectId = proj.id;
           await supabase.from("estimates").update({ custom_work_id: proj.id }).eq("id", estimate.id);
         }
       } catch (e) {
         console.error("[approve] auto-create project failed:", e);
+      }
+    }
+
+    // ── Relic: create the deposit invoice and route the client to pay it ──
+    // Wallflower handles deposits in Nexus; Relic collects here via Stripe.
+    let payUrl: string | null = null;
+    if (estimate.entity === "relic") {
+      try {
+        const depPct = Number(estimate.deposit_percent ?? settings?.deposit_percent ?? 50);
+        const depositAmount = Math.round(totalAmount * (depPct / 100) * 100) / 100;
+        const invNum = `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+        const { data: inv } = await supabase
+          .from("invoices")
+          .insert({
+            entity: "relic",
+            invoice_number: invNum,
+            invoice_type: "deposit",
+            custom_work_id: projectId,
+            client_name: estimate.client_name || "",
+            client_email: estimate.client_email || null,
+            client_phone: estimate.client_phone || null,
+            description: `Deposit (${depPct}%) — ${estimate.project_name || estimate.estimate_number}`,
+            subtotal: depositAmount,
+            delivery_fee: 0,
+            discount: 0,
+            tax_rate: 0,
+            line_items: [{
+              item_number: "",
+              description: `Deposit — ${depPct}% of project total (${money(totalAmount)}), due to schedule and begin work. Balance ${100 - depPct}% due on completion.`,
+              quantity: 1,
+              unit_price: depositAmount,
+              unit: "ea",
+            }],
+            status: "unpaid",
+            issued_date: new Date().toISOString().split("T")[0],
+            notes: `Deposit — ${depPct}% due to schedule and begin work. Balance ${100 - depPct}% due on completion.`,
+            payments: [],
+          })
+          .select("id")
+          .single();
+        if (inv?.id) payUrl = `/pay/${inv.id}`;
+      } catch (e) {
+        console.error("[approve] relic deposit invoice failed:", e);
       }
     }
 
@@ -279,6 +339,7 @@ export async function POST(req: NextRequest) {
       project_name: estimate.project_name || estimate.estimate_number,
       total_amount: totalAmount,
       biz_name: settings?.biz_name || "RELIC",
+      pay_url: payUrl,
     });
   } catch (err) {
     console.error("[approve-estimate-proposal] error:", err);
