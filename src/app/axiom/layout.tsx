@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "@/components/axiom/AuthProvider";
 import { EntityProvider } from "@/components/axiom/EntityProvider";
 import Sidebar from "@/components/axiom/Sidebar";
 import AxiomLogin from "@/components/axiom/AxiomLogin";
+import Assistant from "@/components/axiom/Assistant";
 
 function AxiomShell({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -33,6 +34,7 @@ function AxiomShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 md:ml-56 p-6 md:p-8 overflow-x-hidden">
         {children}
       </main>
+      <Assistant />
     </div>
   );
 }
