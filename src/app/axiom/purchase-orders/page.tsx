@@ -346,6 +346,12 @@ function OrdersTab() {
 
   async function receiveIntoInventory(po: PurchaseOrder, taxAmount: number, deliveryAmount: number) {
     if (!po.line_items || po.line_items.length === 0) return;
+    // Guard against receiving the same PO twice — that would add the
+    // quantities again and re-average the landed cost.
+    if (po.received_at && !confirm(
+      `PO ${po.po_number} was already received on ${new Date(po.received_at).toLocaleDateString()}.\n\n` +
+      `Receive again? This adds the quantities a second time and re-averages costs.`
+    )) return;
     setReceivingId(po.id);
     setReceiveMsg("");
 
@@ -434,6 +440,14 @@ function OrdersTab() {
         user_name: userEmail,
       });
 
+      // Stamp the PO as received so it isn't double-counted (best-effort:
+      // if the column isn't migrated yet, receiving still succeeds).
+      const receivedAt = new Date().toISOString();
+      try {
+        await axiom.from("purchase_orders").update({ received_at: receivedAt }).eq("id", po.id);
+        setPos((prev) => prev.map((p) => (p.id === po.id ? { ...p, received_at: receivedAt } : p)));
+      } catch { /* received_at column not present yet — non-fatal */ }
+
       setReceiveMsg(`Received ${received} of ${po.line_items.length} items into inventory.${extras > 0 ? ` Tax/delivery $${extras.toFixed(2)} distributed.` : ""}`);
     } catch (err) {
       console.error("receive error:", err);
@@ -515,14 +529,28 @@ function OrdersTab() {
                     </>
                   )}
                   {po.status === "approved" && po.line_items && po.line_items.length > 0 && (
-                    <button
-                      onClick={() => { setReceiveModal(po); setReceiveTax(""); setReceiveDelivery(""); }}
-                      disabled={receivingId === po.id}
-                      className="text-green-500 hover:text-green-400 disabled:opacity-50"
-                      title="Receive into Inventory"
-                    >
-                      <Warehouse size={14} />
-                    </button>
+                    po.received_at ? (
+                      <span className="inline-flex items-center gap-1 text-xs text-green-500" title={`Received ${new Date(po.received_at).toLocaleDateString()}`}>
+                        <Check size={13} /> Received
+                        <button
+                          onClick={() => { setReceiveModal(po); setReceiveTax(""); setReceiveDelivery(""); }}
+                          disabled={receivingId === po.id}
+                          className="text-muted hover:text-foreground ml-0.5 disabled:opacity-50"
+                          title="Receive again"
+                        >
+                          <Warehouse size={12} />
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => { setReceiveModal(po); setReceiveTax(""); setReceiveDelivery(""); }}
+                        disabled={receivingId === po.id}
+                        className="text-green-500 hover:text-green-400 disabled:opacity-50"
+                        title="Receive into Inventory"
+                      >
+                        <Warehouse size={14} />
+                      </button>
+                    )
                   )}
                   {po.status !== "pending" && (
                     <button onClick={() => resetPO(po.id)} className="text-muted hover:text-foreground" title="Reset"><RotateCcw size={14} /></button>
