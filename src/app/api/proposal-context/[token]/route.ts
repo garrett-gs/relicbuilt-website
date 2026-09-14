@@ -45,7 +45,7 @@ export async function GET(
     if (estimate.customer_id) {
       const { data: cust } = await supabase
         .from("customers")
-        .select("company_id,company_name,address,city,state,zip")
+        .select("company_id,company_name,address")
         .eq("id", estimate.customer_id)
         .single();
       clientAddress = composeClientAddress(cust) || null;

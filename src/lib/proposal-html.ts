@@ -261,16 +261,14 @@ interface EstimateProposalArgs {
 }
 
 /**
- * Compose a one-line address from a customer's parts, e.g.
- * "133 Antelope Circle, Tuscola, TX 79562". Empty parts are skipped.
+ * The customer's address for the proposal. Customers store the full address
+ * in a single `address` column (e.g. "133 Antelope Circle, Tuscola, TX
+ * 79562"), so this just normalizes it.
  */
 export function composeClientAddress(
-  c?: { address?: string | null; city?: string | null; state?: string | null; zip?: string | null } | null
+  c?: { address?: string | null } | null
 ): string {
-  if (!c) return "";
-  const cityState = [c.city, c.state].filter(Boolean).join(", ");
-  const tail = [cityState, c.zip].filter(Boolean).join(" ");
-  return [c.address, tail].filter(Boolean).join(", ");
+  return (c?.address || "").trim();
 }
 
 export function generateEstimateProposalHtml({

@@ -1119,7 +1119,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   useEffect(() => {
     if (!estimate.customer_id) return;
     axiom.from("customers")
-      .select("name,email,phone,company_id,company_name,address,city,state,zip")
+      .select("name,email,phone,company_id,company_name,address")
       .eq("id", estimate.customer_id)
       .single()
       .then(({ data }) => {
