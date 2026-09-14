@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
 
     const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
-  <div style="padding:20px 32px;border-bottom:3px solid #5b642e;">
+  <div style="padding:20px 32px;border-bottom:3px solid ${profile.accent};">
     ${profile.logoUrl ? `<img src="${profile.logoUrl}" alt="${bizName}" style="height:36px;display:block;" />` : `<span style="font-size:20px;font-weight:bold;color:#111;">${bizName}</span>`}
   </div>
   <div style="padding:32px;">
@@ -159,7 +159,7 @@ export async function POST(req: NextRequest) {
     ` : ""}
 
     <div style="text-align:center;margin:32px 0;">
-      <a href="${proposalUrl}" style="display:inline-block;background:#5b642e;color:#0a0a0a;padding:16px 32px;text-decoration:none;font-weight:bold;letter-spacing:0.08em;font-size:14px;text-transform:uppercase;">
+      <a href="${proposalUrl}" style="display:inline-block;background:${profile.accent};color:#0a0a0a;padding:16px 32px;text-decoration:none;font-weight:bold;letter-spacing:0.08em;font-size:14px;text-transform:uppercase;">
         Review &amp; Sign Proposal
       </a>
     </div>
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest) {
     ` : ""}
 
     <p style="font-size:12px;color:#999;margin:16px 0 0;text-align:center;line-height:1.6;">
-      Need our W-9 for your records? <a href="${origin}/api/w9" style="color:#5b642e;font-weight:600;text-decoration:none;">Download it here</a> — it opens as our signed PDF, dated the day you grab it.
+      Need our W-9 for your records? <a href="${origin}/api/w9" style="color:${profile.accent};font-weight:600;text-decoration:none;">Download it here</a> — it opens as our signed PDF, dated the day you grab it.
     </p>
 
     <p style="font-size:13px;color:#888;margin:24px 0 0;line-height:1.6;">
