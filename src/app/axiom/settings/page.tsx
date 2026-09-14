@@ -200,7 +200,14 @@ export default function SettingsPage() {
                 <Field label="ZIP" value={settings.relic_profile?.zip || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), zip: v })} />
               </div>
               <Field label="Website" value={settings.relic_profile?.website || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), website: v })} placeholder="relic.com" />
-              <Field label="Logo URL" value={settings.relic_profile?.logo_url || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), logo_url: v })} placeholder="https://…/relic-logo.png" />
+              <Field label="Logo URL" value={settings.relic_profile?.logo_url || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), logo_url: v })} placeholder="https://relicbuilt.com/logo-full.png" />
+              <div>
+                <label className="block text-xs text-muted mb-1">Accent Color (gold)</label>
+                <div className="flex items-center gap-2">
+                  <input type="color" value={settings.relic_profile?.accent_color || "#b8963c"} onChange={(e) => updateField("relic_profile", { ...(settings.relic_profile || {}), accent_color: e.target.value })} className="w-10 h-9 bg-background border border-border p-0.5 cursor-pointer" />
+                  <input value={settings.relic_profile?.accent_color || "#b8963c"} onChange={(e) => updateField("relic_profile", { ...(settings.relic_profile || {}), accent_color: e.target.value })} className="w-32 bg-background border border-border px-3 py-2 text-sm text-foreground font-mono" placeholder="#b8963c" />
+                </div>
+              </div>
               <Field label="Footer Line" value={settings.relic_profile?.footer || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), footer: v })} placeholder="RELIC · (###) ###-#### · relic.com" />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Email From Name" value={settings.relic_profile?.from_name || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), from_name: v })} placeholder="RELIC" />

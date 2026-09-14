@@ -19,6 +19,8 @@ export interface EntityProfile {
   footer: string;
   fromName: string;
   fromEmail: string;
+  accent: string;     // medium brand color (labels, borders, gold for Relic)
+  accentDark: string; // dark bar/button bg with legible light text on it
 }
 
 // Only the settings fields the resolver needs.
@@ -50,6 +52,8 @@ export interface ProposalBizInfo {
   logo_url?: string;
   website?: string;
   footer?: string;
+  accent?: string;
+  accent_dark?: string;
 }
 
 // Shared transactional sender (relicbuilt.com is the verified Resend domain).
@@ -81,6 +85,8 @@ export function resolveEntityProfile(
       footer,
       fromName: rp.from_name || name,
       fromEmail: rp.from_email || DEFAULT_FROM_EMAIL,
+      accent: rp.accent_color || "#b8963c",   // RELIC gold
+      accentDark: "#1a1a1a",                    // near-black bars, matches the logo
     };
   }
 
@@ -99,6 +105,8 @@ export function resolveEntityProfile(
     footer: "Wallflower RELIC  ·  (402) 235-8179  ·  wallflower-relic.com",
     fromName: "Wallflower RELIC",
     fromEmail: DEFAULT_FROM_EMAIL,
+    accent: "#5b642e",     // Wallflower olive (unchanged)
+    accentDark: "#454d23",
   };
 }
 
@@ -139,5 +147,7 @@ export function proposalBiz(
     logo_url: p.logoUrl,
     footer: p.footer,
     website: p.website,
+    accent: p.accent,
+    accent_dark: p.accentDark,
   };
 }

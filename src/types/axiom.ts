@@ -569,6 +569,7 @@ export interface RelicProfile {
   footer?: string;
   from_name?: string;
   from_email?: string;
+  accent_color?: string;
 }
 
 export interface Settings {

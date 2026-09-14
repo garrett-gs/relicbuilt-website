@@ -66,6 +66,14 @@ export function EntityProvider({ children }: { children: ReactNode }) {
 
   const entity: BusinessEntity = hasRelicAccess ? stored : "wallflower_relic";
 
+  // Flag the document so CSS can swing the app's accent to gold in Relic mode.
+  useEffect(() => {
+    const el = document.documentElement;
+    if (entity === "relic") el.setAttribute("data-entity", "relic");
+    else el.removeAttribute("data-entity");
+    return () => el.removeAttribute("data-entity");
+  }, [entity]);
+
   const setEntity = (e: BusinessEntity) => {
     if (e === "relic" && !hasRelicAccess) return;
     writeStored(e);

@@ -9,6 +9,12 @@
   --accent: #5b642e;
 }
 
+/* Relic entity: turn the whole app's accent gold as a visual cue you're in
+   the Relic portion (set by EntityProvider on <html data-entity="relic">). */
+:root[data-entity="relic"] {
+  --accent: #b8963c;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
