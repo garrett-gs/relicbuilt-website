@@ -76,6 +76,7 @@ const KIND: Record<string, Kind> = {
   update_work_order: "write",
   create_estimate: "write",
   update_estimate: "write",
+  add_estimate_line_items: "write",
   create_invoice: "write",
   record_invoice_payment: "write",
   create_expense: "write",
@@ -86,6 +87,7 @@ const KIND: Record<string, Kind> = {
 const RISK: Record<string, Risk> = {
   create_estimate: "money",
   update_estimate: "money",
+  add_estimate_line_items: "money",
   create_invoice: "money",
   record_invoice_payment: "money",
   create_expense: "money",
@@ -283,6 +285,31 @@ export const TOOLS = [
     },
   },
   {
+    name: "add_estimate_line_items",
+    description: "Add one or more material line items to an existing estimate (by id). Look up the price with list_inventory first and use its unit_cost; you can add several items at once. Appends to whatever line items are already on the estimate. Money action.",
+    input_schema: {
+      type: "object",
+      properties: {
+        estimate_id: { type: "string" },
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              description: { type: "string" },
+              quantity: { type: "number" },
+              unit_price: { type: "number", description: "Unit cost, e.g. from list_inventory" },
+              unit: { type: "string", description: "e.g. ea, sheet, bf, LF" },
+              item_number: { type: "string", description: "SKU if known" },
+            },
+            required: ["description", "quantity", "unit_price"],
+          },
+        },
+      },
+      required: ["estimate_id", "items"],
+    },
+  },
+  {
     name: "create_invoice",
     description: "Create an invoice in the current workspace with line items. Money action.",
     input_schema: {
@@ -405,6 +432,12 @@ export function describeAction(name: string, input: In): { title: string; summar
           ["Status", input.status],
         ]),
       };
+    case "add_estimate_line_items": {
+      const items = Array.isArray(input.items) ? (input.items as In[]) : [];
+      const total = items.reduce((s, li) => s + (num(li, "quantity") || 0) * (num(li, "unit_price") || 0), 0);
+      const itemLines = items.map((li) => `  • ${str(li, "description")} — ${num(li, "quantity")} × $${num(li, "unit_price")}`).join("\n");
+      return { title: `Add ${items.length} line item${items.length === 1 ? "" : "s"} to estimate — $${total.toFixed(2)}`, summary: itemLines };
+    }
     case "create_invoice": {
       const items = Array.isArray(input.line_items) ? (input.line_items as In[]) : [];
       const sub = items.reduce((s, li) => s + (num(li, "quantity") || 0) * (num(li, "unit_price") || 0), 0);
@@ -650,6 +683,28 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         if (error) return { ok: false, error: error.message };
         await logActivity(ctx, { action: "updated", entity: "estimate", entity_id: id, label: `Updated estimate ${data?.estimate_number || id}` });
         return { ok: true, data };
+      }
+      case "add_estimate_line_items": {
+        const id = str(input, "estimate_id");
+        const items = Array.isArray(input.items) ? (input.items as In[]) : [];
+        if (!id) return { ok: false, error: "estimate_id is required" };
+        if (items.length === 0) return { ok: false, error: "at least one item is required" };
+        const { data: est, error: gErr } = await admin
+          .from("estimates").select("id,estimate_number,line_items").eq("id", id).eq("entity", entity).single();
+        if (gErr || !est) return { ok: false, error: gErr?.message || "estimate not found" };
+        const newLines = items.map((li) => ({
+          item_number: str(li, "item_number") || "",
+          description: str(li, "description") || "",
+          quantity: num(li, "quantity") || 1,
+          unit_price: num(li, "unit_price") || 0,
+          unit: str(li, "unit") || "ea",
+        }));
+        const merged = [...(est.line_items || []), ...newLines];
+        const { error } = await admin.from("estimates").update({ line_items: merged, updated_at: new Date().toISOString() }).eq("id", id);
+        if (error) return { ok: false, error: error.message };
+        const added = newLines.reduce((s, li) => s + li.quantity * li.unit_price, 0);
+        await logActivity(ctx, { action: "updated", entity: "estimate", entity_id: id, label: `Added ${newLines.length} line item(s) to ${est.estimate_number}` });
+        return { ok: true, data: { added_count: newLines.length, added_subtotal: Number(added.toFixed(2)), line_item_count: merged.length } };
       }
       case "create_invoice": {
         const client_name = str(input, "client_name");
