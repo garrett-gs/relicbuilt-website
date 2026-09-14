@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { BusinessEntity } from "@/types/axiom";
+import { normalizeText } from "@/lib/fuzzy-match";
 
 /**
  * Whitelisted operations the Axiom Assistant may perform. This file is the
@@ -37,23 +38,6 @@ const num = (o: In, k: string): number | undefined => {
   if (typeof v === "string" && v.trim() !== "" && !isNaN(Number(v))) return Number(v);
   return undefined;
 };
-
-// Normalize an item name/query for fuzzy matching: lowercase, expand unicode
-// fractions (¾ → 3/4), drop inch marks and "inch", strip punctuation but keep
-// the slash so fractions survive. Lets "3/4-inch birch plywood" line up with a
-// terse SKU like "IMP 3/4 BIRCH WHT RAW C2 VC WPF".
-function normalizeText(s: string): string {
-  return (s || "")
-    .toLowerCase()
-    .replace(/½/g, "1/2").replace(/¼/g, "1/4").replace(/¾/g, "3/4")
-    .replace(/⅜/g, "3/8").replace(/⅝/g, "5/8").replace(/⅞/g, "7/8")
-    .replace(/⅓/g, "1/3").replace(/⅔/g, "2/3")
-    .replace(/[""“”]/g, "")
-    .replace(/\b(inch|inches|in)\b/g, " ")
-    .replace(/[^a-z0-9/ ]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 async function logActivity(
   ctx: ToolCtx,

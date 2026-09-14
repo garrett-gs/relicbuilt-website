@@ -14,6 +14,7 @@ import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
 import { generateEstimateProposalHtml, composeClientAddress } from "@/lib/proposal-html";
+import { fuzzyRank } from "@/lib/fuzzy-match";
 import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -30,6 +31,20 @@ function money(n: number) {
 
 function pct(n: number) {
   return `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
+}
+
+// Dedupe catalog items by SKU (falling back to description); first wins, so a
+// vendor's own catalog entry takes precedence over the generic product row.
+function dedupeCatalog(items: CatalogItem[]): CatalogItem[] {
+  const seen = new Set<string>();
+  const out: CatalogItem[] = [];
+  for (const c of items) {
+    const key = c.item_number?.toLowerCase() || c.description.toLowerCase().trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+  }
+  return out;
 }
 
 function calcTotals(est: Pick<Estimate, "line_items" | "labor_items" | "markup_percent">) {
@@ -1102,6 +1117,23 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [vendorName, setVendorName] = useState(estimate.vendor_name || "");
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [catalogSearch, setCatalogSearch] = useState("");
+  // The whole pricing catalog (all products from inventory_items, populated
+  // by receiving POs). Lets the search box find any item without first
+  // picking a vendor.
+  const [allCatalog, setAllCatalog] = useState<CatalogItem[]>([]);
+  useEffect(() => {
+    axiom.from("inventory_items")
+      .select("id,item_number,description,unit_cost,unit")
+      .eq("active", true).order("description").limit(1000)
+      .then(({ data }) => {
+        if (!data) return;
+        setAllCatalog(data.map((i) => ({
+          id: `inv-${i.id}`, vendor_id: "", item_number: i.item_number || undefined,
+          description: i.description, unit_price: i.unit_cost, unit: i.unit,
+          category: undefined, active: true, created_at: "",
+        }) as CatalogItem));
+      });
+  }, []);
 
   // Load vendors list
   useEffect(() => {
@@ -1232,10 +1264,31 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     }]);
   }
 
-  const filteredCatalog = catalog.filter((c) =>
-    !catalogSearch ||
-    c.description.toLowerCase().includes(catalogSearch.toLowerCase()) ||
-    (c.item_number || "").toLowerCase().includes(catalogSearch.toLowerCase())
+  const searchingCatalog = catalogSearch.trim().length > 0;
+  // While searching, look across the whole catalog (current vendor's items +
+  // every product), deduped, fuzzy-ranked. Otherwise show the vendor's list.
+  const searchPool = searchingCatalog ? dedupeCatalog([...catalog, ...allCatalog]) : catalog;
+  const filteredCatalog = searchingCatalog
+    ? fuzzyRank(catalogSearch, searchPool, (c) => `${c.description} ${c.item_number || ""}`)
+    : catalog;
+
+  const catalogRow = (item: CatalogItem) => (
+    <button
+      key={item.id}
+      onClick={() => addFromCatalog(item)}
+      className="w-full text-left bg-card border border-border p-2.5 hover:border-accent/50 transition-colors"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          {item.item_number && <span className="text-[10px] font-mono text-muted mr-1.5">{item.item_number}</span>}
+          <span className="text-sm truncate">{item.description}</span>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <span className="text-sm font-mono">{money(item.unit_price)}</span>
+          <span className="text-xs text-muted ml-1">/{item.unit}</span>
+        </div>
+      </div>
+    </button>
   );
 
   const { materialTotal, laborTotal, subtotal, markupAmount, total } = calcTotals({
@@ -1873,49 +1926,48 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
             )}
           </div>
 
-          {vendorId && (
+          {/* Search — always available; searches the whole catalog, no vendor needed */}
+          <div className="relative mb-2">
+            <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              value={catalogSearch}
+              onChange={(e) => setCatalogSearch(e.target.value)}
+              placeholder="Search all products… e.g. 3/4 birch ply"
+              className="w-full bg-card border border-border pl-8 pr-4 py-2 text-xs text-foreground focus:outline-none focus:border-accent"
+            />
+          </div>
+
+          {searchingCatalog ? (
+            filteredCatalog.length === 0 ? (
+              <p className="text-muted text-sm bg-card border border-border p-3">
+                No catalog matches for &ldquo;{catalogSearch}&rdquo;.
+              </p>
+            ) : (
+              <>
+                <p className="text-[11px] text-muted mb-1.5">{filteredCatalog.length} match{filteredCatalog.length === 1 ? "" : "es"} across your catalog</p>
+                <div className="space-y-1 max-h-[320px] overflow-y-auto">
+                  {filteredCatalog.map(catalogRow)}
+                </div>
+              </>
+            )
+          ) : vendorId ? (
             <>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs text-muted flex items-center gap-1">
                   <Package size={12} /> {vendorName} ({catalog.length} items)
                 </span>
               </div>
-              {catalog.length > 0 && (
-                <div className="relative mb-2">
-                  <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-                  <input value={catalogSearch} onChange={(e) => setCatalogSearch(e.target.value)} placeholder="Search catalog..." className="w-full bg-card border border-border pl-8 pr-4 py-2 text-xs text-foreground focus:outline-none focus:border-accent" />
-                </div>
-              )}
               {catalog.length === 0 ? (
                 <p className="text-muted text-sm bg-card border border-border p-3">No items in this vendor&apos;s catalog yet.</p>
               ) : (
                 <div className="space-y-1 max-h-[320px] overflow-y-auto">
-                  {filteredCatalog.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => addFromCatalog(item)}
-                      className="w-full text-left bg-card border border-border p-2.5 hover:border-accent/50 transition-colors"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0">
-                          {item.item_number && <span className="text-[10px] font-mono text-muted mr-1.5">{item.item_number}</span>}
-                          <span className="text-sm truncate">{item.description}</span>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <span className="text-sm font-mono">{money(item.unit_price)}</span>
-                          <span className="text-xs text-muted ml-1">/{item.unit}</span>
-                        </div>
-                      </div>
-                    </button>
-                  ))}
+                  {catalog.map(catalogRow)}
                 </div>
               )}
             </>
-          )}
-
-          {!vendorId && (
-            <div className="flex items-center justify-center h-24 text-muted text-sm border border-border bg-card">
-              Select a vendor to browse their catalog
+          ) : (
+            <div className="flex items-center justify-center h-24 text-muted text-sm border border-border bg-card text-center px-3">
+              Search the full catalog above, or pick a vendor to browse.
             </div>
           )}
         </div>
