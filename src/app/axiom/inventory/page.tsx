@@ -25,6 +25,7 @@ import {
   FileUp,
   Check,
   Loader2,
+  Globe,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -164,6 +165,7 @@ function InventoryTab({
   // that need a physical count to reconcile.
   const [driftOnly, setDriftOnly] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [addFromUrl, setAddFromUrl] = useState(false);
   const [showScan, setShowScan] = useState(false);
   const [txnModal, setTxnModal] = useState<{ item: InventoryItem; type: "in" | "out" } | null>(null);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
@@ -382,7 +384,10 @@ function InventoryTab({
         <button onClick={() => setShowScan(true)} className="flex items-center gap-1.5 border border-accent/50 text-accent px-4 py-2.5 text-sm font-medium hover:bg-accent/10 transition-colors">
           <FileUp size={14} /> Scan PDF
         </button>
-        <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 bg-accent text-background px-4 py-2.5 text-sm font-medium hover:bg-accent/90 transition-colors">
+        <button onClick={() => { setAddFromUrl(true); setShowAdd(true); }} className="flex items-center gap-1.5 border border-accent/50 text-accent px-4 py-2.5 text-sm font-medium hover:bg-accent/10 transition-colors">
+          <Globe size={14} /> From URL
+        </button>
+        <button onClick={() => { setAddFromUrl(false); setShowAdd(true); }} className="flex items-center gap-1.5 bg-accent text-background px-4 py-2.5 text-sm font-medium hover:bg-accent/90 transition-colors">
           <Plus size={14} /> Add Item
         </button>
       </div>
@@ -563,6 +568,7 @@ function InventoryTab({
           categories={categories}
           vendors={vendors}
           locations={locations}
+          startWithUrl={addFromUrl}
           onClose={() => setShowAdd(false)}
           onSaved={onReload}
         />
@@ -655,14 +661,16 @@ function groupByProduct(items: InventoryItem[]): ProductGroup[] {
 // ── Add Item Modal ───────────────────────────────────────────────────────────
 
 function AddItemModal({
-  categories, vendors, locations, onClose, onSaved,
+  categories, vendors, locations, startWithUrl, onClose, onSaved,
 }: {
   categories: InventoryCategory[];
   vendors: SimpleVendor[];
   locations: string[];
+  startWithUrl?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { session } = useAuth();
   const [desc, setDesc] = useState("");
   const [itemNum, setItemNum] = useState("");
   const [unit, setUnit] = useState("ea");
@@ -673,6 +681,38 @@ function AddItemModal({
   const [location, setLocation] = useState("");
   const [minStock, setMinStock] = useState("");
   const [saving, setSaving] = useState(false);
+  // Pull-from-URL
+  const [url, setUrl] = useState("");
+  const [fetching, setFetching] = useState(false);
+  const [fetchMsg, setFetchMsg] = useState("");
+
+  async function fetchFromUrl() {
+    if (!url.trim() || fetching) return;
+    setFetching(true);
+    setFetchMsg("");
+    try {
+      const res = await fetch("/api/axiom/price-from-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ url: url.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setFetchMsg(data.error || "Couldn't read that page.");
+        return;
+      }
+      const p = data.product;
+      if (p.name) setDesc(p.name);
+      if (p.sku) setItemNum(p.sku);
+      if (p.unit) setUnit(p.unit);
+      if (typeof p.price === "number") setUnitCost(String(p.price));
+      setFetchMsg(`Found: ${p.name || "item"} — $${p.price}${p.method === "ai" ? " (read from page text)" : ""}. Review below, then Add.`);
+    } catch {
+      setFetchMsg("Couldn't reach that page.");
+    } finally {
+      setFetching(false);
+    }
+  }
 
   async function save() {
     if (!desc.trim()) return;
@@ -696,6 +736,26 @@ function AddItemModal({
   return (
     <Modal title="Add Inventory Item" onClose={onClose}>
       <div className="space-y-4">
+        <div className={cn("border p-3", startWithUrl ? "border-accent/50 bg-accent/5" : "border-border bg-card")}>
+          <label className={lbl}>Pull from a product URL</label>
+          <div className="flex gap-2">
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); fetchFromUrl(); } }}
+              placeholder="https://…  (public product page)"
+              className={inp}
+            />
+            <button
+              onClick={fetchFromUrl}
+              disabled={fetching || !url.trim()}
+              className="flex items-center gap-1.5 bg-accent text-background px-4 text-sm font-medium hover:bg-accent/90 disabled:opacity-50 shrink-0"
+            >
+              {fetching ? <Loader2 size={14} className="animate-spin" /> : <Globe size={14} />} Fetch
+            </button>
+          </div>
+          {fetchMsg && <p className="text-xs text-muted mt-1.5">{fetchMsg}</p>}
+        </div>
         <div>
           <label className={lbl}>Description *</label>
           <input value={desc} onChange={(e) => setDesc(e.target.value)} className={inp} placeholder="Item description" />

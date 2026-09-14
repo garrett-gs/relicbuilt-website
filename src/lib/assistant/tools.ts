@@ -1,6 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { BusinessEntity } from "@/types/axiom";
 import { normalizeText } from "@/lib/fuzzy-match";
+import { extractProductFromUrl } from "@/lib/price-extract";
 
 /**
  * Whitelisted operations the Axiom Assistant may perform. This file is the
@@ -67,6 +68,7 @@ const KIND: Record<string, Kind> = {
   list_tasks: "read",
   list_inventory: "read",
   list_expenses: "read",
+  price_from_url: "read",
   create_customer: "write",
   update_customer: "write",
   create_company: "write",
@@ -143,6 +145,11 @@ export const TOOLS = [
     input_schema: { type: "object", properties: { limit: { type: "number" } } },
   },
 
+  {
+    name: "price_from_url",
+    description: "Fetch a public product URL and extract its name, price, SKU, and unit. Use to price an item from a website; then add it to the catalog with add_inventory_item if the user wants. Only works for public pages (not login-gated prices).",
+    input_schema: { type: "object", properties: { url: { type: "string" } }, required: ["url"] },
+  },
   {
     name: "create_customer",
     description: "Add a customer/contact to the current workspace.",
@@ -573,6 +580,12 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         const limit = num(input, "limit") || 20;
         const { data, error } = await admin.from("expenses").select("id,date,amount,category,vendor_name,description").eq("entity", entity).order("date", { ascending: false }).limit(limit);
         return error ? { ok: false, error: error.message } : { ok: true, data };
+      }
+      case "price_from_url": {
+        const url = str(input, "url");
+        if (!url) return { ok: false, error: "url is required" };
+        const r = await extractProductFromUrl(url);
+        return r.ok ? { ok: true, data: r.product } : { ok: false, error: r.error };
       }
 
       // ---- writes ----
