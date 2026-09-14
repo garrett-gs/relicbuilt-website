@@ -228,7 +228,7 @@ export function generateProposalHtml(
   ${biz.terms_text ? `
   <div style="margin-top:28px;padding-top:16px;border-top:1px solid #eee;">
     <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Terms</p>
-    <p style="margin:0;font-size:12px;color:#888;white-space:pre-wrap;line-height:1.7;">${esc(biz.terms_text)}</p>
+    <p style="margin:0;font-size:9px;color:#888;white-space:pre-wrap;line-height:1.6;">${esc(biz.terms_text)}</p>
   </div>` : ""}
 
   <!-- Footer -->
@@ -483,7 +483,7 @@ export function generateEstimateProposalHtml({
   const termsHtml = biz.terms_text ? `
   <section style="margin-bottom:24px;page-break-inside:avoid;">
     <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Terms</p>
-    <p style="margin:0;font-size:11px;color:#888;white-space:pre-wrap;line-height:1.7;">${esc(biz.terms_text)}</p>
+    <p style="margin:0;font-size:9px;color:#888;white-space:pre-wrap;line-height:1.6;">${esc(biz.terms_text)}</p>
   </section>
   ` : "";
 
