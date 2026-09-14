@@ -7,7 +7,7 @@ import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
-import { Plus, Trash2, MessageSquare } from "lucide-react";
+import { Plus, Trash2, MessageSquare, UserPlus, X } from "lucide-react";
 import { cn, formatPhone } from "@/lib/utils";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 
@@ -25,6 +25,65 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>("General");
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
+
+  // "Add User (with login)" modal
+  const [showAddUser, setShowAddUser] = useState(false);
+  const [nu, setNu] = useState({ name: "", email: "", password: "", role: "staff", hourly_rate: 60, relic_access: false });
+  const [nuBusy, setNuBusy] = useState(false);
+  const [nuErr, setNuErr] = useState("");
+  const [nuDone, setNuDone] = useState(false);
+
+  function genPassword() {
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+    const arr = new Uint32Array(14);
+    crypto.getRandomValues(arr);
+    let p = "";
+    for (const n of arr) p += chars[n % chars.length];
+    setNu((s) => ({ ...s, password: p }));
+  }
+
+  async function createUserWithLogin() {
+    setNuBusy(true); setNuErr("");
+    try {
+      const email = nu.email.trim().toLowerCase();
+      if (!email || nu.password.length < 8) {
+        setNuErr("Enter an email and a password of at least 8 characters.");
+        setNuBusy(false); return;
+      }
+      const { data: sess } = await axiom.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) { setNuErr("Your session expired — sign in again."); setNuBusy(false); return; }
+
+      const res = await fetch("/api/axiom/create-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email, password: nu.password }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setNuErr(data.error || "Could not create the login."); setNuBusy(false); return; }
+
+      // Login created — now record the team-member row (settings' single writer is this page).
+      const member: TeamMember = {
+        name: nu.name.trim() || email,
+        email,
+        role: nu.role as TeamMember["role"],
+        hourly_rate: Number(nu.hourly_rate) || 0,
+        pin: "",
+        relic_access: isSuperAdmin ? nu.relic_access : false,
+      };
+      const newMembers = [...(settings?.team_members || []), member];
+      if (settings) {
+        const { error } = await axiom.from("settings").update({ team_members: newMembers }).eq("id", settings.id);
+        if (error) { setNuErr("Login created, but saving the team member failed: " + error.message); setNuBusy(false); return; }
+        setSettings((s) => s ? { ...s, team_members: newMembers } : s);
+      }
+      setNuDone(true);
+      setNuBusy(false);
+    } catch {
+      setNuErr("Something went wrong creating the user.");
+      setNuBusy(false);
+    }
+  }
 
   const load = useCallback(async () => {
     const { data } = await axiom.from("settings").select("*").limit(1).single();
@@ -306,10 +365,77 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
-          <button onClick={() => {
-            const members = [...(settings.team_members || []), { name: "", email: "", role: "staff" as const, hourly_rate: 60, pin: "" }];
-            updateField("team_members", members);
-          }} className="text-accent text-sm flex items-center gap-1"><Plus size={14} /> Add Team Member</button>
+          <div className="flex items-center gap-5 mt-1">
+            <button onClick={() => {
+              const members = [...(settings.team_members || []), { name: "", email: "", role: "staff" as const, hourly_rate: 60, pin: "" }];
+              updateField("team_members", members);
+            }} className="text-accent text-sm flex items-center gap-1"><Plus size={14} /> Add Team Member</button>
+            {isAdmin && (
+              <button onClick={() => {
+                setNu({ name: "", email: "", password: "", role: "staff", hourly_rate: 60, relic_access: false });
+                setNuErr(""); setNuDone(false); setShowAddUser(true);
+              }} className="text-accent text-sm flex items-center gap-1"><UserPlus size={14} /> Add User (with login)</button>
+            )}
+          </div>
+          <p className="text-xs text-muted mt-2">&ldquo;Add Team Member&rdquo; just records someone in the list. &ldquo;Add User (with login)&rdquo; also creates their sign-in so they can log in to Axiom.</p>
+
+          {showAddUser && (
+            <>
+              <div className="fixed inset-0 bg-black/60 z-50" onClick={() => setShowAddUser(false)} />
+              <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-background border border-border p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-heading font-bold">Add User (with login)</h3>
+                  <button onClick={() => setShowAddUser(false)} className="text-muted hover:text-foreground"><X size={18} /></button>
+                </div>
+                {nuDone ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-green-500">Login created for {nu.email}.</p>
+                    <div>
+                      <label className="text-[10px] uppercase tracking-wider text-muted block mb-1">Temporary password — share it with them</label>
+                      <input readOnly value={nu.password} onFocus={(e) => e.target.select()} className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground font-mono" />
+                    </div>
+                    <p className="text-xs text-muted">They sign in at relicbuilt.com/axiom with this email and password. Have them change it after first login.</p>
+                    <Button onClick={() => setShowAddUser(false)}>Done</Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <Field label="Name" value={nu.name} onChange={(v) => setNu((s) => ({ ...s, name: v }))} />
+                    <Field label="Email" value={nu.email} onChange={(v) => setNu((s) => ({ ...s, email: v }))} type="email" />
+                    <div>
+                      <label className="text-[10px] uppercase tracking-wider text-muted block mb-1">Temporary Password</label>
+                      <div className="flex gap-2">
+                        <input value={nu.password} onChange={(e) => setNu((s) => ({ ...s, password: e.target.value }))} placeholder="at least 8 characters" className="flex-1 bg-background border border-border px-3 py-2 text-sm text-foreground font-mono" />
+                        <Button variant="outline" size="sm" onClick={genPassword}>Generate</Button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[10px] uppercase tracking-wider text-muted block mb-1">Role</label>
+                        <select value={nu.role} onChange={(e) => setNu((s) => ({ ...s, role: e.target.value }))} className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent">
+                          <option value="staff">Staff</option>
+                          <option value="manager">Manager</option>
+                          <option value="admin">Admin</option>
+                          {isSuperAdmin && <option value="superadmin">Superadmin</option>}
+                        </select>
+                      </div>
+                      <Field label="Hourly Rate ($)" value={String(nu.hourly_rate)} onChange={(v) => setNu((s) => ({ ...s, hourly_rate: Number(v) || 0 }))} type="number" />
+                    </div>
+                    {isSuperAdmin && (
+                      <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                        <input type="checkbox" checked={nu.relic_access} onChange={(e) => setNu((s) => ({ ...s, relic_access: e.target.checked }))} className="accent-accent" />
+                        <span className="text-foreground">Relic access</span>
+                      </label>
+                    )}
+                    {nuErr && <p className="text-xs text-red-500">{nuErr}</p>}
+                    <div className="flex gap-2 pt-1">
+                      <Button onClick={createUserWithLogin} disabled={nuBusy || !nu.email || nu.password.length < 8}>{nuBusy ? "Creating…" : "Create User"}</Button>
+                      <Button variant="outline" onClick={() => setShowAddUser(false)}>Cancel</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 
