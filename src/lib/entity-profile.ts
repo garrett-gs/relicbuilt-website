@@ -142,7 +142,8 @@ export function proposalBiz(
     biz_zip: p.zip,
     biz_phone: p.phone,
     biz_email: p.email,
-    terms_text: s.terms_text,
+    // Relic's own terms take precedence; fall back to the shared settings terms.
+    terms_text: (s.relic_profile?.terms) || s.terms_text,
     deposit_percent: s.deposit_percent,
     logo_url: p.logoUrl,
     footer: p.footer,

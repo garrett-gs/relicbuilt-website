@@ -214,6 +214,11 @@ export default function SettingsPage() {
                 <Field label="Email From Address" value={settings.relic_profile?.from_email || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), from_email: v })} placeholder="notifications@relicbuilt.com" />
               </div>
               <p className="text-xs text-muted">A custom From Address only sends once its domain is verified in Resend — otherwise leave it blank to send from the shared address under the Relic name.</p>
+              <div>
+                <label className="block text-xs text-muted mb-1">Terms &amp; Conditions</label>
+                <textarea value={settings.relic_profile?.terms || ""} onChange={(e) => updateField("relic_profile", { ...(settings.relic_profile || {}), terms: e.target.value })} rows={10} placeholder="These terms appear at the bottom of Relic proposals." className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground font-mono leading-relaxed focus:outline-none focus:border-accent" />
+                <p className="text-xs text-muted mt-1">Shown on every Relic proposal. One point per line.</p>
+              </div>
             </div>
           )}
         </div>

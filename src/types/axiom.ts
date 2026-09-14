@@ -570,6 +570,7 @@ export interface RelicProfile {
   from_name?: string;
   from_email?: string;
   accent_color?: string;
+  terms?: string;
 }
 
 export interface Settings {
