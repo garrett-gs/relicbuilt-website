@@ -729,6 +729,21 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [emailSubject, setEmailSubject] = useState("");
   const [emailMessage, setEmailMessage] = useState("");
+  // The signed-in person's name, used to sign off proposal emails by default.
+  const [signerName, setSignerName] = useState("");
+  useEffect(() => {
+    if (!detailUserEmail) return;
+    let active = true;
+    axiom.from("settings").select("team_members").limit(1).single().then(({ data }) => {
+      if (!active) return;
+      const me = (data?.team_members || []).find(
+        (m: { email?: string }) => m.email?.toLowerCase() === detailUserEmail.toLowerCase()
+      );
+      const name = (me as { name?: string } | undefined)?.name;
+      if (name) setSignerName(name);
+    });
+    return () => { active = false; };
+  }, [detailUserEmail]);
 
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -865,7 +880,9 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       `Hi ${clientName || "there"},\n\n` +
         `Thanks for the opportunity to put this together. Your proposal for ` +
         `${projectName || "your project"} is ready to review` +
-        `${total > 0 ? `, with a total investment of ${money(total)}` : ""}.`
+        `${total > 0 ? `, with a total investment of ${money(total)}` : ""}.\n\n` +
+        `Sincerely,\n\n` +
+        `${signerName}`
     );
     setShowEmailModal(true);
   }
