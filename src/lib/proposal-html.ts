@@ -254,6 +254,23 @@ interface EstimateProposalArgs {
   // company's display name so the proposal can show "[Client] of [Company]"
   // in the "Prepared for" sections of the cover and body pages.
   clientCompany?: string;
+  // The client's address (composed from their customer record). Shown under
+  // both the client and the project on the proposal — the work site is the
+  // client's address for this kind of work.
+  clientAddress?: string;
+}
+
+/**
+ * Compose a one-line address from a customer's parts, e.g.
+ * "133 Antelope Circle, Tuscola, TX 79562". Empty parts are skipped.
+ */
+export function composeClientAddress(
+  c?: { address?: string | null; city?: string | null; state?: string | null; zip?: string | null } | null
+): string {
+  if (!c) return "";
+  const cityState = [c.city, c.state].filter(Boolean).join(", ");
+  const tail = [cityState, c.zip].filter(Boolean).join(" ");
+  return [c.address, tail].filter(Boolean).join(", ");
 }
 
 export function generateEstimateProposalHtml({
@@ -263,7 +280,10 @@ export function generateEstimateProposalHtml({
   approveUrl,
   forEmail = false,
   clientCompany,
+  clientAddress,
 }: EstimateProposalArgs): string {
+  // Address on the proposal is a Relic-only touch for now.
+  const showAddress = estimate.entity === "relic" && !!clientAddress;
   // Build a "Prepared for" string that includes the company if present.
   // Example: "Sarah Johnson of Acme Events"
   const preparedFor = estimate.client_name
@@ -522,10 +542,12 @@ export function generateEstimateProposalHtml({
     <div style="flex:1;">
       <p style="margin:0 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Prepared For</p>
       <p style="margin:0;font-size:15px;font-weight:bold;color:#111;">${esc(preparedFor)}</p>
+      ${showAddress ? `<p style="margin:4px 0 0;font-size:12px;color:#666;">${esc(clientAddress!)}</p>` : ""}
     </div>
     <div style="flex:1;">
       <p style="margin:0 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Project</p>
       <p style="margin:0;font-size:15px;font-weight:bold;color:#111;">${esc(estimate.project_name || "—")}</p>
+      ${showAddress ? `<p style="margin:4px 0 0;font-size:12px;color:#666;">${esc(clientAddress!)}</p>` : ""}
     </div>
     <div style="text-align:right;">
       <p style="margin:0 0 4px;font-size:10px;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Proposal #</p>

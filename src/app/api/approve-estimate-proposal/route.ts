@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { generateEstimateProposalHtml } from "@/lib/proposal-html";
+import { generateEstimateProposalHtml, composeClientAddress } from "@/lib/proposal-html";
 import { proposalBiz } from "@/lib/entity-profile";
 import { renderHtmlToPdf } from "@/lib/render-pdf";
 import { logProposalEvent, ipFromHeaders, sha256 } from "@/lib/audit";
@@ -278,12 +278,14 @@ export async function POST(req: NextRequest) {
     try {
       // Look up linked company for the audit snapshot
       let clientCompany: string | undefined;
+      let clientAddress: string | undefined;
       if (estimate.customer_id) {
         const { data: cust } = await supabase
           .from("customers")
-          .select("company_id,company_name")
+          .select("company_id,company_name,address,city,state,zip")
           .eq("id", estimate.customer_id)
           .single();
+        clientAddress = composeClientAddress(cust) || undefined;
         if (cust?.company_name) {
           clientCompany = cust.company_name;
         } else if (cust?.company_id) {
@@ -300,6 +302,7 @@ export async function POST(req: NextRequest) {
         biz: proposalBiz(estimate.entity, settings),
         totals: { materialTotal: totals.materialTotal, laborTotal: totals.laborTotal, markupAmount: totals.markup, total: totals.total },
         clientCompany,
+        clientAddress,
       });
       documentHash = sha256(proposalHtml);
 

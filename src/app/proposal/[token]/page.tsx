@@ -36,6 +36,7 @@ export default function ProposalPage() {
   const [alreadyApproved, setAlreadyApproved] = useState(false);
   const [expired, setExpired] = useState(false);
   const [clientCompany, setClientCompany] = useState<string>("");
+  const [clientAddress, setClientAddress] = useState<string>("");
 
   useEffect(() => {
     if (!token) return;
@@ -69,6 +70,7 @@ export default function ProposalPage() {
         }
         if (data.settings) setSettings(data.settings as Settings);
         if (data.clientCompany) setClientCompany(data.clientCompany);
+        if (data.clientAddress) setClientAddress(data.clientAddress);
         setLoading(false);
       })
       .catch(() => {
@@ -202,6 +204,7 @@ export default function ProposalPage() {
               biz: proposalBiz(estimate.entity, settings),
               totals,
               clientCompany: clientCompany || undefined,
+              clientAddress: clientAddress || undefined,
             }),
           }}
         />
@@ -246,6 +249,7 @@ export default function ProposalPage() {
             biz: proposalBiz(estimate.entity, settings),
             totals,
             clientCompany: clientCompany || undefined,
+            clientAddress: clientAddress || undefined,
           }),
         }}
       />

@@ -13,7 +13,7 @@ import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Ve
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
-import { generateEstimateProposalHtml } from "@/lib/proposal-html";
+import { generateEstimateProposalHtml, composeClientAddress } from "@/lib/proposal-html";
 import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -673,6 +673,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   // company's display info onto the estimate so it shows in the UI and
   // the proposal ("Prepared for [Customer] of [Company]").
   const [linkedCompanyName, setLinkedCompanyName] = useState("");
+  const [clientAddress, setClientAddress] = useState("");
   const [clientEmail, setClientEmail] = useState(estimate.client_email || "");
   const [clientPhone, setClientPhone] = useState(estimate.client_phone || "");
   const [projectName, setProjectName] = useState(estimate.project_name || "");
@@ -998,6 +999,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       biz: proposalBiz(estimate.entity, settings),
       totals: { materialTotal, laborTotal, markupAmount, total },
       clientCompany: linkedCompanyName || undefined,
+      clientAddress: clientAddress || undefined,
     });
 
     const html = `
@@ -1113,12 +1115,13 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   useEffect(() => {
     if (!estimate.customer_id) return;
     axiom.from("customers")
-      .select("name,email,phone,company_id,company_name")
+      .select("name,email,phone,company_id,company_name,address,city,state,zip")
       .eq("id", estimate.customer_id)
       .single()
       .then(({ data }) => {
         if (!data) return;
         setCustomerName(data.name);
+        setClientAddress(composeClientAddress(data));
         // If customer has a linked company, show it on the estimate.
         // Prefer the cached company_name; fall back to looking up the
         // company table if only company_id is set.

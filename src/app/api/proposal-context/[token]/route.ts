@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { composeClientAddress } from "@/lib/proposal-html";
 
 /**
  * Public endpoint the /proposal/[token] page calls to fetch everything
@@ -40,12 +41,14 @@ export async function GET(
     }
 
     let clientCompany: string | null = null;
+    let clientAddress: string | null = null;
     if (estimate.customer_id) {
       const { data: cust } = await supabase
         .from("customers")
-        .select("company_id,company_name")
+        .select("company_id,company_name,address,city,state,zip")
         .eq("id", estimate.customer_id)
         .single();
+      clientAddress = composeClientAddress(cust) || null;
       if (cust?.company_name) {
         clientCompany = cust.company_name;
       } else if (cust?.company_id) {
@@ -88,7 +91,7 @@ export async function GET(
       }
     }
 
-    return NextResponse.json({ estimate, settings: settings || null, clientCompany, depositInvoice });
+    return NextResponse.json({ estimate, settings: settings || null, clientCompany, clientAddress, depositInvoice });
   } catch (err) {
     console.error("[proposal-context] error:", err);
     return NextResponse.json({ estimate: null, settings: null, clientCompany: null });
