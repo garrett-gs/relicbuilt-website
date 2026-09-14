@@ -38,6 +38,23 @@ const num = (o: In, k: string): number | undefined => {
   return undefined;
 };
 
+// Normalize an item name/query for fuzzy matching: lowercase, expand unicode
+// fractions (¾ → 3/4), drop inch marks and "inch", strip punctuation but keep
+// the slash so fractions survive. Lets "3/4-inch birch plywood" line up with a
+// terse SKU like "IMP 3/4 BIRCH WHT RAW C2 VC WPF".
+function normalizeText(s: string): string {
+  return (s || "")
+    .toLowerCase()
+    .replace(/½/g, "1/2").replace(/¼/g, "1/4").replace(/¾/g, "3/4")
+    .replace(/⅜/g, "3/8").replace(/⅝/g, "5/8").replace(/⅞/g, "7/8")
+    .replace(/⅓/g, "1/3").replace(/⅔/g, "2/3")
+    .replace(/[""“”]/g, "")
+    .replace(/\b(inch|inches|in)\b/g, " ")
+    .replace(/[^a-z0-9/ ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 async function logActivity(
   ctx: ToolCtx,
   a: { action: string; entity: string; entity_id?: string; label: string; meta?: In }
@@ -131,7 +148,7 @@ export const TOOLS = [
   },
   {
     name: "list_inventory",
-    description: "Search inventory items by description; set low_stock true to list items at or below their minimum level.",
+    description: "Look up products and their prices in the catalog. Fuzzy-matches natural language (e.g. '3/4 birch plywood') against terse vendor SKU names and returns unit_cost (the price), unit, and stock — use this to price an item. Set low_stock true to list items at or below their minimum level.",
     input_schema: { type: "object", properties: { query: { type: "string" }, low_stock: { type: "boolean" } } },
   },
   {
@@ -506,13 +523,33 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         return error ? { ok: false, error: error.message } : { ok: true, data };
       }
       case "list_inventory": {
-        let q = admin.from("inventory_items").select("id,description,item_number,unit,unit_cost,quantity_on_hand,min_stock_level,location").eq("active", true).limit(50);
-        const query = str(input, "query");
-        if (query) q = q.ilike("description", `%${query}%`);
-        const { data, error } = await q.order("description");
+        const { data, error } = await admin
+          .from("inventory_items")
+          .select("id,description,item_number,unit,unit_cost,quantity_on_hand,min_stock_level,location")
+          .eq("active", true)
+          .order("description")
+          .limit(500);
         if (error) return { ok: false, error: error.message };
         let rows = data || [];
         if (input.low_stock === true) rows = rows.filter((i) => (i.quantity_on_hand || 0) <= (i.min_stock_level || 0));
+        const query = str(input, "query");
+        if (query) {
+          // Score each item by how many normalized query tokens it contains
+          // (in the description or SKU). Ranked, so the best match floats up
+          // even though item names are terse vendor codes.
+          const tokens = normalizeText(query).split(" ").filter((t) => t.length > 1 || /\d/.test(t));
+          const scored = rows.map((i) => {
+            const hay = normalizeText(`${i.description || ""} ${i.item_number || ""}`);
+            const score = tokens.reduce((s, t) => (hay.includes(t) ? s + 1 : s), 0);
+            return { i, score };
+          });
+          const hits = scored.filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
+          // Matched something → return the ranked hits; nothing → return the
+          // whole (small) catalog so the assistant can still reason a match.
+          rows = (hits.length ? hits.map((x) => x.i) : rows).slice(0, 20);
+        } else {
+          rows = rows.slice(0, 50);
+        }
         return { ok: true, data: rows };
       }
       case "list_expenses": {
