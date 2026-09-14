@@ -342,21 +342,23 @@ export function generateEstimateProposalHtml({
   </div>`;
 
   const highlightsHtml = highlights.length > 0 ? `
-  <section style="margin-bottom:32px;">
-    <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Highlights</p>
+  <section style="margin-bottom:28px;">
+    <p style="margin:0 0 10px;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:0.14em;color:${accent};">Highlights</p>
     ${highlights.map((h) => `
-      <div style="margin-bottom:16px;page-break-inside:avoid;">
-        ${h.title ? `<h3 style="margin:0 0 4px;font-size:15px;color:#111;font-weight:bold;">${esc(h.title)}</h3>` : ""}
-        ${h.body ? `<p style="margin:0;font-size:13px;color:#444;line-height:1.7;white-space:pre-wrap;">${esc(h.body)}</p>` : ""}
+      <div style="margin-bottom:12px;padding:14px 16px;background:#faf9f5;border-left:3px solid ${accent};page-break-inside:avoid;">
+        ${h.title ? `<h3 style="margin:0 0 6px;font-size:15px;color:#111;font-weight:bold;">${esc(h.title)}</h3>` : ""}
+        ${h.body ? `<p style="margin:0;font-size:13px;color:#333;line-height:1.75;white-space:pre-wrap;">${esc(h.body)}</p>` : ""}
       </div>
     `).join("")}
   </section>
   ` : "";
 
   const scopeHtml = scope ? `
-  <section style="margin-bottom:32px;page-break-inside:avoid;">
-    <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Scope of Work</p>
-    <p style="margin:0;font-size:13px;color:#444;line-height:1.7;white-space:pre-wrap;">${esc(scope)}</p>
+  <section style="margin-bottom:28px;page-break-inside:avoid;">
+    <p style="margin:0 0 10px;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:0.14em;color:${accent};">Scope of Work</p>
+    <div style="padding:16px 18px;background:#fafafa;border:1px solid #eee;">
+      <p style="margin:0;font-size:13px;color:#333;line-height:1.8;white-space:pre-wrap;">${esc(scope)}</p>
+    </div>
   </section>
   ` : "";
 
@@ -449,14 +451,28 @@ export function generateEstimateProposalHtml({
   // Lump-sum cost — client sees just the total + deposit + balance.
   // The materials/labor/markup breakdown is intentionally hidden so the
   // proposal reads as a fixed-price quote.
+  const depositPct = Number((estimate as { deposit_percent?: number }).deposit_percent ?? biz.deposit_percent ?? 0);
+  const payInFull = (estimate as { pay_in_full?: boolean }).pay_in_full === true;
+  const depositAmt = Math.round(totals.total * (depositPct / 100) * 100) / 100;
+  const balanceAmt = Math.round((totals.total - depositAmt) * 100) / 100;
+  const showSchedule = !payInFull && depositPct > 0 && depositPct < 100;
   const costHtml = `
   <section style="margin-bottom:32px;page-break-inside:avoid;">
-    <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Investment</p>
+    <p style="margin:0 0 8px;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:0.14em;color:${accent};">Investment</p>
     <table style="width:100%;border-collapse:collapse;">
       <tr style="border-top:2px solid ${accent};border-bottom:2px solid ${accent};">
         <td style="padding:14px 0;font-size:18px;font-weight:bold;color:#111;">Project Total</td>
         <td style="padding:14px 0;text-align:right;font-size:22px;font-family:monospace;font-weight:bold;color:#111;">${money(totals.total)}</td>
       </tr>
+      ${showSchedule ? `
+      <tr>
+        <td style="padding:12px 0 4px;font-size:13px;color:#555;">Deposit (${depositPct}%) — to schedule &amp; begin work</td>
+        <td style="padding:12px 0 4px;text-align:right;font-size:14px;font-family:monospace;color:#111;">${money(depositAmt)}</td>
+      </tr>
+      <tr>
+        <td style="padding:2px 0;font-size:13px;color:#555;">Balance (${100 - depositPct}%) — due on completion</td>
+        <td style="padding:2px 0;text-align:right;font-size:14px;font-family:monospace;color:#111;">${money(balanceAmt)}</td>
+      </tr>` : ""}
     </table>
     <p style="margin:14px 0 0;font-size:11px;color:#999;font-style:italic;line-height:1.5;">
       This proposal is valid through <strong style="color:#555;font-style:normal;">${expiresText}</strong>.
