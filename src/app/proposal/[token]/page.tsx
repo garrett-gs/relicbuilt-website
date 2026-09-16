@@ -139,6 +139,23 @@ export default function ProposalPage() {
     );
   }
 
+  // ── Not sent yet — the build link exists but the proposal isn't ready ──
+  // Nexus builds get a stable portal link the moment the estimate is created,
+  // before it's priced/sent. Don't show an empty, signable proposal until it
+  // has actually been sent.
+  if (!result && estimate.proposal_status !== "sent" && estimate.proposal_status !== "approved") {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f5f5f5", padding: "48px 16px", fontFamily: "Arial,Helvetica,sans-serif" }}>
+        <div style={{ maxWidth: 520, background: "#fff", padding: 48, textAlign: "center" }}>
+          <h1 style={{ margin: "0 0 12px", fontSize: 22, color: "#111" }}>Your Build Proposal Is Being Prepared</h1>
+          <p style={{ margin: 0, color: "#666", fontSize: 14, lineHeight: 1.6 }}>
+            We&apos;re finalizing the details for <strong>{estimate.project_name || "your build"}</strong>. You&apos;ll be able to review and sign right here as soon as it&apos;s ready — this link stays the same, so feel free to check back.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // ── Approval confirmation screen ─────────────────────────────────────
   if (result) {
     return (

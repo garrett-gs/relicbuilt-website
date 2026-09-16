@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "crypto";
 import { notifyWallflowerStatus } from "@/lib/wallflower-status";
+import { notifyNexusBuildLink } from "@/lib/notify-nexus-build-link";
 
 const API_KEY = process.env.WALLFLOWER_API_KEY || "wfrelic2026";
 
@@ -92,6 +94,10 @@ export async function POST(req: NextRequest) {
     // immediately — no manual "Create Estimate" click. Link it and flip the
     // work order to "estimated". Best-effort — never fails the intake.
     let spawnedEstimateId: string | null = null;
+    let spawnedEstimateNumber: string | null = null;
+    // Generate the proposal token up front so the build-portal URL is stable
+    // from the moment the estimate exists — Nexus is handed the link on create.
+    const proposalToken = `prop_${randomUUID().replace(/-/g, "")}`;
     try {
       const year = new Date().getFullYear();
       const woImages = Array.isArray(reference_images)
@@ -130,11 +136,13 @@ export async function POST(req: NextRequest) {
             markup_percent: 0,
             notes: seedNotes,
             images: woImages.length ? woImages : item_image_url ? [item_image_url] : undefined,
+            proposal_token: proposalToken,
           })
-          .select("id")
+          .select("id,estimate_number")
           .single();
         if (!estErr && est?.id) {
           spawnedEstimateId = est.id;
+          spawnedEstimateNumber = est.estimate_number;
           break;
         }
         if (estErr?.code !== "23505") break; // only retry number collisions
@@ -149,6 +157,18 @@ export async function POST(req: NextRequest) {
           .from("wallflower_work_orders")
           .update({ estimate_id: spawnedEstimateId, updated_at: new Date().toISOString() })
           .eq("id", data.id);
+
+        // Hand Nexus the build-portal URL for this estimate (no-op until the
+        // Nexus webhook is configured). Best-effort — never fails intake.
+        await notifyNexusBuildLink({
+          estimateId: spawnedEstimateId,
+          estimateNumber: spawnedEstimateNumber,
+          proposalToken,
+          wallflowerOrderId: wallflower_order_id,
+          nexusRef: nexus_ref,
+          event: "created",
+          status: "pending",
+        });
       }
     } catch (e) {
       console.error("[wallflower] auto-spawn estimate failed:", e);

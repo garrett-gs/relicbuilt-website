@@ -6,6 +6,7 @@ import { renderHtmlToPdf } from "@/lib/render-pdf";
 import { logProposalEvent, ipFromHeaders, sha256 } from "@/lib/audit";
 import { notifyWallflowerStatus } from "@/lib/wallflower-status";
 import { notifyNexusApproval } from "@/lib/notify-nexus-approval";
+import { notifyNexusBuildLink } from "@/lib/notify-nexus-build-link";
 import type { Estimate, ProposalHighlight, ProposalScope } from "@/types/axiom";
 
 export const runtime = "nodejs";
@@ -123,6 +124,16 @@ export async function POST(req: NextRequest) {
     // moves it toward invoice/payment. No-op unless the build is linked to a
     // Nexus quote. Best-effort — never blocks the approval.
     await notifyNexusApproval(supabase, estimate, signatureName, totalAmount);
+
+    // Re-hand Nexus the build-portal link, now flagged approved (no-op until
+    // the Nexus build webhook is configured). Best-effort.
+    await notifyNexusBuildLink({
+      estimateId: estimate.id,
+      estimateNumber: estimate.estimate_number,
+      proposalToken: estimate.proposal_token,
+      event: "approved",
+      status: "accepted",
+    });
 
     // Approval auto-creates the Axiom project (custom_work) if one isn't linked
     // yet, so approved builds land in Projects automatically (no manual "Send
