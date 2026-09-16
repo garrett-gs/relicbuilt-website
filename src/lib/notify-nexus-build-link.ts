@@ -5,12 +5,15 @@
  * approval/sign-off, per the Nexus integration contract. The client-facing
  * portal lives at:  {AXIOM_PUBLIC_URL}/build/<estimate_id>?token=<proposal_token>
  *
- * Configured entirely by env — a no-op until Nexus provides the target:
- *   NEXUS_BUILD_WEBHOOK_URL   where to POST (required to fire)
- *   NEXUS_BUILD_WEBHOOK_KEY   sent as the `x-relic-api-key` header (optional)
- *   AXIOM_PUBLIC_URL          portal base (default https://axiom.wallflower-relic.com)
- * Never throws — a webhook failure must not break intake or approval.
+ * Uses the SAME Nexus edge-function host + auth as the status/approval webhooks
+ * (so it reuses secrets already configured): POSTs to
+ *   {WR_SUPABASE_URL}/functions/v1/relic-build-link
+ * with `Authorization: Bearer <WR_SUPABASE_SERVICE_KEY>` and
+ * `x-relic-api-key: <RELIC_TO_WALLFLOWER_API_KEY>`. Set NEXUS_BUILD_WEBHOOK_URL
+ * to override the endpoint. No-op (never throws) until the creds are present.
  */
+
+const FN = "relic-build-link";
 
 interface BuildLinkArgs {
   estimateId: string;
@@ -28,9 +31,13 @@ export function buildPortalUrl(estimateId: string, proposalToken: string): strin
 }
 
 export async function notifyNexusBuildLink(args: BuildLinkArgs): Promise<void> {
-  const url = process.env.NEXUS_BUILD_WEBHOOK_URL;
-  if (!url || !args.proposalToken) return; // not configured / no token yet — no-op
-  const key = process.env.NEXUS_BUILD_WEBHOOK_KEY;
+  if (!args.proposalToken) return;
+  const bearer = process.env.WR_SUPABASE_SERVICE_KEY;
+  const apiKey = process.env.RELIC_TO_WALLFLOWER_API_KEY;
+  const wrBase = process.env.WR_SUPABASE_URL;
+  const endpoint = process.env.NEXUS_BUILD_WEBHOOK_URL || (wrBase ? `${wrBase}/functions/v1/${FN}` : "");
+  if (!endpoint || !bearer || !apiKey) return; // not configured yet — no-op
+
   const payload = {
     event: args.event,
     build_url: buildPortalUrl(args.estimateId, args.proposalToken),
@@ -40,13 +47,22 @@ export async function notifyNexusBuildLink(args: BuildLinkArgs): Promise<void> {
     nexus_ref: args.nexusRef ?? null,
     status: args.status ?? null,
   };
+
   try {
-    await fetch(url, {
+    const res = await fetch(endpoint, {
       method: "POST",
-      headers: { "content-type": "application/json", ...(key ? { "x-relic-api-key": key } : {}) },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${bearer}`,
+        "x-relic-api-key": apiKey,
+      },
       body: JSON.stringify(payload),
     });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      console.error(`[nexus-build-link] ${res.status}: ${txt.slice(0, 200)}`);
+    }
   } catch (e) {
-    console.error("[notify-nexus-build-link] failed:", e);
+    console.error("[nexus-build-link] error:", e);
   }
 }

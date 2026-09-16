@@ -20,8 +20,13 @@ https://axiom.wallflower-relic.com/build/<estimate_id>?token=<proposal_token>
 Axiom POSTs the build URL to a Nexus endpoint **on estimate create** and again
 **on approval (sign-off)**.
 
-- **Target:** `NEXUS_BUILD_WEBHOOK_URL` (Nexus provides this; set in Axiom's Vercel env).
-- **Auth header:** `x-relic-api-key: <NEXUS_BUILD_WEBHOOK_KEY>` (shared secret, optional).
+- **Target (default):** `{WR_SUPABASE_URL}/functions/v1/relic-build-link` — a new
+  Nexus Supabase edge function, same host/pattern as `relic-status-update` /
+  `relic-approval-update`. (Override with `NEXUS_BUILD_WEBHOOK_URL` if hosted
+  elsewhere.) **Nexus: create the `relic-build-link` function to receive this.**
+- **Auth:** `Authorization: Bearer <WR_SUPABASE_SERVICE_KEY>` +
+  `x-relic-api-key: <RELIC_TO_WALLFLOWER_API_KEY>` — the same secrets the existing
+  callbacks use (already set in Axiom's Vercel env).
 - **Method:** `POST`, `content-type: application/json`.
 - **Body:**
 
@@ -73,11 +78,15 @@ invoice** — payment stays in Nexus, which reports it back via `POST /api/nexus
 `user_agent`, `document_hash` (SHA-256 of the rendered proposal), a saved PDF
 snapshot, and `event_type: "signed"`.
 
-## 5. Env to set
+## 5. Env
 
-Axiom (Vercel): `NEXUS_BUILD_WEBHOOK_URL`, `NEXUS_BUILD_WEBHOOK_KEY` (from Nexus),
-`AXIOM_PUBLIC_URL` (optional; defaults to `https://axiom.wallflower-relic.com`).
-Until `NEXUS_BUILD_WEBHOOK_URL` is set, the build-link webhook is a safe no-op.
+Axiom (Vercel) already has `WR_SUPABASE_URL`, `WR_SUPABASE_SERVICE_KEY`, and
+`RELIC_TO_WALLFLOWER_API_KEY` (used by the existing callbacks), so the build-link
+webhook needs **no new secrets** — it goes live the moment Nexus stands up the
+`relic-build-link` edge function. Optional overrides: `NEXUS_BUILD_WEBHOOK_URL`
+(full endpoint if not the default edge fn), `AXIOM_PUBLIC_URL` (portal base;
+defaults to `https://axiom.wallflower-relic.com`). Until the WR creds resolve an
+endpoint, the webhook is a safe no-op.
 
 ## 6. Nexus side (their items 1–4)
 
