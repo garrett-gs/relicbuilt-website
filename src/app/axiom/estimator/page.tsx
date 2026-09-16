@@ -1444,8 +1444,9 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     markDirty();
   }
 
-  function save() {
-    onUpdate({
+  // The full set of fields the Estimator manages, from current state.
+  function buildFull(): Partial<Estimate> {
+    return {
       customer_id: customerId || undefined,
       vendor_id: vendorId || undefined,
       vendor_name: vendorName || undefined,
@@ -1472,7 +1473,30 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       proposal_status: proposalStatus,
       deposit_percent: depositPercent !== "" ? Number(depositPercent) : undefined,
       pay_in_full: payInFull,
-    });
+    } as Partial<Estimate>;
+  }
+
+  // Snapshot of those fields as first loaded. Autosave writes ONLY the fields
+  // that differ from this baseline, so a full-row overwrite can't clobber a
+  // field changed elsewhere (e.g. the assistant editing the scope) that the
+  // user never touched in this tab. The baseline advances as we save.
+  const baseRef = useRef<Record<string, unknown> | null>(null);
+  useEffect(() => {
+    if (baseRef.current === null) baseRef.current = buildFull() as Record<string, unknown>;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function save() {
+    const full = buildFull() as Record<string, unknown>;
+    const base = baseRef.current || {};
+    const changed: Record<string, unknown> = {};
+    for (const k of Object.keys(full)) {
+      if (JSON.stringify(full[k]) !== JSON.stringify(base[k])) changed[k] = full[k];
+    }
+    if (Object.keys(changed).length > 0) {
+      onUpdate(changed as Partial<Estimate>);
+      baseRef.current = { ...base, ...changed };
+    }
     setDirty(false);
     setSaved(true);
   }
