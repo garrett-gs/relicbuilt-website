@@ -276,7 +276,7 @@ export const TOOLS = [
   },
   {
     name: "update_estimate",
-    description: "Update an existing estimate's details (by id): project/client name, job-site address, deposit %, or status. Does not change line items — those are edited in the Estimator.",
+    description: "Update an existing estimate's details (by id): project/client name, job-site address, deposit %, status, the proposal Scope of Work, and proposal Highlights. Never put scope or highlights into project_name — use the scope/highlights fields. Does not change line items — those are edited in the Estimator.",
     input_schema: {
       type: "object",
       properties: {
@@ -287,6 +287,8 @@ export const TOOLS = [
         site_same_as_client: { type: "boolean", description: "True: proposal uses the client's address for the job site. False: uses site_address." },
         deposit_percent: { type: "number" },
         status: { type: "string", enum: ["draft", "sent", "accepted", "rejected"] },
+        scope: { type: "string", description: "The proposal's Scope of Work text (replaces the current scope). Plain text; new lines allowed." },
+        highlights: { type: "string", description: "The proposal's Highlights (replaces the current highlights). One highlight per line, e.g. bullet points." },
       },
       required: ["id"],
     },
@@ -437,6 +439,8 @@ export function describeAction(name: string, input: In): { title: string; summar
           ["Job site", input.site_same_as_client === true ? "Same as client address" : input.site_address],
           ["Deposit %", input.deposit_percent],
           ["Status", input.status],
+          ["Scope", input.scope],
+          ["Highlights", input.highlights],
         ]),
       };
     case "add_estimate_line_items": {
@@ -691,6 +695,10 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         if (typeof input.site_same_as_client === "boolean") patch.site_same_as_client = input.site_same_as_client;
         const dp = num(input, "deposit_percent");
         if (dp !== undefined) patch.deposit_percent = dp;
+        const scope = str(input, "scope");
+        if (scope !== undefined) patch.proposal_scope = { body: scope, included: true };
+        const highlights = str(input, "highlights");
+        if (highlights !== undefined) patch.proposal_highlights = [{ title: "Highlights", body: highlights, included: true }];
         if (Object.keys(patch).length <= 1) return { ok: false, error: "nothing to update" };
         const { data, error } = await admin.from("estimates").update(patch).eq("id", id).eq("entity", entity).select("id,estimate_number").single();
         if (error) return { ok: false, error: error.message };
