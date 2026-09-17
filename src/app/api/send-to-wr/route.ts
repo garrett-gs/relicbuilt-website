@@ -121,11 +121,10 @@ export async function POST(req: NextRequest) {
       images: allImages,
       files: buildFiles,
       status: estimate.status,
-      // NOTE: axiom_build_url is intentionally NOT written to relic_builds —
-      // that column doesn't exist in the WR DB yet. It rides on the quote
-      // item (quotes.items[].axiom_build_url) below, which Nexus's portal reads.
-      // Add a relic_builds.axiom_build_url column on the Nexus side to also
-      // support the manual "WR Builds" picker path.
+      // Nexus added these columns to relic_builds — write the portal URL and
+      // amount here so the "WR Builds" picker copies them onto the quote item.
+      axiom_build_url: buildUrl,
+      estimate_amount: total,
       sent_at: new Date().toISOString(),
     };
 
