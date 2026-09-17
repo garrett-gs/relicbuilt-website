@@ -184,6 +184,31 @@ export async function POST(req: NextRequest) {
 </div>
     `.trim();
 
+    // Assemble email attachments: the generated proposal PDF + any documents
+    // attached to the proposal (PDFs, spec sheets). Fetch each doc and attach
+    // it; best-effort per file, and cap total size so the send doesn't fail.
+    const attachments: { filename: string; content: string }[] = [];
+    if (pdfBase64) attachments.push({ filename: pdfFilename, content: pdfBase64 });
+    let attachBytes = pdfBase64 ? Math.floor((pdfBase64.length * 3) / 4) : 0;
+    const MAX_TOTAL = 35 * 1024 * 1024; // Resend caps ~40MB; stay under
+    for (const doc of (estimate.proposal_documents || []) as { name?: string; url?: string }[]) {
+      if (!doc?.url) continue;
+      try {
+        const dres = await fetch(doc.url);
+        if (!dres.ok) continue;
+        const buf = Buffer.from(await dres.arrayBuffer());
+        if (attachBytes + buf.length > MAX_TOTAL) {
+          console.warn(`[send-proposal-email] skipping ${doc.name} — attachment size cap`);
+          continue;
+        }
+        attachBytes += buf.length;
+        const safe = (doc.name || "document").replace(/[\\/:*?"<>|]+/g, "_");
+        attachments.push({ filename: safe, content: buf.toString("base64") });
+      } catch (e) {
+        console.error(`[send-proposal-email] attach failed for ${doc.name}:`, e);
+      }
+    }
+
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -198,12 +223,7 @@ export async function POST(req: NextRequest) {
           : `Proposal for ${estimate.project_name || estimate.estimate_number}`,
         html,
         reply_to: settings?.biz_email || "garrett@relicbuilt.com",
-        ...(pdfBase64 ? {
-          attachments: [{
-            filename: pdfFilename,
-            content: pdfBase64,
-          }],
-        } : {}),
+        ...(attachments.length ? { attachments } : {}),
       }),
     });
     if (!res.ok) {

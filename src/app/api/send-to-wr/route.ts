@@ -80,6 +80,13 @@ export async function POST(req: NextRequest) {
     const markupAmount = subtotal * (markupPct / 100);
     const total = subtotal + markupAmount;
 
+    // Client-facing proposal attachments (PDFs, spec sheets) travel with the
+    // build so they're available on the Nexus side too.
+    const proposalDocs = (estimate.proposal_documents || [])
+      .filter((d: { url?: string }) => d && d.url)
+      .map((d: { name?: string; url: string }) => ({ name: d.name || "Document", url: d.url, type: "document" }));
+    buildFiles = [...buildFiles, ...proposalDocs];
+
     // Determine type: labor-only (maintenance) vs custom build
     const isLaborOnly = lineItems.length === 0 && laborItems.length > 0;
     const buildType = isLaborOnly ? "maintenance" : "build";
