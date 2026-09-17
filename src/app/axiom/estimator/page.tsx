@@ -1524,7 +1524,15 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
       setWrSent(true);
-      onUpdate({ sent_to_wr_at: new Date().toISOString() } as Partial<Estimate>);
+      // Sending to Nexus publishes the proposal — reflect "sent" immediately in
+      // the UI (the server also flips these) so it doesn't linger as a draft.
+      const sentPatch: Partial<Estimate> = { sent_to_wr_at: new Date().toISOString() };
+      if (status === "draft") { setStatus("sent"); sentPatch.status = "sent"; }
+      if (proposalStatus !== "sent" && proposalStatus !== "approved") {
+        setProposalStatus("sent");
+        sentPatch.proposal_status = "sent";
+      }
+      onUpdate(sentPatch);
       await logActivity({
         action: "sent",
         entity: "estimate",
