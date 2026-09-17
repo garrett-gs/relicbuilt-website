@@ -9,7 +9,7 @@ import { useEntity } from "@/components/axiom/EntityProvider";
 import { proposalBiz } from "@/lib/entity-profile";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { persistEstimate, deleteEstimateById } from "@/lib/estimate-actions";
-import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, ProposalScheduleItem, SalesNote } from "@/types/axiom";
+import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, ProposalScheduleItem, ProposalDocument, SalesNote } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn } from "@/lib/utils";
@@ -722,6 +722,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   );
   const [proposalImages, setProposalImages] = useState<string[]>(estimate.proposal_images || []);
   const [coverImageUrl, setCoverImageUrl] = useState<string>(estimate.proposal_cover_image_url || "");
+  const [proposalDocuments, setProposalDocuments] = useState<ProposalDocument[]>(estimate.proposal_documents || []);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [proposalFinalDrawing, setProposalFinalDrawing] = useState<string>(estimate.proposal_final_drawing_url || "");
   const [uploadingDrawing, setUploadingDrawing] = useState(false);
@@ -863,6 +865,31 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     } finally {
       setUploadingDrawing(false);
     }
+  }
+
+  async function uploadProposalDocument(file: File) {
+    if (file.size > 25 * 1024 * 1024) {
+      alert("Document must be under 25 MB.");
+      return;
+    }
+    setUploadingDoc(true);
+    try {
+      const ext = (file.name.split(".").pop() || "pdf").toLowerCase();
+      const path = `proposal-docs/${estimate.id}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: upErr } = await axiom.storage.from("portal-images").upload(path, file, { upsert: false, contentType: file.type || "application/octet-stream" });
+      if (upErr) { alert(`Upload failed: ${upErr.message}`); return; }
+      const { data } = axiom.storage.from("portal-images").getPublicUrl(path);
+      setProposalDocuments([...proposalDocuments, { name: file.name, url: data.publicUrl }]);
+      markDirty();
+    } finally {
+      setUploadingDoc(false);
+    }
+  }
+
+  function removeProposalDocument(url: string) {
+    if (!confirm("Remove this attachment from the proposal?")) return;
+    setProposalDocuments(proposalDocuments.filter((d) => d.url !== url));
+    markDirty();
   }
 
   function removeProposalImage(url: string) {
@@ -1055,6 +1082,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       proposal_cover_image_url: coverImageUrl || undefined,
       proposal_final_drawing_url: proposalFinalDrawing || undefined,
       proposal_schedule: proposalSchedule.length ? { items: proposalSchedule, included: true } : undefined,
+      proposal_documents: proposalDocuments,
         deposit_percent: depositPercent !== "" ? Number(depositPercent) : undefined,
         pay_in_full: payInFull || undefined,
       } as Estimate,
@@ -1470,6 +1498,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       proposal_cover_image_url: coverImageUrl || undefined,
       proposal_final_drawing_url: proposalFinalDrawing || undefined,
       proposal_schedule: proposalSchedule.length ? { items: proposalSchedule, included: true } : undefined,
+      proposal_documents: proposalDocuments,
       proposal_status: proposalStatus,
       deposit_percent: depositPercent !== "" ? Number(depositPercent) : undefined,
       pay_in_full: payInFull,
@@ -2355,6 +2384,53 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
             <p className="text-[11px] text-muted mt-2 italic">
               Cover image renders as a full first page in the proposal PDF, with the project + client name beneath.
             </p>
+          )}
+        </div>
+
+        {/* Documents / Attachments — PDFs & files the client can download from the proposal */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs uppercase tracking-wider text-muted">
+              Documents &amp; Attachments <span className="text-muted/60 normal-case ml-1.5">({proposalDocuments.length})</span>
+            </p>
+            <label className="text-accent text-xs flex items-center gap-1 cursor-pointer hover:text-accent/80">
+              <Plus size={12} /> {uploadingDoc ? "Uploading…" : "Attach File"}
+              <input
+                type="file"
+                accept=".pdf,application/pdf,.doc,.docx,.xls,.xlsx,.csv,image/*"
+                disabled={uploadingDoc}
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) uploadProposalDocument(file);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+          {proposalDocuments.length === 0 ? (
+            <p className="text-muted text-xs italic">
+              Attach a PDF or other document (spec sheet, drawing, warranty, etc.). It appears as a download link on the proposal for the client.
+            </p>
+          ) : (
+            <div className="space-y-1.5">
+              {proposalDocuments.map((doc) => (
+                <div key={doc.url} className="flex items-center justify-between gap-2 bg-card border border-border px-3 py-2">
+                  <a href={doc.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 min-w-0 text-sm text-foreground hover:text-accent">
+                    <FileText size={14} className="shrink-0 text-muted" />
+                    <span className="truncate">{doc.name}</span>
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => removeProposalDocument(doc.url)}
+                    className="text-muted hover:text-red-500 shrink-0"
+                    title="Remove attachment"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 

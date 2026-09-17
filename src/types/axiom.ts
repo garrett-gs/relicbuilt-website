@@ -21,6 +21,11 @@ export interface ProposalSchedule {
   included?: boolean;
 }
 
+export interface ProposalDocument {
+  name: string; // display/file name
+  url: string;  // public storage URL
+}
+
 export interface ProposalCostItem {
   description: string;
   cost: number;
@@ -305,6 +310,8 @@ export interface Estimate {
   // optional phase/timing schedule.
   proposal_final_drawing_url?: string;
   proposal_schedule?: ProposalSchedule;
+  // Client-facing attachments on the proposal (PDFs, spec sheets, etc.).
+  proposal_documents?: ProposalDocument[];
   proposal_token?: string;
   proposal_status?: "draft" | "sent" | "approved";
   proposal_sent_at?: string;

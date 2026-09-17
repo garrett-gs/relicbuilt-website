@@ -403,6 +403,18 @@ export function generateEstimateProposalHtml({
   const scheduleItems = estimate.proposal_schedule?.included !== false
     ? (estimate.proposal_schedule?.items || []).filter((s) => s.phase || s.timing)
     : [];
+  // Attachments: PDFs / documents the client can download from the proposal.
+  const documents = (estimate.proposal_documents || []).filter((d) => d && d.url);
+  const clip = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${accent}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:6px;"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>`;
+  const documentsHtml = documents.length > 0 ? `
+  <section style="margin-bottom:32px;page-break-inside:avoid;">
+    <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Attachments</p>
+    ${documents.map((d) => `
+      <a href="${d.url}" style="display:block;margin:0 0 7px;font-size:13px;color:${accent};text-decoration:none;">${clip}${esc(d.name || "Document")}</a>
+    `).join("")}
+  </section>
+  ` : "";
+
   const scheduleHtml = scheduleItems.length > 0 ? `
   <section style="margin-bottom:32px;page-break-inside:avoid;">
     <p style="margin:0 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:#bbb;">Schedule</p>
@@ -568,6 +580,7 @@ export function generateEstimateProposalHtml({
   ${projectImagesHtml}
   ${fieldNoteImagesHtml}
   ${scheduleHtml}
+  ${documentsHtml}
   ${costHtml}
   ${termsHtml}
   ${acceptanceSection}
