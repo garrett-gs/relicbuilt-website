@@ -1526,7 +1526,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       setWrSent(true);
       // Sending to Nexus publishes the proposal — reflect "sent" immediately in
       // the UI (the server also flips these) so it doesn't linger as a draft.
-      const sentPatch: Partial<Estimate> = { sent_to_wr_at: new Date().toISOString() };
+      const sentPatch = { sent_to_wr_at: new Date().toISOString() } as Partial<Estimate>;
       if (status === "draft") { setStatus("sent"); sentPatch.status = "sent"; }
       if (proposalStatus !== "sent" && proposalStatus !== "approved") {
         setProposalStatus("sent");
