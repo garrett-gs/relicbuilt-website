@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "crypto";
 import { getWRClient } from "@/lib/wr-supabase";
+import { buildPortalUrl } from "@/lib/notify-nexus-build-link";
 
 export async function POST(req: NextRequest) {
   try {
@@ -82,6 +84,24 @@ export async function POST(req: NextRequest) {
     const isLaborOnly = lineItems.length === 0 && laborItems.length > 0;
     const buildType = isLaborOnly ? "maintenance" : "build";
 
+    // Build the customer-facing portal URL. Ensure a proposal token exists, and
+    // publish the proposal (mark "sent") so the customer can review + sign it
+    // from Nexus's quote — sending to Nexus IS the "make it live" step here.
+    let proposalToken: string = estimate.proposal_token || "";
+    const proposalUpdates: Record<string, unknown> = {};
+    if (!proposalToken) {
+      proposalToken = `prop_${randomUUID().replace(/-/g, "")}`;
+      proposalUpdates.proposal_token = proposalToken;
+    }
+    if (estimate.proposal_status !== "sent" && estimate.proposal_status !== "approved") {
+      const nowIso = new Date().toISOString();
+      proposalUpdates.proposal_status = "sent";
+      proposalUpdates.proposal_sent_at = nowIso;
+      proposalUpdates.proposal_expires_at = new Date(Date.now() + 30 * 86400000).toISOString();
+      if (estimate.status === "draft") proposalUpdates.status = "sent";
+    }
+    const buildUrl = buildPortalUrl(estimate.id, proposalToken);
+
     // Push to WR's relic_builds table
     const wr = getWRClient();
 
@@ -101,6 +121,7 @@ export async function POST(req: NextRequest) {
       images: allImages,
       files: buildFiles,
       status: estimate.status,
+      axiom_build_url: buildUrl,
       sent_at: new Date().toISOString(),
     };
 
@@ -121,7 +142,7 @@ export async function POST(req: NextRequest) {
 
     await axiom
       .from("estimates")
-      .update({ sent_to_wr_at: new Date().toISOString() })
+      .update({ sent_to_wr_at: new Date().toISOString(), ...proposalUpdates })
       .eq("id", estimate.id);
 
     // ── Auto-append this build onto a linked Nexus quote's items[] ──
@@ -152,6 +173,7 @@ export async function POST(req: NextRequest) {
           price: String(total),
           image_url: mainImage || "",
           relic_build_id: wrData.id,
+          axiom_build_url: buildUrl,
           taxable: true,
         };
         const enabled = process.env.NEXUS_QUOTE_AUTOPUSH === "true";
@@ -192,7 +214,7 @@ export async function POST(req: NextRequest) {
       quoteAppend = { error: e instanceof Error ? e.message : "quote append failed" };
     }
 
-    return NextResponse.json({ success: true, wr_id: wrData.id, quote_append: quoteAppend });
+    return NextResponse.json({ success: true, wr_id: wrData.id, build_url: buildUrl, quote_append: quoteAppend });
   } catch (err) {
     console.error("send-to-wr error:", err);
     return NextResponse.json(
