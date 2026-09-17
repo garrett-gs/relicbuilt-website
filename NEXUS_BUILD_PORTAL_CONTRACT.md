@@ -20,32 +20,40 @@ https://axiom.wallflower-relic.com/build/<estimate_id>?token=<proposal_token>
 Axiom POSTs the build URL to a Nexus endpoint **on estimate create** and again
 **on approval (sign-off)**.
 
-- **Target (default):** `{WR_SUPABASE_URL}/functions/v1/relic-build-link` — a new
-  Nexus Supabase edge function, same host/pattern as `relic-status-update` /
-  `relic-approval-update`. (Override with `NEXUS_BUILD_WEBHOOK_URL` if hosted
-  elsewhere.) **Nexus: create the `relic-build-link` function to receive this.**
-- **Auth:** `Authorization: Bearer <WR_SUPABASE_SERVICE_KEY>` +
-  `x-relic-api-key: <RELIC_TO_WALLFLOWER_API_KEY>` — the same secrets the existing
-  callbacks use (already set in Axiom's Vercel env).
+- **Target:** `https://mgwvpkezvuswvbkzwysx.supabase.co/functions/v1/relic-build-link`
+  (default `{WR_SUPABASE_URL}/functions/v1/relic-build-link`; override with
+  `NEXUS_BUILD_WEBHOOK_URL`). `axiom-webhook` at the same host is an accepted alias.
+- **Auth:** `Authorization: Bearer <WR_SUPABASE_SERVICE_KEY or Nexus anon JWT>`
+  (Supabase gateway) + `x-axiom-api-key: <RELIC_INBOUND_API_KEY>` (the shared secret
+  the function verifies; Axiom falls back to `WALLFLOWER_API_KEY`). **Both sides must
+  use the same `x-axiom-api-key` value.**
 - **Method:** `POST`, `content-type: application/json`.
 - **Body:**
 
 ```json
 {
-  "event": "created" | "approved",
-  "build_url": "https://axiom.wallflower-relic.com/build/<estimate_id>?token=<proposal_token>",
+  "event": "estimate.created" | "estimate.updated" | "estimate.approved",
+  "relic_build_id": "<uuid matching quotes.items[].relic_build_id, or null at create>",
+  "build_url": "https://axiom.wallflower-relic.com/build/<estimate_id>?token=<token>",
   "estimate_id": "<uuid>",
   "estimate_number": "EST-2026-0123",
+  "estimate_amount": 4500,
+  "status": "draft" | "sent" | "approved" | "rejected",
+  "approved_at": "<iso, present on estimate.approved>",
+  "approved_by": "Client name",
   "wallflower_order_id": "<nexus WO id, on create>",
-  "nexus_ref": { "type": "quote" | "order", "id": "...", "number": "..." },
-  "status": "pending" | "accepted"
+  "nexus_ref": { "type": "quote" | "order", "id": "...", "number": "..." }
 }
 ```
 
-- `event: "created"` fires from intake (`POST /api/wallflower`), right after the
-  estimate is spawned. Carries `wallflower_order_id` + `nexus_ref` so Nexus can
-  correlate to the originating quote/order line.
-- `event: "approved"` fires on sign-off. Correlate by `estimate_id` / `build_url`.
+- `estimate.created` fires from intake (`POST /api/wallflower`) after the estimate is
+  spawned (`estimate_amount: 0`, `status: "draft"`, `relic_build_id` usually null →
+  Nexus falls back to `build_url`). Carries `wallflower_order_id` + `nexus_ref`.
+- `estimate.approved` fires on sign-off with `estimate_amount`, `approved_at`,
+  `approved_by`, and `relic_build_id` (resolved from `relic_builds.relic_estimate_id`).
+- Nexus stamps `approved_at` + `relic_status: "approved"` on the matching line item on
+  `estimate.approved`, which releases both quote-sign and convert-to-order gates.
+- Endpoint returns `{ "success": true, "updated": { "quotes": N, "orders": N } }`.
 
 ## 3. Sign-off approval callback (already live)
 

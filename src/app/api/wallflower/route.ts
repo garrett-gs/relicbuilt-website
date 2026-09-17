@@ -167,7 +167,8 @@ export async function POST(req: NextRequest) {
           wallflowerOrderId: wallflower_order_id,
           nexusRef: nexus_ref,
           event: "created",
-          status: "pending",
+          status: "draft",
+          estimateAmount: 0,
         });
       }
     } catch (e) {

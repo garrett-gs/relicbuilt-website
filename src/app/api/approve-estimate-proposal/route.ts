@@ -132,7 +132,10 @@ export async function POST(req: NextRequest) {
       estimateNumber: estimate.estimate_number,
       proposalToken: estimate.proposal_token,
       event: "approved",
-      status: "accepted",
+      status: "approved",
+      estimateAmount: totalAmount,
+      approvedAt: new Date().toISOString(),
+      approvedBy: signatureName.trim(),
     });
 
     // Approval auto-creates the Axiom project (custom_work) if one isn't linked
