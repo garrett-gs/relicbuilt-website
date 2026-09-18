@@ -31,7 +31,7 @@ function AxiomShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-background">
       <Sidebar />
-      <main className="flex-1 md:ml-56 p-6 md:p-8 overflow-x-hidden">
+      <main className="flex-1 md:ml-56 px-6 pb-6 md:px-8 md:pb-8 pt-[calc(env(safe-area-inset-top)_+_1.5rem)] md:pt-8 overflow-x-hidden">
         {children}
       </main>
       <Assistant />

@@ -140,7 +140,7 @@ export default function Sidebar() {
             alt="Wallflower RELIC"
             width={28}
             height={28}
-            className="h-7 w-7"
+            className="h-7 w-7 shrink-0 object-contain"
           />
           <span className="text-base font-heading font-bold tracking-wide text-foreground">
             {entity === "relic" ? "RELIC" : "Wallflower RELIC"}
@@ -254,10 +254,11 @@ export default function Sidebar() {
         {nav}
       </aside>
 
-      {/* Mobile toggle */}
+      {/* Mobile toggle — offset below the iPhone status bar / notch */}
       <button
         onClick={() => setMobileOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-50 bg-card border border-border p-2 rounded"
+        className="md:hidden fixed left-4 z-50 bg-card border border-border p-2 rounded"
+        style={{ top: "calc(env(safe-area-inset-top, 0px) + 0.75rem)" }}
       >
         <Menu size={20} />
       </button>
@@ -269,10 +270,14 @@ export default function Sidebar() {
             className="fixed inset-0 bg-black/60 z-50 md:hidden"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="fixed left-0 top-0 h-full w-64 bg-card border-r border-border z-50 flex flex-col md:hidden">
+          <aside
+            className="fixed left-0 top-0 h-full w-64 bg-card border-r border-border z-50 flex flex-col md:hidden overflow-y-auto"
+            style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+          >
             <button
               onClick={() => setMobileOpen(false)}
-              className="absolute top-4 right-4 text-muted"
+              className="absolute right-4 text-muted z-10"
+              style={{ top: "calc(env(safe-area-inset-top, 0px) + 1rem)" }}
             >
               <X size={20} />
             </button>
