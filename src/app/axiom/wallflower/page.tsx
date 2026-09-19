@@ -1059,7 +1059,7 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
             {labor.map((l, i) => (
               <div key={i} className="bg-card border border-border p-2">
                 <div className="flex items-center gap-2">
-                  <input type="date" className="bg-transparent border border-border px-2 py-1 text-xs w-32 text-foreground" value={l.date} onChange={(e) => updateLabor(i, "date", e.target.value)} />
+                  <DateField value={l.date || ""} onChange={(v) => updateLabor(i, "date", v)} className="w-32" inputClassName="w-32 text-left bg-transparent border border-border px-2 py-1 text-xs text-foreground hover:border-accent focus:outline-none focus:border-accent" />
                   <input className="bg-transparent border border-border px-2 py-1 text-sm flex-1 min-w-0 text-foreground" placeholder="Who / what" value={l.description || ""} onChange={(e) => updateLabor(i, "description", e.target.value)} />
                   <input type="number" step="0.25" className="bg-transparent border border-border px-2 py-1 text-sm w-14 text-foreground" value={l.hours} onChange={(e) => updateLabor(i, "hours", parseFloat(e.target.value) || 0)} title="Hours" />
                   <span className="text-muted text-xs">h ×</span>

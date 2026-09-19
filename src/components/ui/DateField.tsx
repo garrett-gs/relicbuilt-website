@@ -13,7 +13,7 @@
 // is set to.
 
 import { useRef } from "react";
-import { formatDueDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
 interface DateFieldProps {
@@ -86,7 +86,7 @@ export default function DateField({
           !value && !highlight && "text-muted",
         )}
       >
-        {value ? formatDueDate(value).text : placeholder}
+        {value ? formatDate(value) : placeholder}
       </button>
       {/* The real picker — invisible but sits ON TOP of the styled button
           and receives taps directly. iPad Safari silently no-ops
