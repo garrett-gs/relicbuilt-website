@@ -285,6 +285,10 @@ export interface Estimate {
   // address instead; when false, site_address is shown.
   site_address?: string;
   site_same_as_client?: boolean;
+  // Tentative build window for planning — lets an unapproved estimate show on
+  // the Build Calendar before it becomes a project.
+  start_date?: string;
+  due_date?: string;
   status: "draft" | "sent" | "accepted" | "rejected";
   line_items: EstimateLineItem[];
   labor_items: EstimateLaborItem[];

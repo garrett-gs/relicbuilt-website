@@ -693,6 +693,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [clientPhone, setClientPhone] = useState(estimate.client_phone || "");
   const [siteSameAsClient, setSiteSameAsClient] = useState(estimate.site_same_as_client !== false);
   const [siteAddress, setSiteAddress] = useState(estimate.site_address || "");
+  const [startDate, setStartDate] = useState(estimate.start_date || "");
+  const [dueDate, setDueDate] = useState(estimate.due_date || "");
   const [projectName, setProjectName] = useState(estimate.project_name || "");
   const [clientName, setClientName] = useState(estimate.client_name || "");
   const [status, setStatus] = useState<Estimate["status"]>(estimate.status);
@@ -1484,6 +1486,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       client_phone: clientPhone || undefined,
       site_same_as_client: siteSameAsClient,
       site_address: siteAddress || undefined,
+      start_date: startDate || undefined,
+      due_date: dueDate || undefined,
       status,
       line_items: lineItems,
       labor_items: laborItems,
@@ -1835,6 +1839,35 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
               )}
             </div>
           )}
+          {/* Build window — places this job on the Build Calendar for planning,
+              shown as "tentative" until the estimate is approved. */}
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">
+              Build Window
+              <span className="text-[10px] text-muted/60 normal-case ml-1.5">(shows on the Build Calendar, tentative until approved)</span>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] text-muted mb-1">Start</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => { setStartDate(e.target.value); markDirty(); }}
+                  className="w-full bg-card border border-border px-3 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-muted mb-1">Target / Due</label>
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => { setDueDate(e.target.value); markDirty(); }}
+                  className="w-full bg-card border border-border px-3 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent"
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-muted mt-1 italic">Set just a target date and the calendar spans the block back by the labor estimate.</p>
+          </div>
           {/* Change Order badge — links back to parent project */}
           {estimate.change_order_for_id && (
             <ChangeOrderBadge projectId={estimate.change_order_for_id} />

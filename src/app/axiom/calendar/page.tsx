@@ -11,6 +11,19 @@ const statusColors: Record<string, string> = {
   new: "#4d9fff", in_review: "#f59e0b", quoted: "#a78bfa", in_progress: "#3b82f6", complete: "#22c55e",
 };
 
+// Tentative (unapproved) work shown on the calendar in a neutral, dashed style.
+const TENTATIVE_COLOR = "#94a3b8"; // slate — clearly "not confirmed yet"
+
+type TentativeItem = {
+  id: string;
+  project_name?: string;
+  client_name?: string;
+  start_date?: string;
+  due_date?: string;
+  status?: string;
+  labor_items?: { hours?: number }[];
+};
+
 const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 function parseDate(s: string): Date {
@@ -44,16 +57,25 @@ export default function BuildCalendarPage() {
   // estimate (excluding change orders). Used to fall back to a computed
   // start date when the project's start_date is not yet saved.
   const [estimateHoursById, setEstimateHoursById] = useState<Record<string, number>>({});
+  const [tentatives, setTentatives] = useState<TentativeItem[]>([]);
+  const [tentativeHours, setTentativeHours] = useState<Record<string, number>>({});
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
 
   const load = useCallback(async () => {
-    const [projectsRes, estimatesRes] = await Promise.all([
+    const [projectsRes, estimatesRes, tentativesRes] = await Promise.all([
       axiom.from("custom_work").select("*").eq("entity", entity).order("due_date"),
       axiom.from("estimates")
         .select("custom_work_id, labor_items, change_order_for_id")
         .not("custom_work_id", "is", null)
+        .is("change_order_for_id", null),
+      // Pipeline / unapproved work: estimates with a build window that haven't
+      // become a project yet — shown on the calendar as "tentative".
+      axiom.from("estimates")
+        .select("id, project_name, client_name, start_date, due_date, labor_items, status")
+        .eq("entity", entity)
+        .is("custom_work_id", null)
         .is("change_order_for_id", null),
     ]);
     if (projectsRes.data) {
@@ -66,6 +88,16 @@ export default function BuildCalendarPage() {
         if (hours > 0) map[e.custom_work_id] = hours;
       }
       setEstimateHoursById(map);
+    }
+    if (tentativesRes.data) {
+      const tents = (tentativesRes.data as TentativeItem[]).filter((t) => t.start_date || t.due_date);
+      const th: Record<string, number> = {};
+      for (const t of tents) {
+        const hours = (t.labor_items || []).reduce((s, it) => s + (Number(it?.hours) || 0), 0);
+        if (hours > 0) th[t.id] = hours;
+      }
+      setTentatives(tents);
+      setTentativeHours(th);
     }
   }, [entity]);
 
@@ -80,6 +112,15 @@ export default function BuildCalendarPage() {
     return m;
   }, [projects, estimateHoursById]);
 
+  const tentativeRanges = useMemo(() => {
+    const m = new Map<string, { start: string; end: string }>();
+    for (const t of tentatives) {
+      const r = buildRange(t as unknown as CustomWork, tentativeHours);
+      if (r) m.set(t.id, r);
+    }
+    return m;
+  }, [tentatives, tentativeHours]);
+
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDay = new Date(year, month, 1).getDay();
 
@@ -91,6 +132,16 @@ export default function BuildCalendarPage() {
     if (!isWeekday(parseDate(d))) return [];
     return projects.filter((p) => {
       const range = ranges.get(p.id);
+      if (!range) return false;
+      return d >= range.start && d <= range.end;
+    });
+  }
+
+  function getTentativesForDay(day: number) {
+    const d = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    if (!isWeekday(parseDate(d))) return [];
+    return tentatives.filter((t) => {
+      const range = tentativeRanges.get(t.id);
       if (!range) return false;
       return d >= range.start && d <= range.end;
     });
@@ -135,6 +186,16 @@ export default function BuildCalendarPage() {
                       {p.project_name}
                     </div>
                   ))}
+                  {getTentativesForDay(day).map((t) => (
+                    <div
+                      key={t.id}
+                      className="text-[10px] px-1 py-0.5 rounded truncate border border-dashed italic"
+                      style={{ background: TENTATIVE_COLOR + "12", color: TENTATIVE_COLOR, borderColor: TENTATIVE_COLOR + "80" }}
+                      title="Tentative — not yet approved"
+                    >
+                      {t.project_name || t.client_name || "Untitled"}
+                    </div>
+                  ))}
                 </div>
               </div>
             );
@@ -143,13 +204,17 @@ export default function BuildCalendarPage() {
       </div>
 
       {/* Legend */}
-      <div className="flex gap-4 mt-4">
+      <div className="flex flex-wrap gap-4 mt-4">
         {Object.entries(statusColors).map(([status, color]) => (
           <div key={status} className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full" style={{ background: color }} />
             <span className="text-xs text-muted capitalize">{status.replace("_", " ")}</span>
           </div>
         ))}
+        <div className="flex items-center gap-1.5">
+          <span className="w-3 h-2 rounded-sm border border-dashed" style={{ borderColor: TENTATIVE_COLOR, background: TENTATIVE_COLOR + "12" }} />
+          <span className="text-xs text-muted">Tentative (unapproved)</span>
+        </div>
       </div>
     </div>
   );
