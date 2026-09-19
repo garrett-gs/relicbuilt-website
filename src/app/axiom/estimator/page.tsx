@@ -12,6 +12,7 @@ import { persistEstimate, deleteEstimateById } from "@/lib/estimate-actions";
 import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, ProposalScheduleItem, ProposalDocument, SalesNote } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
+import DateField from "@/components/axiom/DateField";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { generateEstimateProposalHtml, composeClientAddress } from "@/lib/proposal-html";
 import { fuzzyRank } from "@/lib/fuzzy-match";
@@ -1851,21 +1852,11 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-[11px] text-muted mb-1">Start</label>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => { setStartDate(e.target.value); markDirty(); }}
-                  className="w-full bg-card border border-border px-3 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent"
-                />
+                <DateField value={startDate} onChange={(v) => { setStartDate(v); markDirty(); }} />
               </div>
               <div>
                 <label className="block text-[11px] text-muted mb-1">Target / Due</label>
-                <input
-                  type="date"
-                  value={dueDate}
-                  onChange={(e) => { setDueDate(e.target.value); markDirty(); }}
-                  className="w-full bg-card border border-border px-3 py-2.5 text-foreground text-sm focus:outline-none focus:border-accent"
-                />
+                <DateField value={dueDate} onChange={(v) => { setDueDate(v); markDirty(); }} />
               </div>
             </div>
             <p className="text-[11px] text-muted mt-1 italic">Set just a target date and the calendar spans the block back by the labor estimate.</p>
