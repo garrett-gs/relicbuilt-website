@@ -1614,6 +1614,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       quoted_amount: quotedAmount,
       project_description: notes || undefined,
       inspiration_images: carriedImages.length > 0 ? carriedImages : undefined,
+      start_date: startDate || undefined,
+      due_date: dueDate || undefined,
       status: "new",
     }).select().single();
 

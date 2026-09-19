@@ -156,6 +156,10 @@ export async function POST(req: NextRequest) {
             quoted_amount: totalAmount,
             project_description: estimate.notes || null,
             inspiration_images: Array.isArray(carried) && carried.length ? carried : undefined,
+            // Carry the estimate's Build Window over so the calendar block
+            // stays put (just changes from tentative to confirmed).
+            start_date: estimate.start_date || null,
+            due_date: estimate.due_date || null,
             status: "new",
           })
           .select("id")

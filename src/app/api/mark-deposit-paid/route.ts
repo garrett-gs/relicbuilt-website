@@ -85,6 +85,8 @@ export async function POST(req: NextRequest) {
           proposal_images_included: estimate.proposal_images_included !== false,
           proposal_status: "approved",
           proposal_approved_at: estimate.proposal_approved_at || new Date().toISOString(),
+          start_date: estimate.start_date || null,
+          due_date: estimate.due_date || null,
           status: "in_progress",
         })
         .select()
