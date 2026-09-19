@@ -82,3 +82,35 @@ export function formatDueDate(iso: string | null | undefined): { text: string; s
   const text = `${MONTH_ABBR[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
   return { text, soon };
 }
+
+/**
+ * The Axiom date standard: always month/day/year (US), regardless of the
+ * viewer's browser locale. Use this instead of a bare toLocaleDateString(),
+ * which follows the browser locale and can render day/month/year.
+ * Date-only strings (YYYY-MM-DD) are parsed as local dates to avoid a
+ * timezone shifting the day.
+ */
+export function formatDate(input: string | Date | null | undefined): string {
+  if (!input) return "";
+  let date: Date;
+  if (input instanceof Date) {
+    date = input;
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    const [y, m, d] = input.split("-").map(Number);
+    date = new Date(y, m - 1, d);
+  } else {
+    date = new Date(input);
+  }
+  if (isNaN(date.getTime())) return typeof input === "string" ? input : "";
+  return date.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" });
+}
+
+/** Month/day/year + time (US), for timestamps. */
+export function formatDateTime(input: string | Date | null | undefined): string {
+  if (!input) return "";
+  const date = input instanceof Date ? input : new Date(input);
+  if (isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-US", {
+    month: "2-digit", day: "2-digit", year: "numeric", hour: "numeric", minute: "2-digit",
+  });
+}

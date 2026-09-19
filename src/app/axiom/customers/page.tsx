@@ -10,7 +10,7 @@ import { Customer, CustomerNote, Company, CustomWork, Invoice } from "@/types/ax
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
-import { cn, formatPhone } from "@/lib/utils";
+import { cn, formatPhone, formatDate } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2,
   ChevronRight, ChevronDown,
@@ -880,7 +880,7 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
           {(customer.notes || []).map((n: CustomerNote, i: number) => (
             <div key={i} className="bg-card border border-border p-3 text-sm">
               <p>{n.text}</p>
-              <p className="text-xs text-muted mt-1">{new Date(n.created_at).toLocaleDateString()}</p>
+              <p className="text-xs text-muted mt-1">{formatDate(n.created_at)}</p>
             </div>
           ))}
         </div>

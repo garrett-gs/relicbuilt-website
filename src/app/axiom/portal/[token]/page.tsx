@@ -6,7 +6,7 @@ import { axiom } from "@/lib/axiom-supabase";
 import { CustomWork, BuildFile, BuildComment, ApprovalRequest } from "@/types/axiom";
 import Image from "next/image";
 import Button from "@/components/ui/Button";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { Check, MessageSquare } from "lucide-react";
 import { notifyPortal } from "@/lib/notify-portal";
 
@@ -211,7 +211,7 @@ export default function ClientPortalPage() {
                         <img src={c.image_url} alt="Attachment" className="max-h-48 max-w-full object-contain border border-border rounded" />
                       </a>
                     )}
-                    <p className="text-xs text-muted mt-1">{c.author} &middot; {new Date(c.created_at).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted mt-1">{c.author} &middot; {formatDate(c.created_at)}</p>
                   </div>
                 ))}
                 {comments.length === 0 && <p className="text-muted text-sm">No comments yet.</p>}

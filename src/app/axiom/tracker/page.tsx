@@ -10,7 +10,7 @@ import {
 } from "@/types/axiom";
 import DateField from "@/components/ui/DateField";
 import Button from "@/components/ui/Button";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import {
   Plus, X, Trash2, Check, Undo2, Pencil, ChevronDown, ChevronRight,
   Hammer,
@@ -263,7 +263,7 @@ function TasksTab() {
             )}
             <div className="flex flex-wrap gap-3 text-xs">
               {selected.assignee && <span className="bg-card border border-border px-2 py-1">👤 {selected.assignee}</span>}
-              {selected.due_date && <span className="bg-card border border-border px-2 py-1">📅 {new Date(selected.due_date + "T00:00:00").toLocaleDateString()}</span>}
+              {selected.due_date && <span className="bg-card border border-border px-2 py-1">📅 {formatDate(selected.due_date)}</span>}
               <span className="bg-card border border-border px-2 py-1 capitalize">{selected.priority}</span>
             </div>
 
@@ -289,7 +289,7 @@ function TasksTab() {
                 {(selected.comments || []).map((c, i) => (
                   <div key={i} className="bg-card border border-border p-2 text-sm">
                     <p>{c.text}</p>
-                    <p className="text-xs text-muted mt-1">{c.author} · {new Date(c.created_at).toLocaleDateString()}</p>
+                    <p className="text-xs text-muted mt-1">{c.author} · {formatDate(c.created_at)}</p>
                   </div>
                 ))}
               </div>

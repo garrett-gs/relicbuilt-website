@@ -13,7 +13,7 @@ import ProjectPartsSection from "@/components/axiom/ProjectPartsSection";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import ImageUpload from "@/components/ui/ImageUpload";
-import { cn, formatPhone, formatDueDate, suggestStartDate } from "@/lib/utils";
+import { cn, formatPhone, formatDueDate, suggestStartDate, formatDate } from "@/lib/utils";
 import { resolveClientEmail } from "@/lib/resolve-email";
 import DateField from "@/components/ui/DateField";
 import FileUpload from "@/components/ui/FileUpload";
@@ -1767,7 +1767,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                 >
                   <div className="flex items-center gap-3 text-sm">
                     <span className="font-medium text-foreground">{r.vendor || "Receipt"}</span>
-                    {r.receipt_date && <span className="text-muted text-xs">{new Date(r.receipt_date + "T12:00:00").toLocaleDateString()}</span>}
+                    {r.receipt_date && <span className="text-muted text-xs">{formatDate(r.receipt_date)}</span>}
                     <span className="text-muted text-xs">{r.line_items?.length || 0} items</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2162,7 +2162,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                project.proposal_status === "sent" ? "Sent" : "Draft"}
             </span>
             {project.proposal_approved_at && (
-              <span className="text-xs text-muted">{new Date(project.proposal_approved_at).toLocaleDateString()}</span>
+              <span className="text-xs text-muted">{formatDate(project.proposal_approved_at)}</span>
             )}
           </div>
           {project.proposal_status === "sent" && (
@@ -2615,7 +2615,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
                         <img src={c.image_url} alt="Attachment" className="max-h-32 max-w-full object-contain border border-border hover:border-accent" />
                       </a>
                     )}
-                    <p className="text-muted mt-1">{new Date(c.created_at).toLocaleDateString()}</p>
+                    <p className="text-muted mt-1">{formatDate(c.created_at)}</p>
                   </div>
                 ))}
               </div>

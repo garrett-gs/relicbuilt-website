@@ -12,7 +12,7 @@ import { PurchaseOrder, POLineItem, Vendor, CatalogItem } from "@/types/axiom";
 import DateField from "@/components/ui/DateField";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
 import {
   Plus, X, Search, Check, XCircle, RotateCcw, Trash2,
@@ -349,7 +349,7 @@ function OrdersTab() {
     // Guard against receiving the same PO twice — that would add the
     // quantities again and re-average the landed cost.
     if (po.received_at && !confirm(
-      `PO ${po.po_number} was already received on ${new Date(po.received_at).toLocaleDateString()}.\n\n` +
+      `PO ${po.po_number} was already received on ${formatDate(po.received_at)}.\n\n` +
       `Receive again? This adds the quantities a second time and re-averages costs.`
     )) return;
     setReceivingId(po.id);
@@ -511,7 +511,7 @@ function OrdersTab() {
                       return proj ? <span className="text-muted text-xs">Project: {proj.project_name}</span> : null;
                     })()}
                   </div>
-                  {po.approved_by && <p className="text-xs text-muted mt-1">Approved by {po.approved_by} on {new Date(po.approved_at!).toLocaleDateString()}</p>}
+                  {po.approved_by && <p className="text-xs text-muted mt-1">Approved by {po.approved_by} on {formatDate(po.approved_at)}</p>}
                 </div>
                 <div className="flex gap-2 flex-shrink-0 items-center">
                   <button onClick={() => setPrintPO(po)} className="text-muted hover:text-foreground" title="Print"><Printer size={14} /></button>
@@ -530,7 +530,7 @@ function OrdersTab() {
                   )}
                   {po.status === "approved" && po.line_items && po.line_items.length > 0 && (
                     po.received_at ? (
-                      <span className="inline-flex items-center gap-1 text-xs text-green-500" title={`Received ${new Date(po.received_at).toLocaleDateString()}`}>
+                      <span className="inline-flex items-center gap-1 text-xs text-green-500" title={`Received ${formatDate(po.received_at)}`}>
                         <Check size={13} /> Received
                         <button
                           onClick={() => { setReceiveModal(po); setReceiveTax(""); setReceiveDelivery(""); }}

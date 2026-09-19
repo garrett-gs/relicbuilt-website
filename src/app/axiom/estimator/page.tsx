@@ -12,7 +12,7 @@ import { persistEstimate, deleteEstimateById } from "@/lib/estimate-actions";
 import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, ProposalScheduleItem, ProposalDocument, SalesNote } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
-import { cn } from "@/lib/utils";
+import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { generateEstimateProposalHtml, composeClientAddress } from "@/lib/proposal-html";
 import { fuzzyRank } from "@/lib/fuzzy-match";
 import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip } from "lucide-react";
@@ -1714,7 +1714,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
       const recap = data.message || "Chat saved (recap unavailable)";
 
       // Append recap to notes with separator
-      const timestamp = new Date().toLocaleString();
+      const timestamp = formatDateTime(new Date());
       const recapBlock = `\n\n══ Claude Estimator Recap — ${timestamp} ══\n${recap}`;
       const updatedNotes = (notes || "") + recapBlock;
       setNotes(updatedNotes);
@@ -2585,7 +2585,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
         {estimate.deposit_paid_at && estimate.custom_work_id && (
           <div className="mt-4 pt-4 border-t border-border">
             <p className="text-xs text-green-400 mb-2">
-              ✓ Deposit paid {new Date(estimate.deposit_paid_at).toLocaleDateString()}
+              ✓ Deposit paid {formatDate(estimate.deposit_paid_at)}
             </p>
             <Button variant="outline" onClick={() => router.push("/axiom/projects")}>
               <Hammer size={14} className="mr-1" /> View Project

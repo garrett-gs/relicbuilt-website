@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { formatDate } from "@/lib/utils";
 import { axiom } from "@/lib/axiom-supabase";
 import { PurchaseOrder, InventoryItem } from "@/types/axiom";
 import { Camera, ExternalLink, Trash2, ShoppingCart, Search, X, RefreshCw, Package, ArrowLeft, Warehouse } from "lucide-react";
@@ -326,7 +327,7 @@ export default function ReceiptsPage() {
 
                   {/* Date + submitted by */}
                   <p className="text-xs text-muted">
-                    {r.receipt_date ? new Date(r.receipt_date + "T12:00:00").toLocaleDateString() : new Date(r.created_at).toLocaleDateString()}
+                    {r.receipt_date ? formatDate(r.receipt_date) : formatDate(r.created_at)}
                     {r.submitted_by && <span className="text-muted/60"> · {r.submitted_by}</span>}
                   </p>
 
