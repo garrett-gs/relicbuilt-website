@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { CustomWork } from "@/types/axiom";
+import { suggestStartDate } from "@/lib/utils";
 
 export type TentativeItem = {
   id: string;
@@ -55,4 +56,19 @@ export async function loadCalendarData(client: SupabaseClient, entity: string): 
   }
 
   return { projects, estimateHoursById, tentatives, tentativeHours };
+}
+
+/** Build window (start→end) for a project/estimate; spans back from the due
+ *  date by the labor estimate when no start_date is saved. */
+export function buildRange(
+  p: { id: string; start_date?: string; due_date?: string },
+  hoursById: Record<string, number>
+): { start: string; end: string } | null {
+  if (p.start_date && p.due_date) return { start: p.start_date, end: p.due_date };
+  if (p.due_date) {
+    const suggested = suggestStartDate(p.due_date, hoursById[p.id] || 0);
+    return suggested ? { start: suggested, end: p.due_date } : { start: p.due_date, end: p.due_date };
+  }
+  if (p.start_date) return { start: p.start_date, end: p.start_date };
+  return null;
 }

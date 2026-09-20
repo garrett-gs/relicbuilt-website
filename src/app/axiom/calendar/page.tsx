@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { useEntity } from "@/components/axiom/EntityProvider";
-import { Share2, Copy, Check } from "lucide-react";
+import { Share2, Copy, Check, Calendar as CalIcon } from "lucide-react";
 import BuildCalendarGrid from "@/components/axiom/BuildCalendarGrid";
 import { loadCalendarData, CalendarData } from "@/lib/calendar-data";
 
@@ -15,7 +15,7 @@ export default function BuildCalendarPage() {
   const [settingsId, setSettingsId] = useState<string>("");
   const [shareTokens, setShareTokens] = useState<Record<string, string>>({});
   const [sharePanel, setSharePanel] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string>("");
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -34,9 +34,11 @@ export default function BuildCalendarPage() {
   }, []);
 
   const shareToken = shareTokens[entity];
-  const shareUrl = shareToken && typeof window !== "undefined"
-    ? `${window.location.origin}/calendar/${shareToken}`
-    : "";
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const host = typeof window !== "undefined" ? window.location.host : "";
+  const shareUrl = shareToken ? `${origin}/calendar/${shareToken}` : "";
+  const feedUrl = shareToken ? `${origin}/api/calendar-feed/${shareToken}` : "";
+  const webcalUrl = shareToken ? `webcal://${host}/api/calendar-feed/${shareToken}` : "";
 
   async function saveTokens(next: Record<string, string>) {
     setBusy(true);
@@ -59,11 +61,11 @@ export default function BuildCalendarPage() {
     await saveTokens(next);
   }
 
-  function copy() {
-    if (!shareUrl) return;
-    navigator.clipboard.writeText(shareUrl).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  function copy(url: string) {
+    if (!url) return;
+    navigator.clipboard.writeText(url).catch(() => {});
+    setCopied(url);
+    setTimeout(() => setCopied(""), 1500);
   }
 
   return (
@@ -85,13 +87,31 @@ export default function BuildCalendarPage() {
             Anyone with the link sees the {entity === "relic" ? "Relic" : "Wallflower RELIC"} build calendar — no login needed. It updates live.
           </p>
           {shareToken ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <input readOnly value={shareUrl} className="flex-1 min-w-[240px] bg-background border border-border px-3 py-2 text-sm text-foreground font-mono" onFocus={(e) => e.target.select()} />
-              <button onClick={copy} className="flex items-center gap-1.5 bg-accent text-white px-3 py-2 text-sm hover:opacity-90">
-                {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
-              </button>
-              <button onClick={disableLink} disabled={busy} className="text-xs text-muted hover:text-red-500 px-2 py-2 disabled:opacity-50">
-                Disable link
+            <div className="space-y-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-muted mb-1">Web view (open in a browser)</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input readOnly value={shareUrl} className="flex-1 min-w-[240px] bg-background border border-border px-3 py-2 text-sm text-foreground font-mono" onFocus={(e) => e.target.select()} />
+                  <button onClick={() => copy(shareUrl)} className="flex items-center gap-1.5 bg-accent text-white px-3 py-2 text-sm hover:opacity-90">
+                    {copied === shareUrl ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-muted mb-1">Subscribe in a calendar app (Apple / Google / Outlook)</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <a href={webcalUrl} className="flex items-center gap-1.5 bg-accent text-white px-3 py-2 text-sm hover:opacity-90">
+                    <CalIcon size={14} /> Add to Apple Calendar
+                  </a>
+                  <input readOnly value={feedUrl} className="flex-1 min-w-[240px] bg-background border border-border px-3 py-2 text-sm text-foreground font-mono" onFocus={(e) => e.target.select()} />
+                  <button onClick={() => copy(feedUrl)} className="flex items-center gap-1.5 border border-border px-3 py-2 text-sm text-muted hover:text-foreground">
+                    {copied === feedUrl ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy feed URL</>}
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted mt-1">Google Calendar: “Other calendars → From URL” and paste the feed URL. Builds appear as all-day events and refresh automatically.</p>
+              </div>
+              <button onClick={disableLink} disabled={busy} className="text-xs text-muted hover:text-red-500 disabled:opacity-50">
+                Disable all links
               </button>
             </div>
           ) : (
