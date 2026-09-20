@@ -1,221 +1,113 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { useEntity } from "@/components/axiom/EntityProvider";
-import { CustomWork } from "@/types/axiom";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { cn, isWeekday, suggestStartDate } from "@/lib/utils";
-
-const statusColors: Record<string, string> = {
-  new: "#4d9fff", in_review: "#f59e0b", quoted: "#a78bfa", in_progress: "#3b82f6", complete: "#22c55e",
-};
-
-// Tentative (unapproved) work shown on the calendar in a neutral, dashed style.
-const TENTATIVE_COLOR = "#94a3b8"; // slate — clearly "not confirmed yet"
-
-type TentativeItem = {
-  id: string;
-  project_name?: string;
-  client_name?: string;
-  start_date?: string;
-  due_date?: string;
-  status?: string;
-  labor_items?: { hours?: number }[];
-};
-
-const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-function parseDate(s: string): Date {
-  const [y, m, d] = s.split("-").map(Number);
-  return new Date(y, m - 1, d);
-}
-
-// Build the date range to render on the calendar. Prefers a saved
-// start_date (user override), but falls back to the same suggestion the
-// project panel uses — so projects that haven't been re-saved since the
-// auto-suggest landed still show their full build span.
-function buildRange(
-  p: CustomWork,
-  estimateHoursById: Record<string, number>
-): { start: string; end: string } | null {
-  if (p.start_date && p.due_date) return { start: p.start_date, end: p.due_date };
-  if (p.due_date) {
-    const hours = estimateHoursById[p.id] || 0;
-    const suggested = suggestStartDate(p.due_date, hours);
-    if (suggested) return { start: suggested, end: p.due_date };
-    return { start: p.due_date, end: p.due_date };
-  }
-  if (p.start_date) return { start: p.start_date, end: p.start_date };
-  return null;
-}
+import { Share2, Copy, Check } from "lucide-react";
+import BuildCalendarGrid from "@/components/axiom/BuildCalendarGrid";
+import { loadCalendarData, CalendarData } from "@/lib/calendar-data";
 
 export default function BuildCalendarPage() {
   const { entity } = useEntity();
-  const [projects, setProjects] = useState<CustomWork[]>([]);
-  // Map from custom_work_id → summed labor_items hours on its original
-  // estimate (excluding change orders). Used to fall back to a computed
-  // start date when the project's start_date is not yet saved.
-  const [estimateHoursById, setEstimateHoursById] = useState<Record<string, number>>({});
-  const [tentatives, setTentatives] = useState<TentativeItem[]>([]);
-  const [tentativeHours, setTentativeHours] = useState<Record<string, number>>({});
-  const today = new Date();
-  const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth());
+  const [data, setData] = useState<CalendarData>({ projects: [], estimateHoursById: {}, tentatives: [], tentativeHours: {} });
+
+  // Share state
+  const [settingsId, setSettingsId] = useState<string>("");
+  const [shareTokens, setShareTokens] = useState<Record<string, string>>({});
+  const [sharePanel, setSharePanel] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const [projectsRes, estimatesRes, tentativesRes] = await Promise.all([
-      axiom.from("custom_work").select("*").eq("entity", entity).order("due_date"),
-      axiom.from("estimates")
-        .select("custom_work_id, labor_items, change_order_for_id")
-        .not("custom_work_id", "is", null)
-        .is("change_order_for_id", null),
-      // Pipeline / unapproved work: estimates with a build window that haven't
-      // become a project yet — shown on the calendar as "tentative".
-      axiom.from("estimates")
-        .select("id, project_name, client_name, start_date, due_date, labor_items, status")
-        .eq("entity", entity)
-        .is("custom_work_id", null)
-        .is("change_order_for_id", null),
-    ]);
-    if (projectsRes.data) {
-      setProjects(projectsRes.data.filter((p: CustomWork) => p.start_date || p.due_date));
-    }
-    if (estimatesRes.data) {
-      const map: Record<string, number> = {};
-      for (const e of estimatesRes.data as { custom_work_id: string; labor_items?: { hours?: number }[] }[]) {
-        const hours = (e.labor_items || []).reduce((s, it) => s + (Number(it?.hours) || 0), 0);
-        if (hours > 0) map[e.custom_work_id] = hours;
-      }
-      setEstimateHoursById(map);
-    }
-    if (tentativesRes.data) {
-      const tents = (tentativesRes.data as TentativeItem[]).filter((t) => t.start_date || t.due_date);
-      const th: Record<string, number> = {};
-      for (const t of tents) {
-        const hours = (t.labor_items || []).reduce((s, it) => s + (Number(it?.hours) || 0), 0);
-        if (hours > 0) th[t.id] = hours;
-      }
-      setTentatives(tents);
-      setTentativeHours(th);
-    }
+    setData(await loadCalendarData(axiom, entity));
   }, [entity]);
 
   useEffect(() => { load(); }, [load]);
 
-  const ranges = useMemo(() => {
-    const m = new Map<string, { start: string; end: string }>();
-    for (const p of projects) {
-      const r = buildRange(p, estimateHoursById);
-      if (r) m.set(p.id, r);
-    }
-    return m;
-  }, [projects, estimateHoursById]);
-
-  const tentativeRanges = useMemo(() => {
-    const m = new Map<string, { start: string; end: string }>();
-    for (const t of tentatives) {
-      const r = buildRange(t as unknown as CustomWork, tentativeHours);
-      if (r) m.set(t.id, r);
-    }
-    return m;
-  }, [tentatives, tentativeHours]);
-
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDay = new Date(year, month, 1).getDay();
-
-  function prev() { if (month === 0) { setMonth(11); setYear(year - 1); } else setMonth(month - 1); }
-  function next() { if (month === 11) { setMonth(0); setYear(year + 1); } else setMonth(month + 1); }
-
-  function getProjectsForDay(day: number) {
-    const d = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    if (!isWeekday(parseDate(d))) return [];
-    return projects.filter((p) => {
-      const range = ranges.get(p.id);
-      if (!range) return false;
-      return d >= range.start && d <= range.end;
+  useEffect(() => {
+    axiom.from("settings").select("id, calendar_share_tokens").limit(1).single().then(({ data }) => {
+      if (data) {
+        setSettingsId(data.id);
+        setShareTokens((data.calendar_share_tokens || {}) as Record<string, string>);
+      }
     });
+  }, []);
+
+  const shareToken = shareTokens[entity];
+  const shareUrl = shareToken && typeof window !== "undefined"
+    ? `${window.location.origin}/calendar/${shareToken}`
+    : "";
+
+  async function saveTokens(next: Record<string, string>) {
+    setBusy(true);
+    try {
+      await axiom.from("settings").update({ calendar_share_tokens: next }).eq("id", settingsId);
+      setShareTokens(next);
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function getTentativesForDay(day: number) {
-    const d = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    if (!isWeekday(parseDate(d))) return [];
-    return tentatives.filter((t) => {
-      const range = tentativeRanges.get(t.id);
-      if (!range) return false;
-      return d >= range.start && d <= range.end;
-    });
+  async function generateLink() {
+    const token = `cal_${crypto.randomUUID().replace(/-/g, "")}`;
+    await saveTokens({ ...shareTokens, [entity]: token });
+  }
+
+  async function disableLink() {
+    const next = { ...shareTokens };
+    delete next[entity];
+    await saveTokens(next);
+  }
+
+  function copy() {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-heading font-bold">Build Calendar</h1>
-        <div className="flex items-center gap-4">
-          <button onClick={prev} className="text-muted hover:text-foreground"><ChevronLeft size={20} /></button>
-          <span className="text-lg font-heading font-bold">{monthNames[month]} {year}</span>
-          <button onClick={next} className="text-muted hover:text-foreground"><ChevronRight size={20} /></button>
-        </div>
+        <button
+          onClick={() => setSharePanel((s) => !s)}
+          className="flex items-center gap-1.5 border border-border px-3 py-1.5 text-sm text-muted hover:text-foreground hover:border-accent transition-colors"
+        >
+          <Share2 size={14} /> Share
+        </button>
       </div>
 
-      {/* Calendar grid */}
-      <div className="bg-card border border-border">
-        <div className="grid grid-cols-7 border-b border-border">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
-            <div key={d} className="px-2 py-2 text-xs uppercase tracking-wider text-muted text-center">{d}</div>
-          ))}
+      {sharePanel && (
+        <div className="bg-card border border-border p-4 mb-4">
+          <p className="text-sm text-foreground font-medium mb-1">Share this build calendar (read-only)</p>
+          <p className="text-xs text-muted mb-3">
+            Anyone with the link sees the {entity === "relic" ? "Relic" : "Wallflower RELIC"} build calendar — no login needed. It updates live.
+          </p>
+          {shareToken ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <input readOnly value={shareUrl} className="flex-1 min-w-[240px] bg-background border border-border px-3 py-2 text-sm text-foreground font-mono" onFocus={(e) => e.target.select()} />
+              <button onClick={copy} className="flex items-center gap-1.5 bg-accent text-white px-3 py-2 text-sm hover:opacity-90">
+                {copied ? <><Check size={14} /> Copied</> : <><Copy size={14} /> Copy</>}
+              </button>
+              <button onClick={disableLink} disabled={busy} className="text-xs text-muted hover:text-red-500 px-2 py-2 disabled:opacity-50">
+                Disable link
+              </button>
+            </div>
+          ) : (
+            <button onClick={generateLink} disabled={busy || !settingsId} className="bg-accent text-white px-3 py-2 text-sm hover:opacity-90 disabled:opacity-50">
+              {busy ? "Creating…" : "Create share link"}
+            </button>
+          )}
         </div>
-        <div className="grid grid-cols-7">
-          {Array.from({ length: firstDay }).map((_, i) => (
-            <div key={`empty-${i}`} className="min-h-[100px] border-b border-r border-border/50" />
-          ))}
-          {Array.from({ length: daysInMonth }).map((_, i) => {
-            const day = i + 1;
-            const dayProjects = getProjectsForDay(day);
-            const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
-            return (
-              <div key={day} className="min-h-[100px] border-b border-r border-border/50 p-1">
-                <span className={cn("text-xs inline-block w-6 h-6 text-center leading-6 rounded-full mb-1", isToday && "bg-accent text-background font-bold")}>{day}</span>
-                <div className="space-y-0.5">
-                  {dayProjects.map((p) => (
-                    <div
-                      key={p.id}
-                      className="text-[10px] px-1 py-0.5 rounded truncate"
-                      style={{ background: statusColors[p.status] + "20", color: statusColors[p.status] }}
-                    >
-                      {p.project_name}
-                    </div>
-                  ))}
-                  {getTentativesForDay(day).map((t) => (
-                    <div
-                      key={t.id}
-                      className="text-[10px] px-1 py-0.5 rounded truncate border border-dashed italic"
-                      style={{ background: TENTATIVE_COLOR + "12", color: TENTATIVE_COLOR, borderColor: TENTATIVE_COLOR + "80" }}
-                      title="Tentative — not yet approved"
-                    >
-                      {t.project_name || t.client_name || "Untitled"}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      )}
 
-      {/* Legend */}
-      <div className="flex flex-wrap gap-4 mt-4">
-        {Object.entries(statusColors).map(([status, color]) => (
-          <div key={status} className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full" style={{ background: color }} />
-            <span className="text-xs text-muted capitalize">{status.replace("_", " ")}</span>
-          </div>
-        ))}
-        <div className="flex items-center gap-1.5">
-          <span className="w-3 h-2 rounded-sm border border-dashed" style={{ borderColor: TENTATIVE_COLOR, background: TENTATIVE_COLOR + "12" }} />
-          <span className="text-xs text-muted">Tentative (unapproved)</span>
-        </div>
-      </div>
+      <BuildCalendarGrid
+        projects={data.projects}
+        estimateHoursById={data.estimateHoursById}
+        tentatives={data.tentatives}
+        tentativeHours={data.tentativeHours}
+      />
     </div>
   );
 }
