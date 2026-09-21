@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getWRClient } from "@/lib/wr-supabase";
+import { notifyNexusBuildLink } from "@/lib/notify-nexus-build-link";
 
 // Receives a payment signal from Nexus when a custom build's invoice takes a
 // payment (deposit / balance / paid-in-full). Records it against the linked
@@ -91,6 +92,9 @@ export async function POST(req: NextRequest) {
     if (greenlight && estimateId) {
       try {
         const { data: est } = await supabase.from("estimates").select("*").eq("id", estimateId).single();
+        const mat = (est?.line_items || []).reduce((s: number, li: { quantity?: number; unit_price?: number }) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
+        const lab = (est?.labor_items || []).reduce((s: number, l: { cost?: number }) => s + (l.cost || 0), 0);
+        const total = Math.round((mat + lab) * (1 + (est?.markup_percent || 0) / 100) * 100) / 100;
         if (est && est.proposal_status !== "approved") {
           await supabase.from("estimates").update({
             proposal_status: "approved",
@@ -99,11 +103,21 @@ export async function POST(req: NextRequest) {
             notes: [est.notes || "", `Approved via payment (${invoice_number || "invoice"}) on ${new Date(paid_at || stamp).toLocaleDateString("en-US")}`].filter(Boolean).join("\n"),
             updated_at: stamp,
           }).eq("id", estimateId);
+          // Fire estimate.approved back to Nexus so the quote item's relic_status
+          // flips to 'approved' (single source of truth = Axiom).
+          await notifyNexusBuildLink({
+            estimateId,
+            estimateNumber: est.estimate_number,
+            proposalToken: est.proposal_token,
+            relicBuildId: relic_build_id || undefined,
+            estimateAmount: total,
+            status: "approved",
+            approvedAt: paid_at || stamp,
+            approvedBy: "Payment",
+            event: "approved",
+          });
         }
         if (est && !est.custom_work_id) {
-          const mat = (est.line_items || []).reduce((s: number, li: { quantity?: number; unit_price?: number }) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
-          const lab = (est.labor_items || []).reduce((s: number, l: { cost?: number }) => s + (l.cost || 0), 0);
-          const total = Math.round((mat + lab) * (1 + (est.markup_percent || 0) / 100) * 100) / 100;
           const { data: proj } = await supabase.from("custom_work").insert({
             entity: est.entity || "wallflower_relic",
             project_name: est.project_name || est.estimate_number,
