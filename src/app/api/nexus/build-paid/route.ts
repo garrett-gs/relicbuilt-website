@@ -85,6 +85,50 @@ export async function POST(req: NextRequest) {
         .eq("id", workOrder.id);
     }
 
+    // Payment IS approval: on deposit/paid-in-full, mark the design approved
+    // and spin up the project if the client paid without approving each design
+    // first. Idempotent — a no-op if it's already approved/linked.
+    if (greenlight && estimateId) {
+      try {
+        const { data: est } = await supabase.from("estimates").select("*").eq("id", estimateId).single();
+        if (est && est.proposal_status !== "approved") {
+          await supabase.from("estimates").update({
+            proposal_status: "approved",
+            proposal_approved_at: paid_at || stamp,
+            status: "accepted",
+            notes: [est.notes || "", `Approved via payment (${invoice_number || "invoice"}) on ${new Date(paid_at || stamp).toLocaleDateString("en-US")}`].filter(Boolean).join("\n"),
+            updated_at: stamp,
+          }).eq("id", estimateId);
+        }
+        if (est && !est.custom_work_id) {
+          const mat = (est.line_items || []).reduce((s: number, li: { quantity?: number; unit_price?: number }) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
+          const lab = (est.labor_items || []).reduce((s: number, l: { cost?: number }) => s + (l.cost || 0), 0);
+          const total = Math.round((mat + lab) * (1 + (est.markup_percent || 0) / 100) * 100) / 100;
+          const { data: proj } = await supabase.from("custom_work").insert({
+            entity: est.entity || "wallflower_relic",
+            project_name: est.project_name || est.estimate_number,
+            client_name: est.client_name || "",
+            client_email: est.client_email || null,
+            client_phone: est.client_phone || null,
+            customer_id: est.customer_id || null,
+            quoted_amount: total,
+            project_description: est.notes || null,
+            inspiration_images: est.images || [],
+            proposal_highlights: est.proposal_highlights || [],
+            proposal_scope: est.proposal_scope || null,
+            proposal_status: "approved",
+            proposal_approved_at: paid_at || stamp,
+            start_date: est.start_date || null,
+            due_date: est.due_date || null,
+            status: "in_progress",
+          }).select("id").single();
+          if (proj?.id) await supabase.from("estimates").update({ custom_work_id: proj.id }).eq("id", estimateId);
+        }
+      } catch (e) {
+        console.error("[build-paid] approve-on-payment failed:", e);
+      }
+    }
+
     await supabase.from("activity_log").insert({
       action: "paid",
       entity: "work_order",
