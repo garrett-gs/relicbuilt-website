@@ -23,6 +23,7 @@ type EntityType =
   | "inventory"
   | "settings"
   | "wallflower_work_order"
+  | "note"
   | "lead";
 
 export async function logActivity({

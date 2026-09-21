@@ -32,6 +32,7 @@ import {
   ClipboardList,
   Ruler,
   Martini,
+  StickyNote,
 } from "lucide-react";
 
 const navSections = [
@@ -40,6 +41,7 @@ const navSections = [
     items: [
       { href: "/axiom/dashboard", icon: LayoutDashboard, label: "Dashboard" },
       { href: "/axiom/tracker", icon: LayoutList, label: "Tracker" },
+      { href: "/axiom/notes", icon: StickyNote, label: "Notes" },
       { href: "/axiom/crew", icon: HardHat, label: "Crew", adminOnly: true },
     ],
   },

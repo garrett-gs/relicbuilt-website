@@ -235,6 +235,21 @@ export interface CustomerNote {
   created_at: string;
 }
 
+// ── Notes ───────────────────────────────────────────────────
+
+export interface Note {
+  id: string;
+  entity?: BusinessEntity;
+  title?: string;
+  body?: string;
+  shared?: boolean;        // also visible on the other Axiom side
+  customer_id?: string;    // optional link to a client
+  custom_work_id?: string; // optional link to a build/project
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Companies ───────────────────────────────────────────────
 
 export interface Company {
