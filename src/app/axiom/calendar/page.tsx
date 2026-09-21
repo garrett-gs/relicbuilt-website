@@ -5,7 +5,7 @@ import { axiom } from "@/lib/axiom-supabase";
 import { useEntity } from "@/components/axiom/EntityProvider";
 import { Share2, Copy, Check, Calendar as CalIcon } from "lucide-react";
 import BuildCalendarGrid from "@/components/axiom/BuildCalendarGrid";
-import { loadCalendarData, CalendarData } from "@/lib/calendar-data";
+import { loadMergedCalendarData, CalendarData } from "@/lib/calendar-data";
 
 export default function BuildCalendarPage() {
   const { entity } = useEntity();
@@ -19,7 +19,7 @@ export default function BuildCalendarPage() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    setData(await loadCalendarData(axiom, entity));
+    setData(await loadMergedCalendarData(axiom, entity));
   }, [entity]);
 
   useEffect(() => { load(); }, [load]);

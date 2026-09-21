@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { loadCalendarData } from "@/lib/calendar-data";
+import { loadMergedCalendarData } from "@/lib/calendar-data";
 
 /**
  * Public, read-only Build Calendar data for a share token. The token is the
@@ -29,7 +29,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     const entity = Object.keys(tokens).find((e) => tokens[e] === token);
     if (!entity) return NextResponse.json({ error: "This calendar link is no longer active." }, { status: 404 });
 
-    const data = await loadCalendarData(supabase, entity);
+    const data = await loadMergedCalendarData(supabase, entity);
     const brand = entity === "relic"
       ? (settings?.relic_profile?.name || "RELIC")
       : (settings?.biz_name || "Wallflower RELIC");

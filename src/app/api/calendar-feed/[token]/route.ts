@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { loadCalendarData, buildRange } from "@/lib/calendar-data";
+import { loadMergedCalendarData, buildRange } from "@/lib/calendar-data";
 
 /**
  * iCal (.ics) feed for a Build Calendar share token, so the schedule can be
@@ -42,7 +42,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   const brand = entity === "relic"
     ? (settings?.relic_profile?.name || "RELIC")
     : (settings?.biz_name || "Wallflower RELIC");
-  const { projects, estimateHoursById, tentatives, tentativeHours } = await loadCalendarData(supabase, entity);
+  const { projects, estimateHoursById, tentatives, tentativeHours } = await loadMergedCalendarData(supabase, entity);
 
   const stamp = new Date().toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
   const lines: string[] = [
@@ -74,7 +74,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
 
   for (const p of projects) {
     const r = buildRange(p, estimateHoursById);
-    if (r) addEvent(p.id, p.project_name || "Build", r, `Status: ${(p.status || "").replace("_", " ")}${p.client_name ? ` · ${p.client_name}` : ""}`, false);
+    if (!r) continue;
+    if ((p.status as string) === "relic") { addEvent(p.id, "Relic Project", r, "Relic build (dates only)", false); continue; }
+    addEvent(p.id, p.project_name || "Build", r, `Status: ${(p.status || "").replace("_", " ")}${p.client_name ? ` · ${p.client_name}` : ""}`, false);
   }
   for (const t of tentatives) {
     const r = buildRange(t, tentativeHours);

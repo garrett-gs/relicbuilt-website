@@ -58,6 +58,35 @@ export async function loadCalendarData(client: SupabaseClient, entity: string): 
   return { projects, estimateHoursById, tentatives, tentativeHours };
 }
 
+/**
+ * Calendar data for `entity`, PLUS — on the Wallflower RELIC calendar — every
+ * Relic build merged in ANONYMIZED: a generic "Relic Project" block with only
+ * the dates (no name, client, or status). Lets Wallflower see when the shop is
+ * occupied by Relic work without exposing what it is. One-way: Wallflower work
+ * is never shown on the Relic calendar.
+ */
+export async function loadMergedCalendarData(client: SupabaseClient, entity: string): Promise<CalendarData> {
+  const own = await loadCalendarData(client, entity);
+  if (entity !== "wallflower_relic") return own;
+
+  let relic: CalendarData;
+  try {
+    relic = await loadCalendarData(client, "relic");
+  } catch {
+    return own; // Relic not readable here — just show Wallflower.
+  }
+
+  const relicBlocks: CustomWork[] = [];
+  const push = (item: { id: string; start_date?: string; due_date?: string }, hours: Record<string, number>) => {
+    const r = buildRange(item, hours);
+    if (r) relicBlocks.push({ id: `relic-${item.id}`, project_name: "Relic Project", status: "relic", start_date: r.start, due_date: r.end } as unknown as CustomWork);
+  };
+  for (const p of relic.projects) push(p, relic.estimateHoursById);
+  for (const t of relic.tentatives) push(t, relic.tentativeHours);
+
+  return { ...own, projects: [...own.projects, ...relicBlocks] };
+}
+
 /** Build window (start→end) for a project/estimate; spans back from the due
  *  date by the labor estimate when no start_date is saved. */
 export function buildRange(
