@@ -15,8 +15,9 @@ import { getWRClient } from "@/lib/wr-supabase";
  */
 
 const FN = "relic-build-link";
-const EVENT_MAP: Record<"created" | "approved", string> = {
+const EVENT_MAP: Record<"created" | "updated" | "approved", string> = {
   created: "estimate.created",
+  updated: "estimate.updated",
   approved: "estimate.approved",
 };
 
@@ -24,7 +25,7 @@ interface BuildLinkArgs {
   estimateId: string;
   estimateNumber?: string | null;
   proposalToken: string;
-  event: "created" | "approved";
+  event: "created" | "updated" | "approved";
   estimateAmount?: number;
   status?: string; // draft | sent | approved | rejected
   approvedAt?: string | null;

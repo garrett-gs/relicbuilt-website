@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { getWRClient } from "@/lib/wr-supabase";
-import { buildPortalUrl } from "@/lib/notify-nexus-build-link";
+import { buildPortalUrl, notifyNexusBuildLink } from "@/lib/notify-nexus-build-link";
 
 export async function POST(req: NextRequest) {
   try {
@@ -154,6 +154,19 @@ export async function POST(req: NextRequest) {
       .from("estimates")
       .update({ sent_to_wr_at: new Date().toISOString(), ...proposalUpdates })
       .eq("id", estimate.id);
+
+    // Also fire the relic-build-link webhook so Nexus keeps the quote's
+    // items[] in sync with axiom_build_url (the direct relic_builds upsert
+    // above doesn't touch the quote line). Best-effort.
+    await notifyNexusBuildLink({
+      estimateId: estimate.id,
+      estimateNumber: estimate.estimate_number,
+      proposalToken,
+      relicBuildId: wrData.id,
+      estimateAmount: total,
+      status: "sent",
+      event: "updated",
+    });
 
     // ── Auto-append this build onto a linked Nexus quote's items[] ──
     // If the estimate's work order references a Nexus quote (nexus_ref), the
