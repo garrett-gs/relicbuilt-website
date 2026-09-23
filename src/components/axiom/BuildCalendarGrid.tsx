@@ -10,6 +10,8 @@ export const statusColors: Record<string, string> = {
   new: "#4d9fff", in_review: "#f59e0b", quoted: "#a78bfa", in_progress: "#3b82f6", complete: "#22c55e",
   // Anonymized Relic builds merged onto the Wallflower calendar (gold = Relic).
   relic: "#b8963c",
+  // A master project's combined span (indigo = program-level).
+  master: "#6366f1",
 };
 
 // Tentative (unapproved) work shown on the calendar in a neutral, dashed style.

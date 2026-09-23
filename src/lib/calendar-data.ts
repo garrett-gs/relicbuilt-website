@@ -9,6 +9,7 @@ export type TentativeItem = {
   start_date?: string;
   due_date?: string;
   status?: string;
+  master_project_id?: string;
   labor_items?: { hours?: number }[];
 };
 
@@ -27,17 +28,18 @@ export interface CalendarData {
  * (service-role) views, so the calendar looks identical either way.
  */
 export async function loadCalendarData(client: SupabaseClient, entity: string): Promise<CalendarData> {
-  const [projectsRes, estimatesRes, tentativesRes] = await Promise.all([
+  const [projectsRes, estimatesRes, tentativesRes, mastersRes] = await Promise.all([
     client.from("custom_work").select("*").eq("entity", entity).order("due_date"),
     client.from("estimates")
       .select("custom_work_id, labor_items, change_order_for_id")
       .not("custom_work_id", "is", null)
       .is("change_order_for_id", null),
     client.from("estimates")
-      .select("id, project_name, client_name, start_date, due_date, labor_items, status")
+      .select("id, project_name, client_name, start_date, due_date, labor_items, status, master_project_id")
       .eq("entity", entity)
       .is("custom_work_id", null)
       .is("change_order_for_id", null),
+    client.from("master_projects").select("id, name").eq("entity", entity),
   ]);
 
   const projects = ((projectsRes.data || []) as CustomWork[]).filter((p) => p.start_date || p.due_date);
@@ -53,6 +55,41 @@ export async function loadCalendarData(client: SupabaseClient, entity: string): 
   for (const t of tentatives) {
     const hours = (t.labor_items || []).reduce((s, it) => s + (Number(it?.hours) || 0), 0);
     if (hours > 0) tentativeHours[t.id] = hours;
+  }
+
+  // Collapse every build tagged to a master project into a single span per
+  // master (min start → max due), so a multi-build program shows as one bar
+  // on the calendar instead of N separate blocks. Untagged builds are left
+  // exactly as they are.
+  const masterName = new Map<string, string>();
+  for (const m of (mastersRes.data || []) as { id: string; name: string }[]) masterName.set(m.id, m.name);
+
+  if (masterName.size > 0) {
+    const spans = new Map<string, { start: string; end: string }>();
+    const absorb = (mid: string, r: { start: string; end: string }) => {
+      const cur = spans.get(mid);
+      if (!cur) spans.set(mid, { ...r });
+      else spans.set(mid, { start: r.start < cur.start ? r.start : cur.start, end: r.end > cur.end ? r.end : cur.end });
+    };
+    const keptProjects: CustomWork[] = [];
+    for (const p of projects) {
+      if (p.master_project_id && masterName.has(p.master_project_id)) {
+        const r = buildRange(p, estimateHoursById);
+        if (r) absorb(p.master_project_id, r);
+      } else keptProjects.push(p);
+    }
+    const keptTentatives: TentativeItem[] = [];
+    for (const t of tentatives) {
+      if (t.master_project_id && masterName.has(t.master_project_id)) {
+        const r = buildRange(t, tentativeHours);
+        if (r) absorb(t.master_project_id, r);
+      } else keptTentatives.push(t);
+    }
+    const masterBlocks: CustomWork[] = [];
+    for (const [mid, r] of spans) {
+      masterBlocks.push({ id: `master-${mid}`, project_name: masterName.get(mid), status: "master", start_date: r.start, due_date: r.end } as unknown as CustomWork);
+    }
+    return { projects: [...keptProjects, ...masterBlocks], estimateHoursById, tentatives: keptTentatives, tentativeHours };
   }
 
   return { projects, estimateHoursById, tentatives, tentativeHours };

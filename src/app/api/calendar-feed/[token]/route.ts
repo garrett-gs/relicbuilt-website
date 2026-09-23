@@ -76,6 +76,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     const r = buildRange(p, estimateHoursById);
     if (!r) continue;
     if ((p.status as string) === "relic") { addEvent(p.id, "Relic Project", r, "Relic build (dates only)", false); continue; }
+    if ((p.status as string) === "master") { addEvent(p.id, p.project_name || "Project", r, "Master project — combined build window", false); continue; }
     addEvent(p.id, p.project_name || "Build", r, `Status: ${(p.status || "").replace("_", " ")}${p.client_name ? ` · ${p.client_name}` : ""}`, false);
   }
   for (const t of tentatives) {
