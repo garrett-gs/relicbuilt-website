@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
           project_name: estimate.project_name || "Untitled Project",
           client_name: estimate.client_name || "",
           customer_id: estimate.customer_id || null,
+          master_project_id: estimate.master_project_id || null,
           quoted_amount: totalAmount,
           project_description: estimate.notes || null,
           inspiration_images: estimate.images || [],

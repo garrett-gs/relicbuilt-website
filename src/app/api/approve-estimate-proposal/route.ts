@@ -153,6 +153,7 @@ export async function POST(req: NextRequest) {
             client_email: estimate.client_email || null,
             client_phone: estimate.client_phone || null,
             customer_id: estimate.customer_id || null,
+            master_project_id: estimate.master_project_id || null,
             quoted_amount: totalAmount,
             project_description: estimate.notes || null,
             inspiration_images: Array.isArray(carried) && carried.length ? carried : undefined,

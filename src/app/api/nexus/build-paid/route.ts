@@ -125,6 +125,7 @@ export async function POST(req: NextRequest) {
             client_email: est.client_email || null,
             client_phone: est.client_phone || null,
             customer_id: est.customer_id || null,
+            master_project_id: est.master_project_id || null,
             quoted_amount: total,
             project_description: est.notes || null,
             inspiration_images: est.images || [],

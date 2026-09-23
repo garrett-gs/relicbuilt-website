@@ -330,6 +330,7 @@ export default function ProjectsPage() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [projectsTab, setProjectsTab] = useState<"active" | "archive">("active");
+  const [masters, setMasters] = useState<{ id: string; name: string }[]>([]);
   const { isSuperAdmin } = useAxiomRole(); // Archive is super-admin only
   const { entity } = useEntity();
 
@@ -339,6 +340,10 @@ export default function ProjectsPage() {
   }, [entity]);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    axiom.from("master_projects").select("id, name").eq("entity", entity).then(({ data }) => { if (data) setMasters(data); });
+  }, [entity]);
+  const masterName = (id?: string) => (id ? masters.find((m) => m.id === id)?.name : undefined);
 
   async function createProject(form: Record<string, string>) {
     const { data } = await axiom.from("custom_work").insert({
@@ -541,6 +546,9 @@ export default function ProjectsPage() {
                       onClick={() => setSelected(p)}
                       className="bg-background border border-border p-3 cursor-pointer hover:border-accent/50 transition-colors text-sm"
                     >
+                      {masterName(p.master_project_id) && (
+                        <span className="inline-block text-[10px] text-accent border border-accent/40 px-1.5 py-0.5 mb-1 truncate max-w-full">{masterName(p.master_project_id)}</span>
+                      )}
                       <p className="font-medium mb-1 truncate">{p.project_name}</p>
                       <p className="text-muted text-xs truncate">{p.client_name}</p>
                       {p.company_name && <p className="text-muted text-xs truncate italic">{p.company_name}</p>}
@@ -589,6 +597,7 @@ export default function ProjectsPage() {
                       <p className="text-xs text-muted mt-0.5 truncate">
                         {p.client_name || "—"}
                         {p.company_name && <span className="italic"> · {p.company_name}</span>}
+                        {masterName(p.master_project_id) && <span className="text-accent"> · {masterName(p.master_project_id)}</span>}
                         {p.due_date && <> · due {formatDueDate(p.due_date).text}</>}
                       </p>
                     </div>

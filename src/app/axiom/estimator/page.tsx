@@ -698,6 +698,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [dueDate, setDueDate] = useState(estimate.due_date || "");
   const [projectName, setProjectName] = useState(estimate.project_name || "");
   const [clientName, setClientName] = useState(estimate.client_name || "");
+  const [masterProjectId, setMasterProjectId] = useState(estimate.master_project_id || "");
+  const [masterProjects, setMasterProjects] = useState<{ id: string; name: string; client_name?: string; site_address?: string }[]>([]);
   const [status, setStatus] = useState<Estimate["status"]>(estimate.status);
   const [lineItems, setLineItems] = useState<EstimateLineItem[]>(estimate.line_items || []);
   const [laborItems, setLaborItems] = useState<EstimateLaborItem[]>(estimate.labor_items || []);
@@ -1479,6 +1481,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   function buildFull(): Partial<Estimate> {
     return {
       customer_id: customerId || undefined,
+      master_project_id: masterProjectId || undefined,
       vendor_id: vendorId || undefined,
       vendor_name: vendorName || undefined,
       project_name: projectName,
@@ -1519,6 +1522,11 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     if (baseRef.current === null) baseRef.current = buildFull() as Record<string, unknown>;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Master projects available to group this build under.
+  useEffect(() => {
+    axiom.from("master_projects").select("id, name, client_name, site_address").eq("entity", estimate.entity || "wallflower_relic").order("name").then(({ data }) => { if (data) setMasterProjects(data); });
+  }, [estimate.entity]);
 
   function save() {
     const full = buildFull() as Record<string, unknown>;
@@ -1612,6 +1620,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       client_email: resolvedEmail,
       client_phone: resolvedPhone,
       customer_id: customerId || undefined,
+      master_project_id: masterProjectId || undefined,
       quoted_amount: quotedAmount,
       project_description: notes || undefined,
       inspiration_images: carriedImages.length > 0 ? carriedImages : undefined,
@@ -1842,6 +1851,30 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
               )}
             </div>
           )}
+          {/* Master project — optional parent grouping several builds together. */}
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">
+              Master Project
+              <span className="text-[10px] text-muted/60 normal-case ml-1.5">(optional — groups this build under a parent)</span>
+            </label>
+            <select
+              value={masterProjectId}
+              onChange={(e) => {
+                const id = e.target.value;
+                setMasterProjectId(id);
+                markDirty();
+                const mp = masterProjects.find((m) => m.id === id);
+                if (mp) {
+                  if (!clientName && mp.client_name) setClientName(mp.client_name);
+                  if (!siteAddress && mp.site_address) { setSiteAddress(mp.site_address); setSiteSameAsClient(false); }
+                }
+              }}
+              className="w-full bg-card border border-border px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-accent"
+            >
+              <option value="">— None —</option>
+              {masterProjects.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </div>
           {/* Build window — places this job on the Build Calendar for planning,
               shown as "tentative" until the estimate is approved. */}
           <div>
