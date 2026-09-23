@@ -33,6 +33,7 @@ import {
   Ruler,
   Martini,
   StickyNote,
+  Layers,
 } from "lucide-react";
 
 const navSections = [
@@ -57,6 +58,7 @@ const navSections = [
     label: "Projects",
     items: [
       { href: "/axiom/estimator", icon: Calculator, label: "Estimator" },
+      { href: "/axiom/master-projects", icon: Layers, label: "Master Projects" },
       { href: "/axiom/projects", icon: Hammer, label: "Projects" },
       { href: "/axiom/timeclock", icon: Clock, label: "Time Clock" },
       { href: "/axiom/calendar", icon: CalendarDays, label: "Build Calendar" },

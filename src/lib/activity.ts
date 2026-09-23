@@ -24,6 +24,7 @@ type EntityType =
   | "settings"
   | "wallflower_work_order"
   | "note"
+  | "master_project"
   | "lead";
 
 export async function logActivity({

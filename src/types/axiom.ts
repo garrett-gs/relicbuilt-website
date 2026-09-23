@@ -86,6 +86,7 @@ export interface CustomWork {
   customer_id?: string;
   company_id?: string;
   company_name?: string;
+  master_project_id?: string;
   project_description?: string;
   budget_range?: string;
   timeline?: string;
@@ -235,6 +236,21 @@ export interface CustomerNote {
   created_at: string;
 }
 
+// ── Master Projects ─────────────────────────────────────────
+
+export interface MasterProject {
+  id: string;
+  entity?: BusinessEntity;
+  name: string;
+  client_name?: string;
+  customer_id?: string;
+  site_address?: string;
+  description?: string;
+  status?: "active" | "complete" | "archived";
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Notes ───────────────────────────────────────────────────
 
 export interface Note {
@@ -289,6 +305,7 @@ export interface Estimate {
   estimate_number: string;
   project_name?: string;
   custom_work_id?: string;
+  master_project_id?: string;
   customer_id?: string;
   vendor_id?: string;
   vendor_name?: string;
