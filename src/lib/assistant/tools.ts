@@ -512,12 +512,12 @@ export async function buildContextBlurb(ctx: ToolCtx): Promise<string> {
     .select("biz_name, deposit_percent, team_members")
     .limit(1)
     .single();
-  const team = (settings?.team_members || []) as Array<{ name?: string; email?: string; role?: string }>;
-  const teamLines = team.map((m) => `  - ${m.name || "?"} <${m.email || ""}> (${m.role || "member"})`).join("\n") || "  - (none)";
+  const team = (settings?.team_members || []) as Array<{ name?: string; email?: string; role?: string; hourly_rate?: number }>;
+  const teamLines = team.map((m) => `  - ${m.name || "?"} <${m.email || ""}> (${m.role || "member"})${m.hourly_rate ? ` — $${m.hourly_rate}/hr` : ""}`).join("\n") || "  - (none)";
   return [
     `Business: ${settings?.biz_name || "RELIC"}`,
     `Default deposit: ${settings?.deposit_percent ?? "—"}%`,
-    `Team (for assignees):\n${teamLines}`,
+    `Team (assignees + labor rates):\n${teamLines}`,
   ].join("\n");
 }
 
