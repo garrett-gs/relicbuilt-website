@@ -79,6 +79,7 @@ const KIND: Record<string, Kind> = {
   create_estimate: "write",
   update_estimate: "write",
   add_estimate_line_items: "write",
+  add_estimate_labor_items: "write",
   create_invoice: "write",
   record_invoice_payment: "write",
   create_expense: "write",
@@ -90,6 +91,7 @@ const RISK: Record<string, Risk> = {
   create_estimate: "money",
   update_estimate: "money",
   add_estimate_line_items: "money",
+  add_estimate_labor_items: "money",
   create_invoice: "money",
   record_invoice_payment: "money",
   create_expense: "money",
@@ -319,6 +321,29 @@ export const TOOLS = [
     },
   },
   {
+    name: "add_estimate_labor_items",
+    description: "Add one or more labor items (hours) to an existing estimate (by id). Each item has a description (e.g. Woodworking, Welding, Finishing, Install), hours, and an hourly rate; cost is computed as hours × rate. Appends to the estimate's existing labor. If you don't know the hourly rate, ask the user (or use the team's rate). Money action.",
+    input_schema: {
+      type: "object",
+      properties: {
+        estimate_id: { type: "string" },
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              description: { type: "string", description: "Labor type, e.g. Woodworking, Welding, Finishing, Install" },
+              hours: { type: "number" },
+              rate: { type: "number", description: "Hourly rate in dollars" },
+            },
+            required: ["description", "hours", "rate"],
+          },
+        },
+      },
+      required: ["estimate_id", "items"],
+    },
+  },
+  {
     name: "create_invoice",
     description: "Create an invoice in the current workspace with line items. Money action.",
     input_schema: {
@@ -448,6 +473,13 @@ export function describeAction(name: string, input: In): { title: string; summar
       const total = items.reduce((s, li) => s + (num(li, "quantity") || 0) * (num(li, "unit_price") || 0), 0);
       const itemLines = items.map((li) => `  • ${str(li, "description")} — ${num(li, "quantity")} × $${num(li, "unit_price")}`).join("\n");
       return { title: `Add ${items.length} line item${items.length === 1 ? "" : "s"} to estimate — $${total.toFixed(2)}`, summary: itemLines };
+    }
+    case "add_estimate_labor_items": {
+      const items = Array.isArray(input.items) ? (input.items as In[]) : [];
+      const total = items.reduce((s, li) => s + (num(li, "hours") || 0) * (num(li, "rate") || 0), 0);
+      const hrs = items.reduce((s, li) => s + (num(li, "hours") || 0), 0);
+      const itemLines = items.map((li) => `  • ${str(li, "description")} — ${num(li, "hours")} hrs × $${num(li, "rate")}/hr = $${((num(li, "hours") || 0) * (num(li, "rate") || 0)).toFixed(2)}`).join("\n");
+      return { title: `Add ${items.length} labor item${items.length === 1 ? "" : "s"} (${hrs} hrs) to estimate — $${total.toFixed(2)}`, summary: itemLines };
     }
     case "create_invoice": {
       const items = Array.isArray(input.line_items) ? (input.line_items as In[]) : [];
@@ -726,6 +758,27 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         const added = newLines.reduce((s, li) => s + li.quantity * li.unit_price, 0);
         await logActivity(ctx, { action: "updated", entity: "estimate", entity_id: id, label: `Added ${newLines.length} line item(s) to ${est.estimate_number}` });
         return { ok: true, data: { added_count: newLines.length, added_subtotal: Number(added.toFixed(2)), line_item_count: merged.length } };
+      }
+      case "add_estimate_labor_items": {
+        const id = str(input, "estimate_id");
+        const items = Array.isArray(input.items) ? (input.items as In[]) : [];
+        if (!id) return { ok: false, error: "estimate_id is required" };
+        if (items.length === 0) return { ok: false, error: "at least one labor item is required" };
+        const { data: est, error: gErr } = await admin
+          .from("estimates").select("id,estimate_number,labor_items").eq("id", id).eq("entity", entity).single();
+        if (gErr || !est) return { ok: false, error: gErr?.message || "estimate not found" };
+        const newLabor = items.map((li) => {
+          const hours = num(li, "hours") || 0;
+          const rate = num(li, "rate") || 0;
+          return { description: str(li, "description") || "", hours, rate, cost: Number((hours * rate).toFixed(2)) };
+        });
+        const merged = [...(est.labor_items || []), ...newLabor];
+        const { error } = await admin.from("estimates").update({ labor_items: merged, updated_at: new Date().toISOString() }).eq("id", id);
+        if (error) return { ok: false, error: error.message };
+        const addedHours = newLabor.reduce((s, l) => s + l.hours, 0);
+        const addedCost = newLabor.reduce((s, l) => s + l.cost, 0);
+        await logActivity(ctx, { action: "updated", entity: "estimate", entity_id: id, label: `Added ${newLabor.length} labor item(s) (${addedHours} hrs) to ${est.estimate_number}` });
+        return { ok: true, data: { added_count: newLabor.length, added_hours: addedHours, added_cost: Number(addedCost.toFixed(2)), labor_item_count: merged.length } };
       }
       case "create_invoice": {
         const client_name = str(input, "client_name");
