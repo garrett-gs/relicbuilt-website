@@ -266,6 +266,18 @@ export default function EstimatorPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Deep-link: open a specific estimate when arrived via ?id= (e.g. a build
+  // clicked from a Master Project). Read client-side to avoid a Suspense
+  // boundary requirement from useSearchParams; select once.
+  const deepLinkedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkedRef.current || estimates.length === 0) return;
+    const id = new URLSearchParams(window.location.search).get("id");
+    if (!id) return;
+    const match = estimates.find((e) => e.id === id);
+    if (match) { setSelected(match); deepLinkedRef.current = true; }
+  }, [estimates]);
+
   // Working = anything still in the funnel that hasn't reached a terminal
   // state. Accepted + rejected are both terminal — accepted gets its own
   // tab so it stays easy to find for post-signature work, and rejected

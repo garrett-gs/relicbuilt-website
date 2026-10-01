@@ -345,6 +345,17 @@ export default function ProjectsPage() {
   }, [entity]);
   const masterName = (id?: string) => (id ? masters.find((m) => m.id === id)?.name : undefined);
 
+  // Deep-link: open a specific project when arrived via ?id= (e.g. a build
+  // clicked from a Master Project). Client-side read, select once.
+  const deepLinkedRef = useRef(false);
+  useEffect(() => {
+    if (deepLinkedRef.current || projects.length === 0) return;
+    const id = new URLSearchParams(window.location.search).get("id");
+    if (!id) return;
+    const match = projects.find((p) => p.id === id);
+    if (match) { setSelected(match); deepLinkedRef.current = true; }
+  }, [projects]);
+
   async function createProject(form: Record<string, string>) {
     const { data } = await axiom.from("custom_work").insert({
       entity,

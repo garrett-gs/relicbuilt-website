@@ -8,6 +8,7 @@ import { useEntity } from "@/components/axiom/EntityProvider";
 import { MasterProject, Estimate, CustomWork, Customer } from "@/types/axiom";
 import { formatDate, cn } from "@/lib/utils";
 import Button from "@/components/ui/Button";
+import Link from "next/link";
 import { Plus, X, Trash2, Search, Layers, ChevronDown, ChevronRight, Pencil, CalendarDays, DollarSign, ListChecks } from "lucide-react";
 
 const money = (n: number) =>
@@ -186,12 +187,14 @@ export default function MasterProjectsPage() {
                   {childCount === 0 && <p className="px-4 py-3 text-xs text-muted">No builds yet — add one below.</p>}
                   {estChildren.map((e) => {
                     const st = childStatus(e);
+                    // Open the built project if it exists, else the estimate.
+                    const href = e.custom_work_id ? `/axiom/projects?id=${e.custom_work_id}` : `/axiom/estimator?id=${e.id}`;
                     return (
                       <div key={e.id} className="px-4 py-2.5 flex items-center justify-between gap-3 border-b border-border/60 last:border-b-0">
-                        <div className="min-w-0">
-                          <p className="text-sm truncate">{e.project_name || e.estimate_number}</p>
+                        <Link href={href} className="min-w-0 flex-1 group">
+                          <p className="text-sm truncate group-hover:text-accent transition-colors">{e.project_name || e.estimate_number}</p>
                           <p className="text-[11px] text-muted font-mono">{e.estimate_number}</p>
-                        </div>
+                        </Link>
                         <div className="flex items-center gap-3 shrink-0">
                           <span className="text-[10px] uppercase tracking-wider text-muted border border-border px-1.5 py-0.5">{st.label}</span>
                           <span className="text-xs font-mono text-accent">{money(estimateTotal(e))}</span>
@@ -202,7 +205,10 @@ export default function MasterProjectsPage() {
                   })}
                   {cwOrphans.map((p) => (
                     <div key={p.id} className="px-4 py-2.5 flex items-center justify-between gap-3 border-b border-border/60 last:border-b-0">
-                      <div className="min-w-0"><p className="text-sm truncate">{p.project_name}</p><p className="text-[11px] text-muted">Project</p></div>
+                      <Link href={`/axiom/projects?id=${p.id}`} className="min-w-0 flex-1 group">
+                        <p className="text-sm truncate group-hover:text-accent transition-colors">{p.project_name}</p>
+                        <p className="text-[11px] text-muted">Project</p>
+                      </Link>
                       <span className="text-xs font-mono text-accent shrink-0">{money(p.quoted_amount || 0)}</span>
                     </div>
                   ))}
