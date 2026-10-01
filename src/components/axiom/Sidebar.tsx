@@ -34,6 +34,7 @@ import {
   Martini,
   StickyNote,
   Layers,
+  ScanLine,
 } from "lucide-react";
 
 const navSections = [
@@ -44,6 +45,13 @@ const navSections = [
       { href: "/axiom/tracker", icon: LayoutList, label: "Tracker" },
       { href: "/axiom/notes", icon: StickyNote, label: "Notes" },
       { href: "/axiom/crew", icon: HardHat, label: "Crew", adminOnly: true },
+    ],
+  },
+  {
+    label: "Tools",
+    items: [
+      { href: "/receipts", icon: Camera, label: "Scan Receipt" },
+      { href: "/axiom/inventory?scan=1", icon: ScanLine, label: "Scan to Inventory" },
     ],
   },
   {

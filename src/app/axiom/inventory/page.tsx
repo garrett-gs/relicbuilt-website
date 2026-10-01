@@ -170,6 +170,12 @@ function InventoryTab({
   const [txnModal, setTxnModal] = useState<{ item: InventoryItem; type: "in" | "out" } | null>(null);
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
 
+  // Open the scanner straight away when arrived via the Tools → "Scan to
+  // Inventory" sidebar shortcut (/axiom/inventory?scan=1).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("scan") === "1") setShowScan(true);
+  }, []);
+
   const filtered = items.filter((it) => {
     const q = search.toLowerCase();
     const matchSearch = !q || it.description.toLowerCase().includes(q) || (it.item_number ?? "").toLowerCase().includes(q);
