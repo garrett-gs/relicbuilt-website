@@ -13,6 +13,8 @@ export async function POST(req: NextRequest) {
     const source = body?.source as WallflowerSource | undefined;
     const status = body?.status as string | undefined;
     const completed = body?.completed as boolean | undefined;
+    const actor = body?.actor as string | undefined;
+    const notes = body?.notes as string | undefined;
 
     if (!source || !status) {
       return NextResponse.json({ error: "source and status required" }, { status: 400 });
@@ -23,7 +25,7 @@ export async function POST(req: NextRequest) {
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
     );
 
-    await notifyWallflowerStatus(db, source, status, { completed });
+    await notifyWallflowerStatus(db, source, status, { completed, actor, notes });
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[wallflower-status route] error:", err);
