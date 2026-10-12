@@ -697,6 +697,11 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const { userEmail: detailUserEmail } = useAuth();
   const [customerId, setCustomerId] = useState(estimate.customer_id || "");
   const [customerName, setCustomerName] = useState("");
+  // Flips true the moment the user picks or clears the Customer by hand. Once
+  // set, the by-name fallback resolver below must never re-bind a customer —
+  // otherwise clearing the link just snaps the old customer right back in,
+  // because client_name (the contact) is left intact on purpose.
+  const customerTouchedRef = useRef(false);
   // If the selected customer is linked to a company, this carries the
   // company's display info onto the estimate so it shows in the UI and
   // the proposal ("Prepared for [Customer] of [Company]").
@@ -1269,6 +1274,9 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   // ambiguous names don't get auto-bound to the wrong person.
   useEffect(() => {
     if (estimate.customer_id) return;
+    // Don't fight an explicit user action: if they just cleared or swapped the
+    // customer, leave the link empty even though client_name still matches.
+    if (customerTouchedRef.current) return;
     if (!estimate.client_name?.trim()) return;
     axiom
       .from("customers")
@@ -1387,6 +1395,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     // clearing them when the user removes the link or picks someone with no
     // contact info on file. The previous "only fill if empty" guard meant
     // switching customers left the prior person's email/phone behind.
+    customerTouchedRef.current = true;
     if (!c.id) {
       setCustomerId("");
       setCustomerName("");
@@ -1492,7 +1501,9 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   // The full set of fields the Estimator manages, from current state.
   function buildFull(): Partial<Estimate> {
     return {
-      customer_id: customerId || undefined,
+      // null (not undefined) so a cleared customer is actually written to the
+      // DB — undefined gets stripped from the PATCH and the old link survives.
+      customer_id: customerId || null,
       master_project_id: masterProjectId || undefined,
       vendor_id: vendorId || undefined,
       vendor_name: vendorName || undefined,
