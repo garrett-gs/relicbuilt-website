@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { notifyWallflowerStatus } from "@/lib/wallflower-status";
 import { notifyNexusBuildLink } from "@/lib/notify-nexus-build-link";
+import { notifyNewIntake } from "@/lib/notify-new-intake";
 
 const API_KEY = process.env.WALLFLOWER_API_KEY || "wfrelic2026";
 
@@ -174,6 +175,18 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       console.error("[wallflower] auto-spawn estimate failed:", e);
     }
+
+    // Alert the owner + add to daily reminders. Best-effort — the helper
+    // swallows its own errors, so a notification hiccup never fails intake.
+    await notifyNewIntake({
+      kind: "work_order",
+      title: item_name.trim(),
+      clientName: submitted_by || "Wallflower",
+      summary: [
+        `Type: ${work_type || "Repair"} · Scope: ${scope || "External"}${quantity && quantity > 1 ? ` · Qty: ${quantity}` : ""}`,
+        description || "",
+      ].filter(Boolean).join("\n"),
+    });
 
     return NextResponse.json({ ok: true, id: data.id, estimate_id: spawnedEstimateId });
   } catch (err) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { notifyNewIntake } from "@/lib/notify-new-intake";
 
 export async function POST(req: NextRequest) {
   try {
@@ -12,15 +13,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // TODO: Save to Supabase and/or send email notification via Resend
-    // For now, log and return success
-    console.log("Contact form submission:", {
-      name,
-      email,
-      phone,
-      subject,
-      message,
-      type,
+    // Every inbound request (new-client / estimate request / general inquiry)
+    // alerts the owner immediately and drops onto the daily reminders until
+    // handled. Best-effort — a notification failure never fails the form.
+    const kindLabel = type === "new-client" ? "New Client" : "Website";
+    await notifyNewIntake({
+      kind: "estimate_request",
+      title: `${name}${type ? ` (${kindLabel})` : ""}`,
+      clientName: name,
+      clientEmail: email,
+      clientPhone: phone || null,
+      summary: [subject ? `Subject: ${subject}` : "", message || ""]
+        .filter(Boolean)
+        .join("\n"),
     });
 
     return NextResponse.json({ success: true });
