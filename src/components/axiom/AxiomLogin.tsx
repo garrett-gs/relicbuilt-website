@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { useAuth } from "./AuthProvider";
 import Button from "@/components/ui/Button";
 
@@ -27,26 +26,16 @@ export default function AxiomLogin() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-6">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-10">
-          <div className="flex justify-center mb-4">
-            <Image
-              src="/wr-emblem.png"
-              alt="Wallflower RELIC"
-              width={64}
-              height={64}
-              className="h-16 w-16"
-            />
-          </div>
-          <h1 className="text-3xl font-heading font-bold tracking-wide text-foreground">
-            Wallflower RELIC
-          </h1>
-          <p className="text-muted text-sm mt-2 tracking-wide">
-            Project Management
-          </p>
-          {/* AXIOM in Morse code: ·- -··- ·· --- -- */}
-          <p className="text-xs mt-3 tracking-[0.5em] font-bold" style={{ color: "#5b642e" }} aria-label="AXIOM in Morse code">
-            ·-&emsp;-··-&emsp;··&emsp;---&emsp;--
-          </p>
+        {/* RELICON | AXIOM lockup + "FROM FIRST QUOTE TO FINAL BUILD" tagline,
+            one piece per AXIOM_LOGO_RULES.md §3. No business logo on login. */}
+        <div className="mb-10">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand/relicon-axiom-login-on-dark.svg"
+            alt="Relicon Axiom — from first quote to final build"
+            className="w-full h-auto select-none"
+            draggable={false}
+          />
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
