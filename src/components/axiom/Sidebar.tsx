@@ -258,7 +258,7 @@ export default function Sidebar() {
         {/* Powered by Relicon — small + muted, per AXIOM_LOGO_RULES.md §4 */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/brand/powered-by-relicon-on-dark.svg"
+          src="/brand/shared/powered-by-relicon-on-dark.svg"
           alt="Powered by Relicon"
           className="h-3 w-auto mt-4 opacity-60 select-none"
           draggable={false}

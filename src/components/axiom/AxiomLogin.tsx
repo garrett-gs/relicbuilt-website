@@ -31,7 +31,7 @@ export default function AxiomLogin() {
         <div className="mb-10">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/brand/relicon-axiom-login-on-dark.svg"
+            src="/brand/axiom/relicon-axiom-login-on-dark.svg"
             alt="Relicon Axiom — from first quote to final build"
             className="w-full h-auto select-none"
             draggable={false}
