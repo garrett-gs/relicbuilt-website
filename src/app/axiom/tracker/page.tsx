@@ -89,11 +89,15 @@ function TasksTab() {
   const { userEmail } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [team, setTeam] = useState<string[]>([]);
+  const [myName, setMyName] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [selected, setSelected] = useState<Task | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  // Each user lands on their own tasks by default; they can switch to "All
+  // Team" anytime. Resolved once from their login email → team-member name.
   const [teamFilter, setTeamFilter] = useState("all");
+  const defaultedFilter = useRef(false);
   const [taskTab, setTaskTab] = useState<"active" | "completed">("active");
   const [comment, setComment] = useState("");
 
@@ -105,14 +109,23 @@ function TasksTab() {
 
   useEffect(() => {
     axiom.from("settings").select("team_members").limit(1).single().then(({ data }) => {
-      if (data?.team_members) {
-        setTeam((data.team_members as { name: string }[]).map((m) => m.name).filter(Boolean));
+      const members = (data?.team_members as { name: string; email?: string }[] | undefined) || [];
+      setTeam(members.map((m) => m.name).filter(Boolean));
+      const me = members.find((m) => m.email && userEmail && m.email.toLowerCase() === userEmail.toLowerCase());
+      if (me?.name) {
+        setMyName(me.name);
+        // Default the filter to the current user once. Guarded so a manual
+        // switch to "All Team" isn't overridden on a later settings refetch.
+        if (!defaultedFilter.current) {
+          setTeamFilter(me.name);
+          defaultedFilter.current = true;
+        }
       }
     });
-  }, []);
+  }, [userEmail]);
 
   const filtered = teamFilter === "all" ? tasks : tasks.filter((t) => t.assignee === teamFilter);
-  const overdue = tasks.filter((t) => t.due_date && t.status !== "done" && new Date(t.due_date) < new Date());
+  const overdue = filtered.filter((t) => t.due_date && t.status !== "done" && new Date(t.due_date) < new Date());
 
   async function createTask(form: Record<string, string>) {
     const { data } = await axiom.from("tasks").insert({
@@ -154,14 +167,14 @@ function TasksTab() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div className="flex gap-4 text-sm">
-          <span className="text-muted">{tasks.filter((t) => t.status !== "done").length} open</span>
-          <span className="text-blue-400">{tasks.filter((t) => t.status === "in_progress").length} in progress</span>
+          <span className="text-muted">{filtered.filter((t) => t.status !== "done").length} open</span>
+          <span className="text-blue-400">{filtered.filter((t) => t.status === "in_progress").length} in progress</span>
           {overdue.length > 0 && <span className="text-red-400">{overdue.length} overdue</span>}
         </div>
         <div className="flex gap-3">
           <select value={teamFilter} onChange={(e) => setTeamFilter(e.target.value)} className="bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent">
             <option value="all">All Team</option>
-            {team.map((t) => <option key={t} value={t}>{t}</option>)}
+            {team.map((t) => <option key={t} value={t}>{t === myName ? `${t} (me)` : t}</option>)}
           </select>
           <Button onClick={() => setShowCreate(true)} size="sm"><Plus size={14} className="mr-1" /> New Task</Button>
         </div>
@@ -251,7 +264,7 @@ function TasksTab() {
 
       {showCreate && (
         <TaskModal title="New Task" onClose={() => setShowCreate(false)}>
-          <TaskForm onSubmit={createTask} onCancel={() => setShowCreate(false)} team={team} />
+          <TaskForm onSubmit={createTask} onCancel={() => setShowCreate(false)} team={team} defaultAssignee={myName} />
         </TaskModal>
       )}
 
@@ -328,11 +341,12 @@ function TaskModal({ title, onClose, children }: { title: string; onClose: () =>
   );
 }
 
-function TaskForm({ onSubmit, onCancel, team }: { onSubmit: (f: Record<string, string>) => void; onCancel: () => void; team: string[] }) {
+function TaskForm({ onSubmit, onCancel, team, defaultAssignee }: { onSubmit: (f: Record<string, string>) => void; onCancel: () => void; team: string[]; defaultAssignee?: string }) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
-  const [assignee, setAssignee] = useState("");
+  // Default a new task to the person creating it — personal tracking by default.
+  const [assignee, setAssignee] = useState(defaultAssignee || "");
   const [dueDate, setDueDate] = useState("");
   return (
     <div className="space-y-3">
