@@ -6,6 +6,7 @@ import { EntityProvider } from "@/components/axiom/EntityProvider";
 import Sidebar from "@/components/axiom/Sidebar";
 import AxiomLogin from "@/components/axiom/AxiomLogin";
 import Assistant from "@/components/axiom/Assistant";
+import UpdateBanner from "@/components/axiom/UpdateBanner";
 
 function AxiomShell({ children }: { children: React.ReactNode }) {
   const { session, loading } = useAuth();
@@ -35,6 +36,7 @@ function AxiomShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <Assistant />
+      <UpdateBanner />
     </div>
   );
 }
