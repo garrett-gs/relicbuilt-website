@@ -78,7 +78,7 @@ function buildEmailHtml(opts: {
           <tbody>${rows}</tbody>
         </table>
         <p style="margin:24px 0 0">
-          <a href="${siteUrl}/axiom/my-tasks" style="display:inline-block;background:#5b642e;color:#fff;text-decoration:none;padding:10px 24px;font-size:14px">Open my tasks →</a>
+          <a href="${siteUrl}/axiom/tracker?tab=tasks" style="display:inline-block;background:#5b642e;color:#fff;text-decoration:none;padding:10px 24px;font-size:14px">Open my tasks →</a>
         </p>
         <p style="margin-top:32px;font-size:11px;color:#aaa">${escapeHtml(bizName)} &nbsp;·&nbsp; wallflower-relic.com</p>
       </div>

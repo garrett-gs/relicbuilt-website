@@ -70,8 +70,9 @@ export async function notifyNewIntake(input: NewIntakeInput): Promise<{ emailed:
     const label = LABEL[input.kind];
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://relicbuilt.com";
     // Where the owner goes to act on it. Work orders live on the Wallflower
-    // board; estimate requests surface through the reminder task list.
-    const actionPath = input.kind === "work_order" ? "/axiom/wallflower" : "/axiom/my-tasks";
+    // board; estimate requests surface through the reminder task list (the
+    // Tracker's Tasks tab — /axiom/my-tasks does not exist).
+    const actionPath = input.kind === "work_order" ? "/axiom/wallflower" : "/axiom/tracker?tab=tasks";
     const actionUrl = `${siteUrl}${actionPath}`;
 
     const contactBits = [
