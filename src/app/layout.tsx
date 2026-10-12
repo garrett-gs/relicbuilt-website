@@ -33,15 +33,22 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
-    title: "Wallflower RELIC",
+    title: "Axiom",
     statusBarStyle: "black-translucent",
     // Pinned to the larger 180x180 apple-touch-icon so iPad/iPhone home
-    // screen icons render crisp rather than scaling the Next-generated
-    // 32px icon up to 180px and looking pixelated.
-    startupImage: ["/apple-touch-icon-wr2.png"],
+    // screen icons render crisp rather than scaling a 32px icon up to 180px
+    // and looking pixelated.
+    startupImage: ["/apple-touch-icon.png"],
   },
+  // Relicon brass "A" icon set (see RELICON_APP_ICONS.md). Served from public/.
   icons: {
-    apple: [{ url: "/apple-touch-icon-wr2.png", sizes: "180x180" }],
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
+      { url: "/favicon-16.png", type: "image/png", sizes: "16x16" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+    shortcut: ["/favicon.ico"],
   },
   openGraph: {
     title: "Wallflower RELIC | Custom Woodworking & Metalworks",
