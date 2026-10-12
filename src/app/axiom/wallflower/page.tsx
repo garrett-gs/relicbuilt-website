@@ -415,6 +415,15 @@ export default function WallflowerPage() {
                           <div className="min-w-0 flex-1">
                             <p className="font-medium text-sm truncate">{wo.item_name}</p>
                             <p className="text-muted text-xs truncate">{wo.work_type} · {wo.scope}</p>
+                            {wo.billing_type === "maintenance" && (
+                              <span
+                                className="inline-block mt-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5"
+                                style={{ background: "#f59e0b20", color: "#f59e0b" }}
+                                title="Maintenance — cost tracking only, no customer-facing price"
+                              >
+                                Maintenance · No Quote
+                              </span>
+                            )}
                             {wo.nexus_ref && (
                               <p className="text-accent/80 text-[11px] mt-0.5 truncate" title={`Nexus ${wo.nexus_ref.type} ${wo.nexus_ref.number}`}>
                                 ↗ {wo.nexus_ref.number}

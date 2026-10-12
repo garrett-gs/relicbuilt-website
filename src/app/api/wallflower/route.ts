@@ -44,11 +44,19 @@ export async function POST(req: NextRequest) {
       // what closes the custom-build loop — when Axiom later finalizes the
       // estimate, send-to-wr auto-appends the price onto this same quote.
       nexus_ref,
+      // Billing posture from Nexus. Both optional; default is billable.
+      // "maintenance" (or pricing_requested === false) means Nexus wants the
+      // work done but NO customer-facing price — track cost only, don't quote.
+      billing_type,
+      pricing_requested,
     } = body;
 
     if (!item_name?.trim()) {
       return NextResponse.json({ error: "item_name is required" }, { status: 400 });
     }
+
+    const isMaintenance = billing_type === "maintenance" || pricing_requested === false;
+    const billingType: "billable" | "maintenance" = isMaintenance ? "maintenance" : "billable";
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
@@ -67,6 +75,7 @@ export async function POST(req: NextRequest) {
         assigned_to: assigned_to || null,
         deadline: deadline || null,
         status: status || "pending",
+        billing_type: billingType,
         description: description || null,
         quantity: quantity || 1,
         submitted_by: submitted_by || "Wallflower",
@@ -105,6 +114,7 @@ export async function POST(req: NextRequest) {
         ? (reference_images as { url?: string }[]).map((r) => r?.url).filter((u): u is string => !!u)
         : [];
       const seedNotes = [
+        isMaintenance ? "⚠ MAINTENANCE — cost tracking only. Do NOT quote; no customer-facing price." : "",
         `Work Order: ${item_name.trim()}`,
         `Type: ${work_type || "Repair"}`,
         `Scope: ${scope || "External"}`,
@@ -180,9 +190,10 @@ export async function POST(req: NextRequest) {
     // swallows its own errors, so a notification hiccup never fails intake.
     await notifyNewIntake({
       kind: "work_order",
-      title: item_name.trim(),
+      title: `${item_name.trim()}${isMaintenance ? " — MAINTENANCE (no quote)" : ""}`,
       clientName: submitted_by || "Wallflower",
       summary: [
+        isMaintenance ? "Maintenance / cost-tracking only — do not produce a customer-facing price." : "",
         `Type: ${work_type || "Repair"} · Scope: ${scope || "External"}${quantity && quantity > 1 ? ` · Qty: ${quantity}` : ""}`,
         description || "",
       ].filter(Boolean).join("\n"),

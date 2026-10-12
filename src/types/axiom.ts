@@ -557,6 +557,10 @@ export interface WallflowerWorkOrder {
   status: "pending" | "accepted" | "in_progress" | "estimated" | "complete" | "cancelled";
   description?: string;
   quantity: number;
+  // Billing posture set on the Nexus side. "maintenance" = do the work for
+  // cost-tracking only, never produce a customer-facing price. Defaults to
+  // "billable" when Nexus omits it.
+  billing_type?: "billable" | "maintenance";
   estimate_id?: string;
   notes?: string;
   images?: string[];

@@ -1,3 +1,4 @@
+import { createClient } from "@supabase/supabase-js";
 import { getWRClient } from "@/lib/wr-supabase";
 
 /**
@@ -67,6 +68,31 @@ export async function notifyNexusBuildLink(args: BuildLinkArgs): Promise<void> {
     }
   }
 
+  // Nexus uses wallflower_order_id to look up the work order's billing_type and
+  // skip pricing a maintenance job through to a customer. Echo it on EVERY push.
+  // Callers at create time pass it; on updated/approved they usually don't, so
+  // fall back to the work order linked to this estimate.
+  let wallflowerOrderId = args.wallflowerOrderId ?? null;
+  if (!wallflowerOrderId) {
+    try {
+      const axiomUrl = process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL;
+      const axiomKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY;
+      if (axiomUrl && axiomKey) {
+        const axiom = createClient(axiomUrl, axiomKey);
+        const { data: wo } = await axiom
+          .from("wallflower_work_orders")
+          .select("wallflower_order_id")
+          .eq("estimate_id", args.estimateId)
+          .not("wallflower_order_id", "is", null)
+          .limit(1)
+          .maybeSingle();
+        wallflowerOrderId = (wo?.wallflower_order_id as string | undefined) ?? null;
+      }
+    } catch {
+      /* Axiom not reachable — leave null; Nexus falls back to billable */
+    }
+  }
+
   const payload = {
     event: EVENT_MAP[args.event],
     relic_build_id: relicBuildId,
@@ -77,7 +103,7 @@ export async function notifyNexusBuildLink(args: BuildLinkArgs): Promise<void> {
     status: args.status ?? (args.event === "approved" ? "approved" : "draft"),
     approved_at: args.approvedAt ?? null,
     approved_by: args.approvedBy ?? null,
-    wallflower_order_id: args.wallflowerOrderId ?? null,
+    wallflower_order_id: wallflowerOrderId,
     nexus_ref: args.nexusRef ?? null,
   };
 
