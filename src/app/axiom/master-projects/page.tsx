@@ -13,6 +13,11 @@ import { Plus, X, Trash2, Search, Layers, ChevronDown, ChevronRight, Pencil, Cal
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n || 0);
+// Exact cents — used in the P&L rollup where materials/expenses are penny-precise.
+const money2 = (n: number) =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
+
+type ExpenseLite = { amount?: number | null; category?: string | null; custom_work_id?: string | null };
 
 function estimateTotal(e: Estimate) {
   const material = (e.line_items || []).reduce((s, li) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
@@ -38,6 +43,7 @@ export default function MasterProjectsPage() {
   const [masters, setMasters] = useState<MasterProject[]>([]);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [projects, setProjects] = useState<CustomWork[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseLite[]>([]);
   const [customers, setCustomers] = useState<Pick<Customer, "id" | "name">[]>([]);
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -57,16 +63,21 @@ export default function MasterProjectsPage() {
     const { data } = await axiom.from("custom_work").select("*").eq("entity", entity);
     if (data) setProjects(data);
   }, [entity]);
+  const loadExpenses = useCallback(async () => {
+    const { data } = await axiom.from("expenses").select("amount, category, custom_work_id").eq("entity", entity);
+    if (data) setExpenses(data);
+  }, [entity]);
   const loadCustomers = useCallback(async () => {
     const { data } = await axiom.from("customers").select("id, name").eq("entity", entity).order("name");
     if (data) setCustomers(data);
   }, [entity]);
 
-  const reload = useCallback(() => { loadMasters(); loadEstimates(); loadProjects(); }, [loadMasters, loadEstimates, loadProjects]);
+  const reload = useCallback(() => { loadMasters(); loadEstimates(); loadProjects(); loadExpenses(); }, [loadMasters, loadEstimates, loadProjects, loadExpenses]);
 
   useEffect(() => { loadMasters(); }, [loadMasters]);
   useEffect(() => { loadEstimates(); }, [loadEstimates]);
   useEffect(() => { loadProjects(); }, [loadProjects]);
+  useEffect(() => { loadExpenses(); }, [loadExpenses]);
   useEffect(() => { loadCustomers(); }, [loadCustomers]);
 
   // Children of a master = estimates tagged to it, plus any tagged project that
@@ -84,6 +95,45 @@ export default function MasterProjectsPage() {
     const raw = cw?.status || e.status || "draft";
     return { raw, label: raw.replace(/_/g, " "), done: raw === "complete" };
   };
+
+  // Roll up a master project's P&L across every child build. Costs are pulled
+  // from all three places costs actually live:
+  //   • labor  — estimate labor_items + project labor_log + expenses tagged "Labor"
+  //   • materials — project materials[] + non-Labor expenses
+  // Revenue is the quoted total unless an actual charged amount is entered on the
+  // master (then it's net sales = charged − tax, since tax is a pass-through).
+  const pnlOf = (m: MasterProject, estChildren: Estimate[], cwOrphans: CustomWork[], quoted: number) => {
+    const childCwIds = new Set<string>();
+    estChildren.forEach((e) => { if (e.custom_work_id) childCwIds.add(e.custom_work_id); });
+    cwOrphans.forEach((p) => childCwIds.add(p.id));
+    const childProjects = projects.filter((p) => childCwIds.has(p.id));
+
+    const laborFromEstimates = estChildren.reduce((s, e) => s + (e.labor_items || []).reduce((a, l) => a + (l.cost || 0), 0), 0);
+    const laborFromLog = childProjects.reduce((s, p) => s + (p.labor_log || []).reduce((a, l) => a + (l.cost || 0), 0), 0);
+    const matFromProjects = childProjects.reduce((s, p) => s + (p.materials || []).reduce((a, mm) => a + (mm.cost || 0), 0), 0);
+
+    const childExpenses = expenses.filter((x) => x.custom_work_id && childCwIds.has(x.custom_work_id));
+    const laborFromExpenses = childExpenses.filter((x) => (x.category || "").toLowerCase() === "labor").reduce((s, x) => s + (x.amount || 0), 0);
+    const matFromExpenses = childExpenses.filter((x) => (x.category || "").toLowerCase() !== "labor").reduce((s, x) => s + (x.amount || 0), 0);
+
+    const labor = laborFromEstimates + laborFromLog + laborFromExpenses;
+    const materials = matFromProjects + matFromExpenses;
+    const cost = labor + materials;
+
+    const charged = m.charged_amount ?? null;
+    const tax = m.tax_collected ?? 0;
+    const hasCharged = charged != null && charged > 0;
+    const netSales = hasCharged ? (charged as number) - tax : quoted;
+    const profit = netSales - cost;
+    const margin = netSales > 0 ? (profit / netSales) * 100 : 0;
+
+    return { labor, materials, cost, quoted, charged, tax, hasCharged, netSales, profit, margin };
+  };
+
+  async function updateMasterFinance(id: string, patch: { charged_amount?: number | null; tax_collected?: number | null }) {
+    await axiom.from("master_projects").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id);
+    loadMasters();
+  }
 
   const unassignedEstimates = estimates.filter((e) => !e.master_project_id);
 
@@ -151,6 +201,7 @@ export default function MasterProjectsPage() {
         {filtered.map((m) => {
           const { estChildren, cwOrphans } = childrenOf(m.id);
           const total = estChildren.reduce((s, e) => s + estimateTotal(e), 0) + cwOrphans.reduce((s, p) => s + (p.quoted_amount || 0), 0);
+          const pnl = pnlOf(m, estChildren, cwOrphans, total);
           const windowStr = combinedWindow([...estChildren, ...cwOrphans]);
           const childCount = estChildren.length + cwOrphans.length;
           const doneCount = estChildren.filter((e) => childStatus(e).done).length + cwOrphans.filter((p) => p.status === "complete").length;
@@ -212,6 +263,83 @@ export default function MasterProjectsPage() {
                       <span className="text-xs font-mono text-accent shrink-0">{money(p.quoted_amount || 0)}</span>
                     </div>
                   ))}
+
+                  {/* Profit & Loss rollup across all child builds */}
+                  <div className="border-t border-border bg-background/40 px-4 py-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-[10px] uppercase tracking-widest text-muted font-medium">Profit &amp; Loss</p>
+                      <span className={cn("text-[11px] font-mono px-1.5 py-0.5 rounded", pnl.margin >= 0 ? "text-accent" : "text-red-500")}>
+                        {pnl.margin.toFixed(1)}% margin
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-1.5 text-sm">
+                      {/* Revenue */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted">{pnl.hasCharged ? "Net sales (charged − tax)" : "Revenue (quoted)"}</span>
+                        <span className="font-mono">{money2(pnl.netSales)}</span>
+                      </div>
+                      {/* Total cost */}
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted">Total cost</span>
+                        <span className="font-mono">{money2(pnl.cost)}</span>
+                      </div>
+                      {/* Labor */}
+                      <div className="flex items-center justify-between text-xs text-muted">
+                        <span className="pl-3">· Labor</span>
+                        <span className="font-mono">{money2(pnl.labor)}</span>
+                      </div>
+                      {/* Materials */}
+                      <div className="flex items-center justify-between text-xs text-muted">
+                        <span className="pl-3">· Materials</span>
+                        <span className="font-mono">{money2(pnl.materials)}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-border mt-3 pt-2.5">
+                      <span className="text-sm font-medium">Net profit</span>
+                      <span className={cn("font-mono font-bold", pnl.profit >= 0 ? "text-accent" : "text-red-500")}>{money2(pnl.profit)}</span>
+                    </div>
+
+                    {/* Actual billing entry — overrides quoted revenue when set */}
+                    <div className="flex flex-wrap items-end gap-x-6 gap-y-2 mt-4 pt-3 border-t border-border/60">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[10px] uppercase tracking-wider text-muted">Amount charged</span>
+                        <input
+                          type="number" step="0.01" inputMode="decimal"
+                          defaultValue={m.charged_amount ?? ""}
+                          key={`charged-${m.id}-${m.charged_amount ?? ""}`}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            const n = v === "" ? null : Number(v);
+                            if ((n ?? null) !== (m.charged_amount ?? null)) updateMasterFinance(m.id, { charged_amount: n });
+                          }}
+                          placeholder="0.00"
+                          className="w-32 bg-card border border-border px-2.5 py-1.5 text-sm font-mono text-foreground focus:outline-none focus:border-accent"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[10px] uppercase tracking-wider text-muted">Sales tax</span>
+                        <input
+                          type="number" step="0.01" inputMode="decimal"
+                          defaultValue={m.tax_collected ?? ""}
+                          key={`tax-${m.id}-${m.tax_collected ?? ""}`}
+                          onBlur={(e) => {
+                            const v = e.target.value.trim();
+                            const n = v === "" ? null : Number(v);
+                            if ((n ?? null) !== (m.tax_collected ?? null)) updateMasterFinance(m.id, { tax_collected: n });
+                          }}
+                          placeholder="0.00"
+                          className="w-28 bg-card border border-border px-2.5 py-1.5 text-sm font-mono text-foreground focus:outline-none focus:border-accent"
+                        />
+                      </label>
+                      <p className="text-[11px] text-muted max-w-xs">
+                        {pnl.hasCharged
+                          ? `Quoted was ${money2(pnl.quoted)}. Tax is excluded from profit (pass-through).`
+                          : `Leave blank to use the quoted total (${money2(pnl.quoted)}) as revenue.`}
+                      </p>
+                    </div>
+                  </div>
 
                   {/* Add build */}
                   <div className="px-4 py-3">

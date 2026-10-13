@@ -247,6 +247,11 @@ export interface MasterProject {
   site_address?: string;
   description?: string;
   status?: "active" | "complete" | "archived";
+  // Actual billing for the whole grouped job (entered by hand, since the event
+  // is often invoiced outside Axiom). When charged_amount is set, the P&L uses
+  // net sales (charged − tax); otherwise it falls back to the quoted total.
+  charged_amount?: number | null;
+  tax_collected?: number | null;
   created_at: string;
   updated_at: string;
 }
