@@ -102,3 +102,28 @@ endpoint, the webhook is a safe no-op.
 - Render a **"View Design"** button per line linking to `build_url`
   (in the `quotes.wallflower-relic.com` app).
 - Gate quote acceptance (approval #2) on the sign-off approval (§3).
+- **Surface the material cost on the build (new, §7):** read `relic_builds.material_total`
+  and show it on the WR Builds picker / the quote line (alongside `build_url`), so the
+  WR proposal is worked off RELIC's true material cost. Material only — do **not** show
+  `labor_total`, `markup_percent`, or `total` in that spot.
+
+## 7. Build cost fields on `relic_builds` (direct upsert, not the webhook)
+
+Beyond the §2 webhook, `Send to WR Nexus` (`/api/send-to-wr`) **upserts the full build
+record directly** into the WR `relic_builds` table (`onConflict: relic_estimate_id`).
+That record already carries the cost breakdown — the webhook body (§2) still only
+carries the single `estimate_amount`. Relevant cost columns Axiom writes:
+
+| Column            | Meaning                                                        |
+|-------------------|---------------------------------------------------------------|
+| `material_total`  | **Material cost, pre-markup** — Σ(`line_items[].quantity × unit_price`). RELIC's true material cost basis. |
+| `labor_total`     | Labor cost, pre-markup — Σ(`labor_items[].cost`).             |
+| `markup_percent`  | Markup % applied on top of (material + labor).                |
+| `total`           | `(material_total + labor_total) × (1 + markup_percent/100)` — the customer-facing project total (`== estimate_amount`). |
+| `line_items`      | Raw material line items (JSONB).                              |
+| `labor_items`     | Raw labor items (JSONB).                                      |
+
+**For working the WR proposal we use `material_total` only** (true material cost, no
+markup, labor excluded). It is already populated on every build Axiom sends — no Axiom
+change is required; the open item is the Nexus-side display in §6. The customer-facing
+Axiom proposal portal still shows only `total` (no breakdown leaks to the client).
