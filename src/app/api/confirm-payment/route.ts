@@ -105,12 +105,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     }
 
+    // Resolve the invoice's entity branding once — reused for the receipt
+    // email and returned to the success page so a Relic payer sees Relic
+    // branding (not Wallflower) on the thank-you screen.
+    const { data: settingsRow } = await supabase
+      .from("settings")
+      .select("biz_name,biz_email,biz_phone,relic_profile")
+      .limit(1)
+      .single();
+    const profile = resolveEntityProfile(invoice.entity, settingsRow);
+    const brand = {
+      name: profile.name,
+      logo_url: profile.logoUrl,
+      website: profile.website,
+      phone: profile.phone,
+      accent: profile.accent,
+    };
+
     if (invoice.status === "paid") {
       return NextResponse.json({
         ok: true,
         already_paid: true,
         invoice_number: invoice.invoice_number,
         client_name: invoice.client_name,
+        brand,
       });
     }
 
@@ -282,12 +300,6 @@ export async function POST(req: NextRequest) {
     // invoice. Identical content as before, now reflecting the actual
     // method (Card vs ACH Bank Transfer).
     if (invoice.client_email && resendKey) {
-      const { data: settingsRow } = await supabase
-        .from("settings")
-        .select("biz_name,biz_email,biz_phone,relic_profile")
-        .limit(1)
-        .single();
-      const profile = resolveEntityProfile(invoice.entity, settingsRow);
       const html = receiptEmailHtml({
         clientName: invoice.client_name || "there",
         invoiceNumber: invoice.invoice_number,
@@ -348,6 +360,7 @@ export async function POST(req: NextRequest) {
       client_name: invoice.client_name,
       description: invoice.description,
       client_email: invoice.client_email,
+      brand,
     });
   } catch (err) {
     console.error("confirm-payment error:", err);
