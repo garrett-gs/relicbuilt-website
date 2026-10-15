@@ -17,7 +17,7 @@ function calcTotals(est: Estimate) {
   const laborTotal = (est.labor_items || []).reduce((s, l) => s + (l.cost || 0), 0);
   const subtotal = materialTotal + laborTotal;
   const markupAmount = subtotal * ((est.markup_percent || 0) / 100);
-  const total = Math.round((subtotal + markupAmount) * 100) / 100;
+  const total = Math.round((subtotal + markupAmount + (est.adjustment || 0)) * 100) / 100;
   return { materialTotal, laborTotal, markupAmount, total };
 }
 

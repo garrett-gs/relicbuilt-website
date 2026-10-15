@@ -18,12 +18,12 @@ function money(n: number) {
 interface LineItem { quantity?: number; unit_price?: number }
 interface LaborItem { cost?: number }
 
-function calcTotals(est: { line_items?: LineItem[]; labor_items?: LaborItem[]; markup_percent?: number }) {
+function calcTotals(est: { line_items?: LineItem[]; labor_items?: LaborItem[]; markup_percent?: number; adjustment?: number }) {
   const materialTotal = (est.line_items || []).reduce((s, li) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
   const laborTotal = (est.labor_items || []).reduce((s, li) => s + (li.cost || 0), 0);
   const subtotal = materialTotal + laborTotal;
   const markupAmount = subtotal * ((est.markup_percent || 0) / 100);
-  const total = Math.round((subtotal + markupAmount) * 100) / 100;
+  const total = Math.round((subtotal + markupAmount + (est.adjustment || 0)) * 100) / 100;
   return { materialTotal, laborTotal, markupAmount, total };
 }
 

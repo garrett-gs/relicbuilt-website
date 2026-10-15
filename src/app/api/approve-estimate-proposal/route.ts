@@ -19,12 +19,12 @@ function money(n: number) {
 interface EstimateLineItem { quantity?: number; unit_price?: number }
 interface EstimateLaborItem { cost?: number }
 
-function calcTotals(est: { line_items?: EstimateLineItem[]; labor_items?: EstimateLaborItem[]; markup_percent?: number }) {
+function calcTotals(est: { line_items?: EstimateLineItem[]; labor_items?: EstimateLaborItem[]; markup_percent?: number; adjustment?: number }) {
   const materialTotal = (est.line_items || []).reduce((s, li) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
   const laborTotal = (est.labor_items || []).reduce((s, l) => s + (l.cost || 0), 0);
   const subtotal = materialTotal + laborTotal;
   const markup = subtotal * ((est.markup_percent || 0) / 100);
-  const total = Math.round((subtotal + markup) * 100) / 100;
+  const total = Math.round((subtotal + markup + (est.adjustment || 0)) * 100) / 100;
   return { materialTotal, laborTotal, subtotal, markup, total };
 }
 

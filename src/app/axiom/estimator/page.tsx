@@ -48,12 +48,12 @@ function dedupeCatalog(items: CatalogItem[]): CatalogItem[] {
   return out;
 }
 
-function calcTotals(est: Pick<Estimate, "line_items" | "labor_items" | "markup_percent">) {
+function calcTotals(est: Pick<Estimate, "line_items" | "labor_items" | "markup_percent" | "adjustment">) {
   const materialTotal = est.line_items.reduce((s, li) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
   const laborTotal = est.labor_items.reduce((s, l) => s + (l.cost || 0), 0);
   const subtotal = materialTotal + laborTotal;
   const markupAmount = subtotal * ((est.markup_percent || 0) / 100);
-  const total = subtotal + markupAmount;
+  const total = subtotal + markupAmount + (est.adjustment || 0);
   return { materialTotal, laborTotal, subtotal, markupAmount, total };
 }
 
@@ -721,6 +721,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [lineItems, setLineItems] = useState<EstimateLineItem[]>(estimate.line_items || []);
   const [laborItems, setLaborItems] = useState<EstimateLaborItem[]>(estimate.labor_items || []);
   const [markupPct, setMarkupPct] = useState(estimate.markup_percent || 0);
+  const [adjustment, setAdjustment] = useState(estimate.adjustment || 0);
   const [unitCount, setUnitCount] = useState(estimate.unit_count || 1);
   const [notes, setNotes] = useState(estimate.notes || "");
 
@@ -1095,6 +1096,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
         line_items: lineItems,
         labor_items: laborItems,
         markup_percent: markupPct,
+        adjustment,
         notes,
         images: fieldNotes,
         proposal_highlights: proposalHighlights,
@@ -1348,6 +1350,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     line_items: lineItems,
     labor_items: laborItems,
     markup_percent: markupPct,
+    adjustment,
   });
 
   function addLine() {
@@ -1519,6 +1522,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       line_items: lineItems,
       labor_items: laborItems,
       markup_percent: markupPct,
+      adjustment,
       unit_count: unitCount,
       notes,
       chat_history: chatMessages.length > 0 ? chatMessages : undefined,
@@ -2198,10 +2202,26 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
               <span className="text-muted text-sm">%</span>
             </div>
           </div>
+          <div>
+            <span className="text-muted block text-xs mb-1">Adjustment</span>
+            <div className="flex items-center gap-2">
+              <span className="text-muted text-sm">$</span>
+              <input
+                type="number"
+                step="0.01"
+                value={adjustment || ""}
+                onChange={(e) => { setAdjustment(Number(e.target.value)); markDirty(); }}
+                placeholder="0.00"
+                title="Flat +/- to round the total to a clean number. Internal only — not shown to the client."
+                className="w-20 bg-background border border-border px-2 py-1 text-sm text-foreground focus:outline-none focus:border-accent text-right font-mono"
+              />
+            </div>
+          </div>
         </div>
         <div className="flex items-center justify-between border-t border-border pt-3">
           <div className="flex items-center gap-4 text-sm text-muted">
             {markupPct > 0 && <span>+ {money(markupAmount)} markup ({pct(markupPct)})</span>}
+            {adjustment !== 0 && <span>{adjustment > 0 ? "+ " : "− "}{money(Math.abs(adjustment))} adjustment</span>}
             <div className="flex items-center gap-2">
               <span className="text-xs uppercase tracking-wider text-muted"># Units</span>
               <input

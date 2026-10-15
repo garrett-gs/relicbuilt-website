@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
     );
     const subtotal = materialTotal + laborTotal;
     const markupAmount = subtotal * (markupPct / 100);
-    const total = subtotal + markupAmount;
+    const total = subtotal + markupAmount + (estimate.adjustment || 0);
 
     // Client-facing proposal attachments (PDFs, spec sheets) travel with the
     // build so they're available on the Nexus side too.

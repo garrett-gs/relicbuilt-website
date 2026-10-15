@@ -330,6 +330,9 @@ export interface Estimate {
   line_items: EstimateLineItem[];
   labor_items: EstimateLaborItem[];
   markup_percent: number;
+  // Flat +/- dollar amount applied after markup — an internal lever to round
+  // the total to a clean number. Never shown as its own line to the client.
+  adjustment?: number;
   unit_count?: number;
   notes?: string;
   images?: string[];
