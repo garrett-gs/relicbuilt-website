@@ -6,14 +6,14 @@
  * "Send to WR Nexus" (send-to-wr), keyed on the relic_builds.id (build_id).
  *
  * Endpoint: {WR_SUPABASE_URL}/functions/v1/axiom-build-cost (override with
- * NEXUS_BUILD_COST_URL). Auth: `X-Axiom-Secret: <NEXUS_BUILD_COST_SECRET>` (the
- * shared secret Nexus's function verifies). A Supabase-gateway Bearer is sent
- * too when WR_SUPABASE_SERVICE_KEY is available, in case the function keeps
- * JWT verification on.
+ * NEXUS_BUILD_COST_URL). Nexus is in SOFT-LAUNCH — the function accepts posts
+ * without secret enforcement for now, so this fires as soon as the endpoint is
+ * configured (WR_SUPABASE_URL is already set). Once Nexus flips on enforcement
+ * (AXIOM_WEBHOOK_SECRET on their side), set NEXUS_BUILD_COST_SECRET here and it
+ * rides along as the `X-Axiom-Secret` header. A Supabase-gateway Bearer is sent
+ * too when WR_SUPABASE_SERVICE_KEY is available, in case JWT verify is on.
  *
- * DORMANT until NEXUS_BUILD_COST_SECRET is set — so nothing fires before Nexus
- * has deployed the endpoint and we both share the secret. Best-effort: never
- * throws, a failure must not break "Send to WR Nexus".
+ * Best-effort: never throws — a failure must not break "Send to WR Nexus".
  */
 
 interface BuildCostArgs {
@@ -38,8 +38,9 @@ export async function notifyNexusBuildCost(args: BuildCostArgs): Promise<void> {
   const base = process.env.WR_SUPABASE_URL;
   const endpoint =
     process.env.NEXUS_BUILD_COST_URL || (base ? `${base}/functions/v1/axiom-build-cost` : "");
-  // Dormant until the shared secret is configured (i.e. until Nexus is ready).
-  if (!secret || !endpoint) return;
+  // Fires as soon as the endpoint is configured. Soft-launch: the secret is
+  // optional until Nexus enforces it; it's attached when NEXUS_BUILD_COST_SECRET is set.
+  if (!endpoint) return;
 
   const payload: Record<string, unknown> = {
     build_id: args.buildId,
@@ -52,8 +53,8 @@ export async function notifyNexusBuildCost(args: BuildCostArgs): Promise<void> {
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    "X-Axiom-Secret": secret,
   };
+  if (secret) headers["X-Axiom-Secret"] = secret;
   const bearer = process.env.WR_SUPABASE_SERVICE_KEY;
   if (bearer) headers.Authorization = `Bearer ${bearer}`;
 

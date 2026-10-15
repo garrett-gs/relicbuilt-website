@@ -137,12 +137,15 @@ Axiom proposal portal still shows only `total` (no breakdown leaks to the client
 Separate from the §7 `relic_builds` columns, Axiom POSTs a build's material cost to a
 Nexus edge function so it lands as **project spend** (not just a quote display value).
 Fires from `Send to WR Nexus` (`/api/send-to-wr`, via `notifyNexusBuildCost`) whenever a
-build's cost is finalized or updated. Best-effort; **dormant until `NEXUS_BUILD_COST_SECRET`
-is set** on the Axiom side.
+build's cost is finalized or updated. Best-effort. **SOFT-LAUNCH:** the endpoint is live and
+accepts posts without secret enforcement, so Axiom fires as soon as the endpoint resolves
+(`WR_SUPABASE_URL` is set). When Nexus enforces (sets `AXIOM_WEBHOOK_SECRET` on their side),
+set `NEXUS_BUILD_COST_SECRET` on the Axiom side to the same value.
 
 - **Target:** `{WR_SUPABASE_URL}/functions/v1/axiom-build-cost` (override `NEXUS_BUILD_COST_URL`).
-- **Auth:** `X-Axiom-Secret: <NEXUS_BUILD_COST_SECRET>` (shared secret; both sides must match).
-  An `Authorization: Bearer <WR_SUPABASE_SERVICE_KEY>` is also sent for the Supabase gateway.
+- **Auth:** `X-Axiom-Secret: <NEXUS_BUILD_COST_SECRET>` — sent only when the secret is set
+  (soft-launch posts without it). An `Authorization: Bearer <WR_SUPABASE_SERVICE_KEY>` is also
+  sent for the Supabase gateway.
 - **Body:**
 
 ```json
