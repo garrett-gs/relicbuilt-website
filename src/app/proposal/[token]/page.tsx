@@ -139,6 +139,9 @@ export default function ProposalPage() {
     );
   }
 
+  // Entity branding (RELIC gold vs Wallflower olive) for the signable screens.
+  const profile = resolveEntityProfile(estimate.entity, settings);
+
   // ── Not sent yet — the build link exists but the proposal isn't ready ──
   // Nexus builds get a stable portal link the moment the estimate is created,
   // before it's priced/sent. Don't show an empty, signable proposal until it
@@ -160,7 +163,7 @@ export default function ProposalPage() {
   if (result) {
     return (
       <div style={{ minHeight: "100vh", background: "#f5f5f5", padding: "48px 16px", fontFamily: "Arial,Helvetica,sans-serif" }}>
-        <div style={{ maxWidth: 600, margin: "0 auto", background: "#fff", padding: 48, textAlign: "center", borderTop: "4px solid #5b642e" }}>
+        <div style={{ maxWidth: 600, margin: "0 auto", background: "#fff", padding: 48, textAlign: "center", borderTop: `4px solid ${profile.accent}` }}>
           <div style={{
             width: 72, height: 72, borderRadius: "50%",
             border: "3px solid #22c55e", color: "#22c55e",
@@ -272,7 +275,7 @@ export default function ProposalPage() {
       />
 
       {/* Acceptance form — sticky at the bottom of the document */}
-      <div style={{ maxWidth: 760, margin: "0 auto", background: "#fff", padding: 48, borderTop: "3px solid #5b642e" }}>
+      <div style={{ maxWidth: 760, margin: "0 auto", background: "#fff", padding: 48, borderTop: `3px solid ${profile.accent}` }}>
         <h2 style={{ margin: "0 0 8px", fontSize: 16, textTransform: "uppercase", letterSpacing: "0.12em", color: "#111" }}>
           Accept This Proposal
         </h2>
@@ -303,7 +306,7 @@ export default function ProposalPage() {
               outline: "none",
               boxSizing: "border-box",
             }}
-            onFocus={(e) => (e.target.style.border = "1px solid #5b642e")}
+            onFocus={(e) => (e.target.style.border = `1px solid ${profile.accent}`)}
             onBlur={(e) => (e.target.style.border = "1px solid #ccc")}
           />
         </div>
@@ -320,8 +323,8 @@ export default function ProposalPage() {
           style={{
             width: "100%",
             padding: "16px",
-            background: submitting || !signatureName.trim() ? "#ccc" : "#5b642e",
-            color: "#0a0a0a",
+            background: submitting || !signatureName.trim() ? "#ccc" : profile.accent,
+            color: submitting || !signatureName.trim() ? "#666" : profile.onAccent,
             border: "none",
             fontSize: 15,
             fontWeight: 700,
@@ -334,7 +337,7 @@ export default function ProposalPage() {
         </button>
 
         <p style={{ margin: "20px 0 0", textAlign: "center", color: "#999", fontSize: 11 }}>
-          {settings?.biz_name || "RELIC"} · {settings?.biz_phone || ""}
+          {profile.name}{profile.phone ? ` · ${profile.phone}` : ""}
         </p>
       </div>
     </div>

@@ -131,6 +131,7 @@ export async function POST(req: NextRequest) {
       // online, so a manually-marked deposit doesn't slip past silently.
       await notifyPaymentTeam({
         supabase,
+        entity: estimate.entity,
         invoiceNumber: depositInvoice.invoice_number,
         clientName: depositInvoice.client_name || estimate.client_name || null,
         clientEmail: depositInvoice.client_email || estimate.client_email || null,

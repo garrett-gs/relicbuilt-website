@@ -50,6 +50,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ invo
       footer: p.footer,
       phone: p.phone || "",
       website: p.website || "",
+      accent: p.accent,
+      onAccent: p.onAccent,
     };
 
     return NextResponse.json({ invoice: data, brand });

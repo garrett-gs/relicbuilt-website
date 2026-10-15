@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { BusinessEntity } from "@/types/axiom";
+import { resolveEntityProfile } from "./entity-profile";
 
 // Server-side helper that emails the team when a payment lands. Used by
 // both the Stripe-redirect path (confirm-payment) and the manual
@@ -19,6 +21,8 @@ interface NotifyPaymentTeamArgs {
   invoiceType?: string | null;
   amount: number;
   method: PaymentMethod;
+  // The invoice's business entity — selects RELIC vs Wallflower branding.
+  entity?: BusinessEntity;
   // Used to build the "Open in Axiom" CTA link. Pass req.headers.get("origin")
   // or a host-derived URL from the calling route.
   origin?: string | null;
@@ -44,9 +48,12 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
   try {
     const { data: settings } = await args.supabase
       .from("settings")
-      .select("biz_name,biz_email,team_members")
+      .select("biz_name,biz_email,biz_phone,team_members,relic_profile")
       .limit(1)
       .single();
+
+    // RELIC vs Wallflower branding for this payment's entity.
+    const profile = resolveEntityProfile(args.entity, settings);
 
     const teamMembers = (settings?.team_members || []) as Array<{
       email?: string;
@@ -61,7 +68,10 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
     // row can never make this alert silently no-op.
     recipients.add("garrett@relicbuilt.com");
 
-    const bizName = settings?.biz_name || "RELIC";
+    const bizName = profile.name;
+    const accent = profile.accent;
+    const onAccent = profile.onAccent;
+    const logoUrl = profile.logoUrl || "https://relicbuilt.com/wr-logo-black.png";
     const origin = args.origin || "https://relicbuilt.com";
     const invoiceUrl = `${origin}/axiom/invoices`;
     const dateFormatted = new Date().toLocaleDateString("en-US", {
@@ -74,8 +84,8 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
 
     const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;background:#fff;">
-  <div style="padding:18px 28px;border-bottom:3px solid #5b642e;">
-    <img src="https://relicbuilt.com/wr-logo-black.png" alt="${bizName}" style="height:36px;display:block;" />
+  <div style="padding:18px 28px;border-bottom:3px solid ${accent};">
+    <img src="${logoUrl}" alt="${bizName}" style="height:36px;display:block;" />
   </div>
   <div style="padding:28px;">
     <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:#888;">Payment Received</p>
@@ -92,7 +102,7 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
     <p style="margin:0 0 16px;padding:10px 14px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:12px;line-height:1.5;">
       ACH transfers take 3–5 business days to fully clear. The invoice is marked paid in Axiom, but the funds may not appear in your bank until settlement.
     </p>` : ""}
-    <a href="${invoiceUrl}" style="display:inline-block;background:#5b642e;color:#0a0a0a;padding:12px 24px;text-decoration:none;font-weight:bold;letter-spacing:0.06em;font-size:13px;text-transform:uppercase;">
+    <a href="${invoiceUrl}" style="display:inline-block;background:${accent};color:${onAccent};padding:12px 24px;text-decoration:none;font-weight:bold;letter-spacing:0.06em;font-size:13px;text-transform:uppercase;">
       Open in Axiom →
     </a>
   </div>
@@ -105,7 +115,7 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: `${bizName} <notifications@relicbuilt.com>`,
+        from: `${profile.fromName} <${profile.fromEmail}>`,
         to: Array.from(recipients),
         subject: `Payment Received — ${money(args.amount)} from ${args.clientName || "client"} (${args.invoiceNumber})`,
         html,

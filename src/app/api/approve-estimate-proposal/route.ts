@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { generateEstimateProposalHtml, composeClientAddress } from "@/lib/proposal-html";
-import { proposalBiz } from "@/lib/entity-profile";
+import { proposalBiz, resolveEntityProfile } from "@/lib/entity-profile";
 import { renderHtmlToPdf } from "@/lib/render-pdf";
 import { logProposalEvent, ipFromHeaders, sha256 } from "@/lib/audit";
 import { notifyWallflowerStatus } from "@/lib/wallflower-status";
@@ -242,12 +242,19 @@ export async function POST(req: NextRequest) {
           dateStyle: "long",
           timeStyle: "short",
         });
-        const bizNameInternal = settings?.biz_name || "RELIC";
+        const internalProfile = resolveEntityProfile(estimate.entity, settings);
+        const bizNameInternal = internalProfile.name;
+        const internalAccent = internalProfile.accent;
+        const internalOnAccent = internalProfile.onAccent;
+        const internalLogo = internalProfile.logoUrl || "https://relicbuilt.com/wr-logo-black.png";
+        const paymentLine = estimate.entity === "relic"
+          ? "The client approved this proposal. Open it in Axiom to proceed — the deposit is collected via the Stripe pay link."
+          : "The client approved this proposal. Open it in Axiom to proceed — payment is handled in Nexus.";
 
         const internalHtml = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;background:#fff;">
-  <div style="padding:18px 28px;border-bottom:3px solid #5b642e;">
-    <img src="https://relicbuilt.com/wr-logo-black.png" alt="${esc(bizNameInternal)}" style="width:240px;max-width:60%;height:auto;display:block;" />
+  <div style="padding:18px 28px;border-bottom:3px solid ${internalAccent};">
+    <img src="${internalLogo}" alt="${esc(bizNameInternal)}" style="width:240px;max-width:60%;height:auto;display:block;" />
   </div>
   <div style="padding:28px;">
     <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:#888;">Proposal Approved</p>
@@ -261,9 +268,9 @@ export async function POST(req: NextRequest) {
       <tr><td style="padding:6px 0;color:#666;">Signed at:</td><td style="padding:6px 0;text-align:right;">${esc(acceptedAt)}</td></tr>
     </table>
     <p style="margin:0 0 20px;font-size:13px;color:#555;">
-      The client approved this proposal. Open it in Axiom to proceed — payment is handled in Nexus.
+      ${paymentLine}
     </p>
-    <a href="${origin}/axiom/estimator" style="display:inline-block;background:#5b642e;color:#0a0a0a;padding:12px 24px;text-decoration:none;font-weight:bold;letter-spacing:0.06em;font-size:13px;text-transform:uppercase;">
+    <a href="${origin}/axiom/estimator" style="display:inline-block;background:${internalAccent};color:${internalOnAccent};padding:12px 24px;text-decoration:none;font-weight:bold;letter-spacing:0.06em;font-size:13px;text-transform:uppercase;">
       Open in Axiom →
     </a>
   </div>
@@ -276,7 +283,7 @@ export async function POST(req: NextRequest) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: `${bizNameInternal} <notifications@relicbuilt.com>`,
+            from: `${internalProfile.fromName} <${internalProfile.fromEmail}>`,
             to: Array.from(recipients),
             subject: `Proposal Approved — ${estimate.project_name || estimate.estimate_number}`,
             html: internalHtml,

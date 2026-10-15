@@ -26,11 +26,13 @@ function receiptEmailHtml(opts: {
   footer: string;
   phone?: string;
   website?: string;
+  accent?: string;
 }) {
   const { clientName, invoiceNumber, description, amountPaid, method, date, logoUrl, footer, phone, website } = opts;
+  const accent = opts.accent || "#5b642e";
   return `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
-  <div style="padding:20px 32px;border-bottom:3px solid #5b642e;margin-bottom:0;">
+  <div style="padding:20px 32px;border-bottom:3px solid ${accent};margin-bottom:0;">
     ${logoUrl ? `<img src="${logoUrl}" alt="" style="height:36px;object-fit:contain;display:block;" />` : ""}
   </div>
   <div style="padding:32px;">
@@ -60,9 +62,9 @@ function receiptEmailHtml(opts: {
           <td style="padding:8px 0 6px;color:#666;">Date:</td>
           <td style="padding:8px 0 6px;text-align:right;color:#111;">${date}</td>
         </tr>
-        <tr style="border-top:2px solid #5b642e;">
+        <tr style="border-top:2px solid ${accent};">
           <td style="padding:10px 0 6px;font-size:15px;font-weight:bold;color:#111;">Amount Paid:</td>
-          <td style="padding:10px 0 6px;text-align:right;font-size:18px;font-weight:bold;color:#5b642e;font-family:monospace;">${money(amountPaid)}</td>
+          <td style="padding:10px 0 6px;text-align:right;font-size:18px;font-weight:bold;color:${accent};font-family:monospace;">${money(amountPaid)}</td>
         </tr>
       </table>
     </div>
@@ -72,7 +74,7 @@ function receiptEmailHtml(opts: {
     </p>
 
     ${phone ? `<p style="font-size:14px;color:#555;margin:0 0 8px;">Phone: <strong>${phone}</strong></p>` : ""}
-    ${website ? `<p style="font-size:14px;color:#555;margin:0 0 8px;">Web: <a href="https://${website.replace(/^https?:\/\//, "")}" style="color:#5b642e;">${website}</a></p>` : ""}
+    ${website ? `<p style="font-size:14px;color:#555;margin:0 0 8px;">Web: <a href="https://${website.replace(/^https?:\/\//, "")}" style="color:${accent};">${website}</a></p>` : ""}
 
     <p style="margin-top:32px;font-size:11px;color:#aaa;">
       ${footer}
@@ -164,7 +166,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Session invoice mismatch" }, { status: 400 });
     }
 
-    const totalPaid = (session.amount_total ?? 0) / 100;
+    // Credit the invoice with the BASE amount only. The customer also paid a
+    // processing fee (base_cents + fee_cents = amount_total), but that fee is a
+    // pass-through that covers Stripe's cut — crediting it to the invoice would
+    // overpay the balance (e.g. a $1.00 invoice paid as $1.33 → -$0.33 balance).
+    const baseCents = parseInt(String(session.metadata?.base_cents ?? ""), 10);
+    const feeCents = parseInt(String(session.metadata?.fee_cents ?? ""), 10) || 0;
+    const creditedCents = Number.isFinite(baseCents) && baseCents > 0
+      ? baseCents
+      : (session.amount_total ?? 0) - feeCents;
+    const totalPaid = creditedCents / 100;
     const today = new Date().toISOString().split("T")[0];
     const existingPayments = Array.isArray(invoice.payments) ? invoice.payments : [];
     // The pay-invoice route stamps method onto session metadata when the
@@ -184,7 +195,7 @@ export async function POST(req: NextRequest) {
             amount: totalPaid,
             method: sessionMethod === "ach" ? "ACH" : "Card",
             date: today,
-            note: sessionMethod === "ach" ? "Paid online via Stripe (ACH)" : "Paid online via Stripe",
+            note: `Paid online via Stripe${sessionMethod === "ach" ? " (ACH)" : ""}${feeCents ? ` — client also paid $${(feeCents / 100).toFixed(2)} processing fee` : ""}`,
             ref: sessionId,
             created_at: new Date().toISOString(),
           },
@@ -311,6 +322,7 @@ export async function POST(req: NextRequest) {
         footer: profile.footer,
         phone: profile.phone,
         website: profile.website,
+        accent: profile.accent,
       });
       const receiptRes = await fetch("https://api.resend.com/emails", {
         method: "POST",
@@ -343,6 +355,7 @@ export async function POST(req: NextRequest) {
     // payment is already recorded.
     await notifyPaymentTeam({
       supabase,
+      entity: invoice.entity,
       invoiceNumber: invoice.invoice_number,
       clientName: invoice.client_name || null,
       clientEmail: invoice.client_email || null,

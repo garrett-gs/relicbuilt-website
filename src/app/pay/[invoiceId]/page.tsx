@@ -22,6 +22,8 @@ interface Brand {
   footer?: string;
   phone?: string;
   website?: string;
+  accent?: string;
+  onAccent?: string;
 }
 
 function money(n: number) {
@@ -55,6 +57,8 @@ export default function PayInvoicePage() {
     logoUrl: "https://relicbuilt.com/wr-logo-black.png",
     phone: "(402) 235-8179",
     website: "wallflower-relic.com",
+    accent: "#5b642e",
+    onAccent: "#ffffff",
   });
 
   useEffect(() => {
@@ -128,6 +132,10 @@ export default function PayInvoicePage() {
     }
   }
 
+  // Entity accent (RELIC gold vs Wallflower olive) for all themed elements.
+  const accent = brand.accent || "#5b642e";
+  const onAccent = brand.onAccent || "#ffffff";
+
   // Header logo (or the entity name as text if no logo is configured).
   const logoEl = brand.logoUrl
     ? <img src={brand.logoUrl} alt={brand.name} style={{ height: 32, objectFit: "contain", display: "block" }} />
@@ -155,7 +163,7 @@ export default function PayInvoicePage() {
     alignItems: "center",
     justifyContent: "space-between",
     padding: "20px 28px",
-    borderBottom: "3px solid #5b642e",
+    borderBottom: `3px solid ${accent}`,
   };
   const dividerStyle: React.CSSProperties = {
     height: 1,
@@ -267,7 +275,7 @@ export default function PayInvoicePage() {
               {invoice.client_name}
             </p>
             <p style={{ margin: 0, fontSize: 13, color: "#888" }}>Amount Due</p>
-            <p style={{ margin: "4px 0 0", fontSize: 28, fontWeight: 700, color: "#5b642e", fontFamily: "monospace" }}>
+            <p style={{ margin: "4px 0 0", fontSize: 28, fontWeight: 700, color: accent, fontFamily: "monospace" }}>
               {money(invoiceTotal)}
             </p>
           </div>
@@ -286,7 +294,7 @@ export default function PayInvoicePage() {
                 style={{
                   textAlign: "left",
                   background: method === "card" ? "#fdf6e3" : "#fff",
-                  border: method === "card" ? "2px solid #5b642e" : "1px solid #e5e0d8",
+                  border: method === "card" ? `2px solid ${accent}` : "1px solid #e5e0d8",
                   padding: "14px 16px",
                   cursor: "pointer",
                   fontFamily: "inherit",
@@ -296,7 +304,7 @@ export default function PayInvoicePage() {
                 <p style={{ margin: "0 0 6px", fontSize: 11, color: "#888", lineHeight: 1.5 }}>
                   Credit or debit. Pays immediately.
                 </p>
-                <p style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: "#5b642e", fontWeight: 700 }}>
+                <p style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: accent, fontWeight: 700 }}>
                   +{money(cardFee)} fee
                 </p>
               </button>
@@ -306,7 +314,7 @@ export default function PayInvoicePage() {
                 style={{
                   textAlign: "left",
                   background: method === "ach" ? "#fdf6e3" : "#fff",
-                  border: method === "ach" ? "2px solid #5b642e" : "1px solid #e5e0d8",
+                  border: method === "ach" ? `2px solid ${accent}` : "1px solid #e5e0d8",
                   padding: "14px 16px",
                   cursor: "pointer",
                   fontFamily: "inherit",
@@ -316,7 +324,7 @@ export default function PayInvoicePage() {
                 <p style={{ margin: "0 0 6px", fontSize: 11, color: "#888", lineHeight: 1.5 }}>
                   US bank transfer. 3–5 business days.
                 </p>
-                <p style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: "#5b642e", fontWeight: 700 }}>
+                <p style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: accent, fontWeight: 700 }}>
                   +{money(achFee)} fee
                   {achFee >= 5 && <span style={{ color: "#888", fontWeight: 400, marginLeft: 4 }}>(capped)</span>}
                 </p>
@@ -352,7 +360,7 @@ export default function PayInvoicePage() {
                 fontSize: 15,
               }}>
                 <span>Total charged</span>
-                <span style={{ fontFamily: "monospace", color: "#5b642e" }}>{money(totalCharged)}</span>
+                <span style={{ fontFamily: "monospace", color: accent }}>{money(totalCharged)}</span>
               </div>
             </div>
 
@@ -362,7 +370,7 @@ export default function PayInvoicePage() {
                 type="checkbox"
                 checked={feeAgreed}
                 onChange={(e) => setFeeAgreed(e.target.checked)}
-                style={{ marginTop: 2, width: 16, height: 16, accentColor: "#5b642e", flexShrink: 0, cursor: "pointer" }}
+                style={{ marginTop: 2, width: 16, height: 16, accentColor: accent, flexShrink: 0, cursor: "pointer" }}
               />
               <span style={{ fontSize: 13, color: "#555", lineHeight: "1.5" }}>
                 I agree to pay the {method === "ach" ? "ACH" : "card"} processing fee of{" "}
@@ -384,8 +392,8 @@ export default function PayInvoicePage() {
               style={{
                 display: "block",
                 width: "100%",
-                background: feeAgreed && !redirecting ? "#5b642e" : "#d9c9a0",
-                color: "#fff",
+                background: feeAgreed && !redirecting ? accent : "#d9c9a0",
+                color: feeAgreed && !redirecting ? onAccent : "#fff",
                 border: "none",
                 padding: "14px 0",
                 fontSize: 16,
@@ -400,14 +408,14 @@ export default function PayInvoicePage() {
 
             <p style={{ fontSize: 12, color: "#aaa", textAlign: "center", marginTop: 12, marginBottom: 0, lineHeight: "1.6" }}>
               Prefer to pay by check or other method?{" "}
-              <a href={telHref} style={{ color: "#5b642e", textDecoration: "none" }}>
+              <a href={telHref} style={{ color: accent, textDecoration: "none" }}>
                 Call us at {brand.phone}
               </a>
             </p>
 
             <p style={{ fontSize: 12, color: "#aaa", textAlign: "center", marginTop: 8, marginBottom: 0, lineHeight: "1.6" }}>
               Need our W-9 for your records?{" "}
-              <a href="/api/w9" target="_blank" rel="noopener noreferrer" style={{ color: "#5b642e", textDecoration: "none", fontWeight: 600 }}>
+              <a href="/api/w9" target="_blank" rel="noopener noreferrer" style={{ color: accent, textDecoration: "none", fontWeight: 600 }}>
                 Download it &rarr;
               </a>
             </p>
