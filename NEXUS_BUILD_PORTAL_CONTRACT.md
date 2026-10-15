@@ -102,10 +102,14 @@ endpoint, the webhook is a safe no-op.
 - Render a **"View Design"** button per line linking to `build_url`
   (in the `quotes.wallflower-relic.com` app).
 - Gate quote acceptance (approval #2) on the sign-off approval (§3).
-- **Surface the material cost on the build (new, §7):** read `relic_builds.material_total`
-  and show it on the WR Builds picker / the quote line (alongside `build_url`), so the
-  WR proposal is worked off RELIC's true material cost. Material only — do **not** show
-  `labor_total`, `markup_percent`, or `total` in that spot.
+- **Surface the material cost on the build (§7) — SHIPPED (Nexus `5c082dcb`, 2026-10-14).**
+  The WR Builds picker copies `relic_builds.material_total → item.relic_material_cost`
+  (on both the new-line and existing-line paths, alongside `axiom_build_url` /
+  `relic_estimate_amount`); the quote line renders a "Material cost" badge next to the
+  "Axiom · EST-xxxx" chip (hover: "RELIC material cost — pre-markup, labor excluded").
+  Older lines saved before the field existed fall back to a live lookup from the loaded
+  `relicBuilds` array by `relic_build_id`. Material only — `labor_total`,
+  `markup_percent`, and `total` are kept off the quote screen.
 
 ## 7. Build cost fields on `relic_builds` (direct upsert, not the webhook)
 
