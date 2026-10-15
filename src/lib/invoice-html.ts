@@ -38,8 +38,11 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
   const website = profile ? (profile.website || "") : "wallflower-relic.com";
   const footer = profile?.footer || "Wallflower RELIC  ·  (402) 235-8179  ·  wallflower-relic.com";
   const accent = profile?.accent || "#5b642e";
+  const onAccent = profile?.onAccent || "#fff";
   const stripeColor = profile?.invoiceBarBg || "#454d23";
   const stripeText = profile?.invoiceBarText || "#fff";
+  const siteBase = (process.env.NEXT_PUBLIC_SITE_URL || "https://relicbuilt.com").replace(/\/+$/, "");
+  const payUrl = `${siteBase}/pay/${inv.id}`;
 
   const wrap = forEmail
     ? `style="max-width:680px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;background:#fff;"`
@@ -134,6 +137,13 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
       </tr>
     </table>
   </div>
+
+  ${forEmail && amountDue > 0 && inv.status !== "paid" ? `
+  <!-- Pay-online CTA — email only, when there's a balance to collect -->
+  <div style="text-align:center;margin:0 0 28px;">
+    <a href="${payUrl}" style="display:inline-block;background:${accent};color:${onAccent};text-decoration:none;padding:14px 40px;font-size:15px;font-weight:bold;letter-spacing:0.04em;">Pay Invoice Online &rarr;</a>
+    <p style="margin:10px 0 0;font-size:11px;color:#999;">Pay securely by card or bank transfer.</p>
+  </div>` : ""}
 
   <!-- Payment Terms — per-invoice notes (deposit / balance / paid in full) -->
   ${inv.notes ? `
