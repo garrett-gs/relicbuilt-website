@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { getWRClient } from "@/lib/wr-supabase";
 import { buildPortalUrl, notifyNexusBuildLink } from "@/lib/notify-nexus-build-link";
+import { notifyNexusBuildCost } from "@/lib/notify-nexus-build-cost";
 
 export async function POST(req: NextRequest) {
   try {
@@ -166,6 +167,15 @@ export async function POST(req: NextRequest) {
       estimateAmount: total,
       status: "sent",
       event: "updated",
+    });
+
+    // Hand Nexus this build's material cost so it lands as project spend
+    // (project_spend_lines). Keyed on the relic_builds.id. Dormant until
+    // NEXUS_BUILD_COST_SECRET is configured. Best-effort.
+    await notifyNexusBuildCost({
+      buildId: wrData.id,
+      materialTotal,
+      laborTotal,
     });
 
     // ── Auto-append this build onto a linked Nexus quote's items[] ──

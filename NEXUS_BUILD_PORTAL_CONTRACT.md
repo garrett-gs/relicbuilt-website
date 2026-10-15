@@ -131,3 +131,36 @@ carries the single `estimate_amount`. Relevant cost columns Axiom writes:
 markup, labor excluded). It is already populated on every build Axiom sends — no Axiom
 change is required; the open item is the Nexus-side display in §6. The customer-facing
 Axiom proposal portal still shows only `total` (no breakdown leaks to the client).
+
+## 8. Axiom → Nexus: build material cost → project spend (`axiom-build-cost`)
+
+Separate from the §7 `relic_builds` columns, Axiom POSTs a build's material cost to a
+Nexus edge function so it lands as **project spend** (not just a quote display value).
+Fires from `Send to WR Nexus` (`/api/send-to-wr`, via `notifyNexusBuildCost`) whenever a
+build's cost is finalized or updated. Best-effort; **dormant until `NEXUS_BUILD_COST_SECRET`
+is set** on the Axiom side.
+
+- **Target:** `{WR_SUPABASE_URL}/functions/v1/axiom-build-cost` (override `NEXUS_BUILD_COST_URL`).
+- **Auth:** `X-Axiom-Secret: <NEXUS_BUILD_COST_SECRET>` (shared secret; both sides must match).
+  An `Authorization: Bearer <WR_SUPABASE_SERVICE_KEY>` is also sent for the Supabase gateway.
+- **Body:**
+
+```json
+{
+  "build_id": "<relic_builds.id — the uuid from the §7 upsert / §2 webhook>",
+  "material_total": 1250.00,            // required — RELIC material cost, pre-markup
+  "labor_total": 800.00,                // optional — info only, NOT posted as spend
+  "vendor": "Home Depot",               // optional — supplier for this build
+  "incurred_date": "2026-10-14",        // optional — defaults to today on Nexus
+  "notes": "Bulk lumber + hardware"     // optional
+}
+```
+
+- **Nexus on receive:** look up `relic_builds` by `build_id`; find the quote item that
+  references it (`quotes.items[].relic_build_id = build_id`) for the event + line-item name
+  snapshot; upsert a `project_spend_lines` row keyed on `axiom_build_id = build_id`
+  (`category=materials`, `source=axiom`, `amount=material_total`, `quote_item_name` snapshot,
+  `vendor`/`incurred_date`/`notes` from payload, `paid=false` — staff mark it paid in Nexus
+  once the vendor invoice clears).
+- Axiom currently sends `build_id` + `material_total` + `labor_total` (vendor/incurred_date/
+  notes omitted). `labor_total` is informational only.
