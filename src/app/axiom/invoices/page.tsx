@@ -729,7 +729,7 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
         {/* Bill To / Invoice meta — no box */}
         <div className="grid grid-cols-2 gap-10 px-10 py-8 print:px-8">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: "#5b642e" }}>Bill To</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider mb-3" style={{ color: profile.accent }}>Bill To</p>
             <p className="font-bold text-gray-900 text-base">{invoice.client_name}</p>
             {invoice.client_phone && <p className="text-sm text-gray-600 mt-1">{invoice.client_phone}</p>}
             {invoice.client_email && <p className="text-sm text-gray-600 mt-0.5">{invoice.client_email}</p>}
@@ -749,9 +749,9 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
           </div>
         </div>
 
-        {/* Gold Items bar — full width */}
-        <div className="px-10 py-3 print:px-8" style={{ background: "#454d23" }}>
-          <p className="text-sm font-bold text-white uppercase tracking-widest">Items</p>
+        {/* Items bar — full width, entity-themed (gold for RELIC) */}
+        <div className="px-10 py-3 print:px-8" style={{ background: profile.invoiceBarBg }}>
+          <p className="text-sm font-bold uppercase tracking-widest" style={{ color: profile.invoiceBarText }}>Items</p>
         </div>
 
         {/* Line items — single row per item, no outer border */}

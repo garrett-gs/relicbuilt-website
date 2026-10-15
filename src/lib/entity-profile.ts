@@ -21,6 +21,8 @@ export interface EntityProfile {
   fromEmail: string;
   accent: string;     // medium brand color (labels, borders, gold for Relic)
   accentDark: string; // dark bar/button bg with legible light text on it
+  invoiceBarBg: string;   // invoice "Items" bar background
+  invoiceBarText: string; // legible text color on invoiceBarBg
 }
 
 // Only the settings fields the resolver needs.
@@ -87,6 +89,8 @@ export function resolveEntityProfile(
       fromEmail: rp.from_email || DEFAULT_FROM_EMAIL,
       accent: rp.accent_color || "#b8963c",   // RELIC gold
       accentDark: "#1a1a1a",                    // near-black bars, matches the logo
+      invoiceBarBg: rp.accent_color || "#b8963c", // gold Items bar
+      invoiceBarText: "#1a1a1a",                  // dark text, legible on gold
     };
   }
 
@@ -107,6 +111,8 @@ export function resolveEntityProfile(
     fromEmail: DEFAULT_FROM_EMAIL,
     accent: "#5b642e",     // Wallflower olive (unchanged)
     accentDark: "#454d23",
+    invoiceBarBg: "#454d23",   // dark olive Items bar (unchanged)
+    invoiceBarText: "#ffffff", // white text (unchanged)
   };
 }
 

@@ -38,7 +38,8 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
   const website = profile ? (profile.website || "") : "wallflower-relic.com";
   const footer = profile?.footer || "Wallflower RELIC  ·  (402) 235-8179  ·  wallflower-relic.com";
   const accent = profile?.accent || "#5b642e";
-  const stripeColor = profile?.accentDark || "#454d23";
+  const stripeColor = profile?.invoiceBarBg || "#454d23";
+  const stripeText = profile?.invoiceBarText || "#fff";
 
   const wrap = forEmail
     ? `style="max-width:680px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#222;background:#fff;"`
@@ -93,7 +94,7 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
 
   <!-- Gold Items bar — full width -->
   <div style="background:${stripeColor};padding:10px 20px;margin-bottom:0;">
-    <p style="margin:0;font-size:11px;font-weight:bold;color:#fff;text-transform:uppercase;letter-spacing:0.14em;">Items</p>
+    <p style="margin:0;font-size:11px;font-weight:bold;color:${stripeText};text-transform:uppercase;letter-spacing:0.14em;">Items</p>
   </div>
 
   <!-- Line items — single row per item -->
