@@ -762,6 +762,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     estimate.proposal_status || "draft"
   );
   const [proposalSentAt, setProposalSentAt] = useState<string>(estimate.proposal_sent_at || "");
+  const [proposalExpiresAt, setProposalExpiresAt] = useState<string>(estimate.proposal_expires_at || "");
   const [proposalApprovedAt, setProposalApprovedAt] = useState<string>(
     estimate.proposal_approved_at || ""
   );
@@ -984,6 +985,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       setProposalToken(token);
       setProposalStatus("sent");
       setProposalSentAt(sentAt);
+      setProposalExpiresAt(expiresAt);
       if (status === "draft") setStatus("sent");
 
       // Mirror "sent" back to Wallflower if this estimate came from one.
@@ -2646,6 +2648,28 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
             Add a client {!clientName && !clientEmail ? "name and email" : !clientName ? "name" : "email"} above before sending the proposal.
           </p>
         )}
+
+        {/* Proposal expiration — so you can see at a glance whether the live
+            proposal is still valid before resending. The client's proposal
+            page hard-blocks once past the expiry; re-sending refreshes it to a
+            fresh 30-day window. Hidden once approved (expiry no longer gates). */}
+        {proposalToken && proposalStatus === "sent" && proposalExpiresAt && (() => {
+          const expMs = new Date(proposalExpiresAt).getTime();
+          const daysLeft = Math.ceil((expMs - Date.now()) / 86400000);
+          const expired = daysLeft < 0;
+          const soon = !expired && daysLeft <= 5;
+          return (
+            <p className={cn(
+              "text-xs mt-2",
+              expired ? "text-red-500 font-semibold" : soon ? "text-amber-500" : "text-muted"
+            )}>
+              {proposalSentAt && <>Sent {formatDate(proposalSentAt)} · </>}
+              {expired
+                ? `Expired ${formatDate(proposalExpiresAt)} — re-send to refresh the 30-day window.`
+                : `Valid through ${formatDate(proposalExpiresAt)} (${daysLeft} day${daysLeft === 1 ? "" : "s"} left)`}
+            </p>
+          );
+        })()}
 
         {/* Deposit paid → creates the project. Only shown after acceptance. */}
         {proposalStatus === "approved" && !estimate.deposit_paid_at && (
