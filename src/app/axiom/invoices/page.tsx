@@ -359,12 +359,44 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
   const [saved, setSaved] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
   const [showPayment, setShowPayment] = useState(false);
+  // Send-invoice email: biz settings power the branded HTML; the inline form
+  // lets Garrett confirm/fix the recipient before it goes out.
+  const [bizSettings, setBizSettings] = useState<Partial<Settings> | null>(null);
+  const [showSend, setShowSend] = useState(false);
+  const [sendTo, setSendTo] = useState(init.client_email || "");
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<"success" | "error" | null>(null);
 
   useEffect(() => {
     axiom.from("settings").select("categories").limit(1).single().then(({ data }) => {
       if (data?.categories) setCategories(data.categories || []);
     });
+    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text,relic_profile").limit(1).single()
+      .then(({ data }) => setBizSettings(data || {}));
   }, []);
+
+  async function handleSend() {
+    if (!sendTo || !bizSettings) return;
+    setSending(true); setSendResult(null);
+    try {
+      // Persist any pending edits first so the emailed doc + pay link match
+      // what's on screen and what's in the DB.
+      if (dirty) await save();
+      const profile = resolveEntityProfile(inv.entity, bizSettings);
+      const html = generateInvoiceHtml(inv, bizSettings.terms_text || "", true, profile);
+      const res = await fetch("/api/send-po", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: sendTo, subject: `Invoice ${inv.invoice_number} from ${profile.name}`, html, from_name: profile.fromName }),
+      });
+      setSendResult(res.ok ? "success" : "error");
+      if (res.ok) {
+        setShowSend(false);
+        await logActivity({ action: "sent", entity: "invoice", entity_id: inv.id, label: `Emailed ${inv.invoice_number} to ${sendTo}`, user_name: userEmail });
+      }
+    } catch { setSendResult("error"); }
+    setSending(false);
+  }
 
   function mark(updates: Partial<Invoice>) { setInv((i) => ({ ...i, ...updates })); setDirty(true); setSaved(false); }
   function addLine() { mark({ line_items: [...(inv.line_items || []), { category: "", description: "", quantity: 1, unit_price: 0 }] }); }
@@ -529,6 +561,27 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
         <SaveButton dirty={dirty} saved={saved} onClick={save} size="sm" />
         <Button onClick={() => setShowPayment(true)} size="sm" variant="outline"><DollarSign size={14} className="mr-1" />Record Payment</Button>
         <Button variant="outline" size="sm" onClick={onPreview}><Eye size={14} className="mr-1" />Preview / Print</Button>
+
+        {/* Send Invoice — emails the branded invoice (with a Pay Online button)
+            straight from here. Inline field confirms the recipient first. */}
+        {showSend ? (
+          <div className="flex items-center gap-2">
+            <input
+              type="email" value={sendTo} onChange={(e) => setSendTo(e.target.value)}
+              placeholder="client@email.com"
+              className="bg-card border border-border px-3 py-1.5 text-sm text-foreground w-56 focus:outline-none focus:border-accent"
+            />
+            <Button size="sm" onClick={handleSend} disabled={!sendTo || sending}>{sending ? "Sending…" : "Send"}</Button>
+            <button onClick={() => { setShowSend(false); setSendResult(null); }} className="text-muted hover:text-foreground"><X size={16} /></button>
+          </div>
+        ) : (
+          <Button size="sm" variant="outline" onClick={() => { setShowSend(true); setSendResult(null); setSendTo(inv.client_email || ""); }}>
+            <Send size={14} className="mr-1" />Send Invoice
+          </Button>
+        )}
+        {sendResult === "success" && !showSend && <span className="flex items-center gap-1 text-green-500 text-sm"><CheckCircle size={14} /> Sent!</span>}
+        {sendResult === "error" && !showSend && <span className="text-red-500 text-sm">Send failed — try again</span>}
+
         <button onClick={onDelete} className="text-muted hover:text-red-500 ml-auto"><Trash2 size={14} /></button>
       </div>
 
@@ -699,8 +752,11 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
         </button>
       </div>
 
-      {/* Invoice document — no outer box, full-width sections */}
-      <div className="max-w-4xl mx-auto my-8 bg-white print:my-0 print:max-w-none print:shadow-none shadow-sm">
+      {/* Invoice document — no outer box, full-width sections.
+          text-gray-900 forces dark default text so value spans without an
+          explicit color (invoice #, dates, Amount Due) stay readable on white
+          instead of inheriting the dark-app's light foreground. */}
+      <div className="max-w-4xl mx-auto my-8 bg-white text-gray-900 print:my-0 print:max-w-none print:shadow-none shadow-sm">
 
         {/* Header */}
         <div className="flex justify-between items-start px-10 pt-10 pb-8 print:px-8 print:pt-8">
