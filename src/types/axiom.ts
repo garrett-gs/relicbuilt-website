@@ -87,11 +87,18 @@ export interface CustomWork {
   company_id?: string;
   company_name?: string;
   master_project_id?: string;
+  // Iteration chain: when this build is a repeat of an earlier one, points at
+  // the prior custom_work.id. Walked to compare cost/labor across rebuilds in
+  // the Project Library.
+  previous_build_id?: string;
   project_description?: string;
   budget_range?: string;
   timeline?: string;
   status: "new" | "in_review" | "quoted" | "in_progress" | "complete";
   internal_notes?: string;
+  // Postmortem written at close-out — what changed, what to do differently
+  // next build. Surfaced in the Project Library.
+  postmortem?: string;
   quoted_amount: number;
   unit_count?: number;
   actual_cost: number;

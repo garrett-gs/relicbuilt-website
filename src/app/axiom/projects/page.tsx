@@ -19,6 +19,7 @@ import DateField from "@/components/ui/DateField";
 import FileUpload from "@/components/ui/FileUpload";
 import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee, ChevronDown, ChevronRight, Clock } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { generateProposalHtml } from "@/lib/proposal-html";
 import { resolveEntityProfile, proposalBiz } from "@/lib/entity-profile";
@@ -640,6 +641,7 @@ export default function ProjectsPage() {
             onGenerateInvoice={() => generateInvoice(selected)}
             onGenerateProposal={() => setShowProposal(true)}
             onGenerateRecap={() => openRecap(selected)}
+            onComplete={() => moveProject(selected.id, "complete")}
             userEmail={userEmail}
           />
         </Modal>
@@ -894,7 +896,7 @@ function CreateProjectForm({ onSubmit, onCancel }: { onSubmit: (form: Record<str
 
 // ── Detail view ──────────────────────────────────────────────
 
-function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerateInvoice, onGenerateProposal, onGenerateRecap, userEmail }: {
+function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerateInvoice, onGenerateProposal, onGenerateRecap, onComplete, userEmail }: {
   project: CustomWork;
   onUpdate: (u: Partial<CustomWork>) => void;
   onDelete: () => void;
@@ -902,6 +904,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   onGenerateInvoice: () => void;
   onGenerateProposal: () => void;
   onGenerateRecap: () => void;
+  onComplete: () => void;
   userEmail: string;
 }) {
   const [projectName, setProjectName] = useState(project.project_name || "");
@@ -2676,6 +2679,15 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         <Button variant="outline" onClick={onGenerateRecap}>
           <Printer size={14} className="mr-1" /> Project Recap
         </Button>
+        {project.status === "complete" ? (
+          <Link href="/axiom/project-library" className="inline-flex items-center gap-1.5 text-sm text-green-500 hover:underline px-2">
+            <CheckCircle size={14} /> Completed — view in Project Library
+          </Link>
+        ) : (
+          <Button onClick={onComplete} className="bg-green-600 hover:bg-green-700 text-white">
+            <CheckCircle size={14} className="mr-1" /> Complete Project
+          </Button>
+        )}
         {confirmDelete ? (
           <div className="flex items-center gap-2">
             <span className="text-red-500 text-sm">Are you sure?</span>
