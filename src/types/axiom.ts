@@ -99,6 +99,11 @@ export interface CustomWork {
   // Postmortem written at close-out — what changed, what to do differently
   // next build. Surfaced in the Project Library.
   postmortem?: string;
+  // Wallflower builds are paid in Nexus (not Axiom). When Nexus reports a
+  // payment (the build-paid webhook), these capture it so Projects can show a
+  // "Paid"/"Deposit paid" badge. milestone: "deposit" | "balance" | "paid_in_full".
+  nexus_paid_at?: string;
+  nexus_paid_milestone?: string;
   quoted_amount: number;
   unit_count?: number;
   actual_cost: number;

@@ -500,17 +500,26 @@ export default function ProjectsPage() {
   const inProgressProjects = projects.filter((p) => p.status === "in_progress");
   const pipelineProjects = projects.filter((p) => p.status === "accepted");
 
-  // Payment status for a RELIC project row, from its linked invoices:
-  //  • a deposit invoice → "Deposit paid" / "Deposit due"
-  //  • otherwise any invoice → "Paid" / "Unpaid"
-  //  • no invoices → fall back to the estimate's deposit_paid_at flag
-  const paymentInfo = (projectId: string): { label: string; paid: boolean } => {
-    const inv = invoiceStatuses.filter((i) => i.custom_work_id === projectId);
-    const deposit = inv.find((i) => (i.invoice_type || "").toLowerCase() === "deposit");
-    if (deposit) return { label: deposit.status === "paid" ? "Deposit paid" : "Deposit due", paid: deposit.status === "paid" };
-    if (inv.length > 0) { const allPaid = inv.every((i) => i.status === "paid"); return { label: allPaid ? "Paid" : "Unpaid", paid: allPaid }; }
-    const estPaid = estimates.some((e) => e.custom_work_id === projectId && !!e.deposit_paid_at);
-    return { label: estPaid ? "Deposit paid" : "Deposit due", paid: estPaid };
+  // Payment badge for a project row (null = show nothing):
+  //  • RELIC — from Axiom invoices: a deposit invoice → "Deposit paid/due";
+  //    otherwise any invoice → "Paid/Unpaid"; no invoices → estimate deposit flag.
+  //  • Wallflower — paid in Nexus: show only once Nexus reports a payment
+  //    (nexus_paid_milestone): deposit → "Deposit paid", else "Paid".
+  const paymentInfo = (p: CustomWork): { label: string; paid: boolean } | null => {
+    if (p.entity === "relic") {
+      const inv = invoiceStatuses.filter((i) => i.custom_work_id === p.id);
+      const deposit = inv.find((i) => (i.invoice_type || "").toLowerCase() === "deposit");
+      if (deposit) return { label: deposit.status === "paid" ? "Deposit paid" : "Deposit due", paid: deposit.status === "paid" };
+      if (inv.length > 0) { const allPaid = inv.every((i) => i.status === "paid"); return { label: allPaid ? "Paid" : "Unpaid", paid: allPaid }; }
+      const estPaid = estimates.some((e) => e.custom_work_id === p.id && !!e.deposit_paid_at);
+      return { label: estPaid ? "Deposit paid" : "Deposit due", paid: estPaid };
+    }
+    // Wallflower — only surface a badge once paid in Nexus.
+    if (p.nexus_paid_milestone || p.nexus_paid_at) {
+      const m = (p.nexus_paid_milestone || "").toLowerCase();
+      return { label: m === "deposit" ? "Deposit paid" : "Paid", paid: true };
+    }
+    return null;
   };
 
   const sortByDue = (list: CustomWork[]) =>
@@ -541,9 +550,11 @@ export default function ProjectsPage() {
           {p.due_date && (() => { const due = formatDueDate(p.due_date); return <span className={due.soon ? "text-orange-400 font-medium" : ""}> · due {due.text}</span>; })()}
         </p>
       </div>
-      {/* Payment status — RELIC only (Wallflower is paid via Nexus). */}
-      {p.entity === "relic" && (() => {
-        const pi = paymentInfo(p.id);
+      {/* Payment status. RELIC: from Axiom invoices. Wallflower: shown only
+          once paid in Nexus; otherwise no badge. */}
+      {(() => {
+        const pi = paymentInfo(p);
+        if (!pi) return null;
         return pi.paid ? (
           <span className="text-xs uppercase tracking-wider text-green-400 bg-green-500/15 px-2 py-1 shrink-0 inline-flex items-center gap-1"><CheckCircle size={13} /> {pi.label}</span>
         ) : (
@@ -1673,20 +1684,24 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     ? `${window.location.origin}/axiom/portal/${project.portal_token}`
     : "";
 
-  // Payment status for the header — reflects automatically from the linked
-  // invoice (online Stripe payment flips it to paid with no clicking). Prefer
-  // the deposit invoice; otherwise use the project's invoice.
-  const payInvoice = projectInvoices.find((i) => i.invoice_type === "deposit") || projectInvoices[0];
-  const payIsDeposit = payInvoice?.invoice_type === "deposit";
-  const payIsPaid = payInvoice?.status === "paid";
-  const payAmt = payInvoice?.subtotal || 0;
+  // Payment status for the header. RELIC reflects the linked Axiom invoice
+  // (online Stripe payment flips it to paid on its own). Wallflower reflects
+  // the Nexus payment flag (paid in Nexus) and only shows once paid.
+  const isRelic = project.entity === "relic";
+  const payInvoice = isRelic ? (projectInvoices.find((i) => i.invoice_type === "deposit") || projectInvoices[0]) : undefined;
+  const nexusPaid = !isRelic && (!!project.nexus_paid_milestone || !!project.nexus_paid_at);
+  const showPay = isRelic ? !!payInvoice : nexusPaid;
+  const payIsDeposit = isRelic ? payInvoice?.invoice_type === "deposit" : (project.nexus_paid_milestone || "").toLowerCase() === "deposit";
+  const payIsPaid = isRelic ? payInvoice?.status === "paid" : nexusPaid;
+  const payAmt = isRelic ? (payInvoice?.subtotal || 0) : 0;
   const payLabel = payIsDeposit ? (payIsPaid ? "Deposit paid" : "Deposit due") : (payIsPaid ? "Paid" : "Unpaid");
+  const paySub = isRelic ? payInvoice?.invoice_number : "via Nexus";
 
   return (
     <div className="space-y-8">
-      {/* Payment status — RELIC only (Wallflower is paid via Nexus). Updates
-          itself when the invoice is paid. */}
-      {project.entity === "relic" && payInvoice && (
+      {/* Payment status. RELIC: from the Axiom invoice (updates itself when
+          paid). Wallflower: shown once paid in Nexus. */}
+      {showPay && (
         <div className={cn(
           "flex items-center gap-2 px-3 py-2 text-sm border",
           payIsPaid ? "border-green-500/40 bg-green-500/10 text-green-400" : "border-border bg-card text-muted"
@@ -1694,7 +1709,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
           {payIsPaid ? <CheckCircle size={15} /> : <Clock size={15} />}
           <span className="font-medium">{payLabel}</span>
           {payAmt > 0 && <span className="font-mono ml-1">{money(payAmt)}</span>}
-          <span className="text-xs opacity-70 ml-auto">{payInvoice.invoice_number}</span>
+          {paySub && <span className="text-xs opacity-70 ml-auto">{paySub}</span>}
         </div>
       )}
 

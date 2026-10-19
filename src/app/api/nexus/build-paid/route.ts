@@ -144,6 +144,26 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Record the Nexus payment on the project so the Projects board can show a
+    // "Paid" / "Deposit paid" badge for Wallflower builds (which are paid in
+    // Nexus, not Axiom). Resolve the project fresh — the greenlight block above
+    // may have just created and linked it.
+    if (estimateId) {
+      try {
+        const { data: estRow } = await supabase.from("estimates").select("custom_work_id").eq("id", estimateId).maybeSingle();
+        const projectId = estRow?.custom_work_id || null;
+        if (projectId) {
+          await supabase.from("custom_work").update({
+            nexus_paid_at: paid_at || stamp,
+            nexus_paid_milestone: milestone || "payment",
+            updated_at: stamp,
+          }).eq("id", projectId);
+        }
+      } catch (e) {
+        console.error("[build-paid] stamp project paid failed:", e);
+      }
+    }
+
     await supabase.from("activity_log").insert({
       action: "paid",
       entity: "work_order",
