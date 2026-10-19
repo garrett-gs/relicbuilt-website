@@ -7,10 +7,11 @@ import { useAuth } from "@/components/axiom/AuthProvider";
 import { useEntity } from "@/components/axiom/EntityProvider";
 import { CustomWork, Estimate, BuildFile } from "@/types/axiom";
 import { formatDate, cn } from "@/lib/utils";
+import FileUpload from "@/components/ui/FileUpload";
 import Link from "next/link";
 import {
   Library, Search, ChevronDown, ChevronRight, FileText, ExternalLink,
-  TrendingDown, TrendingUp, Minus, Link2, Save,
+  TrendingDown, TrendingUp, Minus, Link2, Save, Trash2,
 } from "lucide-react";
 
 // Whole-dollar + penny-precise currency. Materials/labor are penny-precise in
@@ -129,6 +130,26 @@ export default function ProjectLibraryPage() {
     setProjects((ps) => ps.map((p) => (p.id === id ? { ...p, previous_build_id: value } : p)));
   }
 
+  async function attachDocument(projectId: string, file: { url: string; name: string; type: string; size: number }) {
+    const { data, error } = await axiom.from("build_files").insert({
+      custom_work_id: projectId,
+      file_url: file.url,
+      file_name: file.name,
+      file_type: file.type,
+      label: "Project Document",
+      uploaded_by: userEmail,
+    }).select().single();
+    if (error) { alert(`Could not attach document: ${error.message}`); return; }
+    if (data) setFiles((prev) => [data as BuildFile, ...prev]);
+    await logActivity({ action: "updated", entity: "project", entity_id: projectId, label: `Attached document "${file.name}" to ${nameById(projectId)}`, user_name: userEmail });
+  }
+
+  async function deleteDocument(id: string, name: string) {
+    if (!confirm(`Delete "${name}"?`)) return;
+    await axiom.from("build_files").delete().eq("id", id);
+    setFiles((prev) => prev.filter((f) => f.id !== id));
+  }
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-1">
@@ -174,6 +195,8 @@ export default function ProjectLibraryPage() {
               nameById={nameById}
               onSavePostmortem={savePostmortem}
               onSavePreviousBuild={savePreviousBuild}
+              onAttachDocument={attachDocument}
+              onDeleteDocument={deleteDocument}
             />
           ))}
         </div>
@@ -186,7 +209,7 @@ export default function ProjectLibraryPage() {
 
 function LibraryCard({
   project: p, estimates, expenses, files, chain, expanded, onToggle,
-  candidates, nameById, onSavePostmortem, onSavePreviousBuild,
+  candidates, nameById, onSavePostmortem, onSavePreviousBuild, onAttachDocument, onDeleteDocument,
 }: {
   project: CustomWork;
   estimates: Estimate[];
@@ -199,6 +222,8 @@ function LibraryCard({
   nameById: (id?: string) => string;
   onSavePostmortem: (id: string, text: string) => Promise<void>;
   onSavePreviousBuild: (id: string, prevId: string) => Promise<void>;
+  onAttachDocument: (projectId: string, file: { url: string; name: string; type: string; size: number }) => Promise<void>;
+  onDeleteDocument: (id: string, name: string) => Promise<void>;
 }) {
   const est = estimatedCost(p.id, estimates);
   const act = actualCost(p, expenses);
@@ -335,19 +360,26 @@ function LibraryCard({
               Documents
             </h3>
             {files.filter((f) => !(f.file_type || "").startsWith("image/")).length === 0 ? (
-              <p className="text-xs text-muted italic">No documents attached. Add them on the project in the Projects board.</p>
+              <p className="text-xs text-muted italic mb-2">No documents attached yet.</p>
             ) : (
-              <div className="space-y-1">
+              <div className="space-y-1 mb-2">
                 {files.filter((f) => !(f.file_type || "").startsWith("image/")).map((f) => (
-                  <a key={f.id} href={f.file_url} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 text-sm text-foreground hover:text-accent group">
-                    <FileText size={14} className="text-muted group-hover:text-accent shrink-0" />
-                    <span className="truncate">{f.file_name || "Document"}</span>
-                    <ExternalLink size={12} className="text-muted opacity-0 group-hover:opacity-100 shrink-0" />
-                  </a>
+                  <div key={f.id} className="flex items-center gap-2 text-sm group">
+                    <a href={f.file_url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-foreground hover:text-accent flex-1 min-w-0">
+                      <FileText size={14} className="text-muted group-hover:text-accent shrink-0" />
+                      <span className="truncate">{f.file_name || "Document"}</span>
+                      <ExternalLink size={12} className="text-muted opacity-0 group-hover:opacity-100 shrink-0" />
+                    </a>
+                    <button onClick={() => onDeleteDocument(f.id, f.file_name || "Document")}
+                      className="text-muted hover:text-red-500 shrink-0 opacity-0 group-hover:opacity-100" title="Delete document">
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                 ))}
               </div>
             )}
+            <FileUpload onUploaded={(file) => onAttachDocument(p.id, file)} label="Add Document" />
           </div>
 
           {/* Link to previous build */}
