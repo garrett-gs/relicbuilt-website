@@ -8,6 +8,7 @@ import { useEntity } from "@/components/axiom/EntityProvider";
 import { CustomWork, Estimate, BuildFile } from "@/types/axiom";
 import { formatDate, cn } from "@/lib/utils";
 import FileUpload from "@/components/ui/FileUpload";
+import ImageUpload from "@/components/ui/ImageUpload";
 import Link from "next/link";
 import {
   Library, Search, ChevronDown, ChevronRight, FileText, ExternalLink,
@@ -150,6 +151,22 @@ export default function ProjectLibraryPage() {
     setFiles((prev) => prev.filter((f) => f.id !== id));
   }
 
+  async function attachPhoto(projectId: string, url: string) {
+    const ext = (url.split(".").pop() || "").toLowerCase().split(/[?#]/)[0];
+    const mime = ext ? `image/${ext === "jpg" ? "jpeg" : ext}` : "image/jpeg";
+    const { data, error } = await axiom.from("build_files").insert({
+      custom_work_id: projectId,
+      file_url: url,
+      file_name: "Project Photo",
+      file_type: mime,
+      label: "Project Photo",
+      uploaded_by: userEmail,
+    }).select().single();
+    if (error) { alert(`Could not add photo: ${error.message}`); return; }
+    if (data) setFiles((prev) => [data as BuildFile, ...prev]);
+    await logActivity({ action: "updated", entity: "project", entity_id: projectId, label: `Added a photo to ${nameById(projectId)}`, user_name: userEmail });
+  }
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center gap-3 mb-1">
@@ -197,6 +214,7 @@ export default function ProjectLibraryPage() {
               onSavePreviousBuild={savePreviousBuild}
               onAttachDocument={attachDocument}
               onDeleteDocument={deleteDocument}
+              onAttachPhoto={attachPhoto}
             />
           ))}
         </div>
@@ -209,7 +227,7 @@ export default function ProjectLibraryPage() {
 
 function LibraryCard({
   project: p, estimates, expenses, files, chain, expanded, onToggle,
-  candidates, nameById, onSavePostmortem, onSavePreviousBuild, onAttachDocument, onDeleteDocument,
+  candidates, nameById, onSavePostmortem, onSavePreviousBuild, onAttachDocument, onDeleteDocument, onAttachPhoto,
 }: {
   project: CustomWork;
   estimates: Estimate[];
@@ -224,6 +242,7 @@ function LibraryCard({
   onSavePreviousBuild: (id: string, prevId: string) => Promise<void>;
   onAttachDocument: (projectId: string, file: { url: string; name: string; type: string; size: number }) => Promise<void>;
   onDeleteDocument: (id: string, name: string) => Promise<void>;
+  onAttachPhoto: (projectId: string, url: string) => Promise<void>;
 }) {
   const est = estimatedCost(p.id, estimates);
   const act = actualCost(p, expenses);
@@ -353,6 +372,30 @@ function LibraryCard({
               <p className="text-xs text-muted mt-1.5">Actual costs, oldest build first — watch materials and labor move as you refine the build.</p>
             </div>
           )}
+
+          {/* Photos */}
+          <div>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted border-l-2 border-accent pl-2 mb-2">
+              Photos
+            </h3>
+            {files.filter((f) => (f.file_type || "").startsWith("image/")).length > 0 && (
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 mb-3">
+                {files.filter((f) => (f.file_type || "").startsWith("image/")).map((f) => (
+                  <div key={f.id} className="relative group aspect-square">
+                    <a href={f.file_url} target="_blank" rel="noopener noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={f.file_url} alt={f.file_name || "Project photo"} className="w-full h-full object-cover border border-border" />
+                    </a>
+                    <button onClick={() => onDeleteDocument(f.id, f.file_name || "Photo")}
+                      className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 hover:bg-red-600" title="Delete photo">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <ImageUpload onUploaded={(url) => onAttachPhoto(p.id, url)} label="Add Photo" />
+          </div>
 
           {/* Documents */}
           <div>
