@@ -19,11 +19,21 @@ export interface PartBuilderExport {
   generatorVersion: number;
 }
 
+export interface PartSaveToLibrary {
+  spec: PartSpec;
+  result: SolveOk;
+  generatorId: string;
+  generatorVersion: number;
+}
+
 interface PartBuilderProps {
   generator: PartGenerator;
   initial?: Partial<PartSpec>;
   context?: SolveContext;
   onExport?: (payload: PartBuilderExport) => void;
+  /** When provided, a "Save to Library" button appears, handing back the
+   *  current spec/result so the caller can store it in the shared parts library. */
+  onSaveToLibrary?: (payload: PartSaveToLibrary) => void | Promise<void>;
 }
 
 export default function PartBuilder({
@@ -31,16 +41,25 @@ export default function PartBuilder({
   initial = {},
   context = {},
   onExport,
+  onSaveToLibrary,
 }: PartBuilderProps) {
   const [spec, setSpec] = useState<PartSpec>(
     () => ({ ...generator.defaults, ...initial }) as PartSpec
   );
+  const [savedToLib, setSavedToLib] = useState(false);
   const result = useMemo(
     () => generator.solve(spec, context),
     [generator, spec, context]
   );
   const set = (key: string, value: number | string) =>
     setSpec((s) => ({ ...s, [key]: value }));
+
+  const handleSaveToLibrary = async (ok: SolveOk) => {
+    if (!onSaveToLibrary) return;
+    await onSaveToLibrary({ spec, result: ok, generatorId: generator.id, generatorVersion: generator.version });
+    setSavedToLib(true);
+    setTimeout(() => setSavedToLib(false), 2000);
+  };
 
   const handleExport = (format: "dxf" | "svg", ok: SolveOk) => {
     const name = ok.filename ?? generator.id;
@@ -117,6 +136,8 @@ export default function PartBuilder({
           result={result}
           label={generator.label}
           onExport={handleExport}
+          onSave={onSaveToLibrary ? () => handleSaveToLibrary(result) : undefined}
+          saved={savedToLib}
         />
       )}
     </div>
@@ -199,10 +220,14 @@ function PartOkPanel({
   result,
   label,
   onExport,
+  onSave,
+  saved,
 }: {
   result: SolveOk;
   label: string;
   onExport: (format: "dxf" | "svg", ok: SolveOk) => void;
+  onSave?: () => void;
+  saved?: boolean;
 }) {
   const pad = 0.5;
   // Preview-only orientation. Rotating the display 90° lets you eyeball a
@@ -316,8 +341,14 @@ function PartOkPanel({
         </p>
       ))}
 
-      <div className="mt-5 flex gap-2">
-        <Button onClick={() => onExport("dxf", result)} className="flex-1">
+      {onSave && (
+        <Button onClick={onSave} className="mt-5 w-full">
+          {saved ? "Saved to Library ✓" : "Save to Library"}
+        </Button>
+      )}
+
+      <div className={`${onSave ? "mt-2" : "mt-5"} flex gap-2`}>
+        <Button onClick={() => onExport("dxf", result)} variant={onSave ? "outline" : "primary"} className="flex-1">
           Download DXF
         </Button>
         <Button
@@ -329,7 +360,7 @@ function PartOkPanel({
         </Button>
       </div>
       <p className="mt-2 text-xs text-muted">
-        DXF for Fusion and CAM. SVG for Illustrator and artwork.
+        {onSave ? "Save a reusable copy to the Parts Library, or download — " : ""}DXF for Fusion and CAM. SVG for Illustrator and artwork.
       </p>
     </>
   );

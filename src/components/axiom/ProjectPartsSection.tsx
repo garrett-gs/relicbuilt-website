@@ -1,13 +1,22 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import PartBuilder, { type PartBuilderExport } from "./PartBuilder";
+import PartBuilder, { type PartBuilderExport, type PartSaveToLibrary } from "./PartBuilder";
 import GeneratorPicker from "./GeneratorPicker";
 import { GENERATORS, byId, type PartSpec } from "@/lib/parts";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
+import { useEntity } from "@/components/axiom/EntityProvider";
 import type { CustomWorkPart } from "@/types/axiom";
-import { Ruler, RotateCcw, Trash2 } from "lucide-react";
+import { Ruler, RotateCcw, Trash2, Library } from "lucide-react";
+
+type PartsLibraryRow = {
+  id: string;
+  generator_id: string;
+  generator_version: number;
+  spec: Record<string, string | number>;
+  label?: string;
+};
 
 interface ProjectPartsSectionProps {
   customWorkId: string;
@@ -28,6 +37,18 @@ export default function ProjectPartsSection({
   const [builderKey, setBuilderKey] = useState(0);
 
   const generator = byId[generatorId] ?? GENERATORS[0];
+  const { entity } = useEntity();
+  const [library, setLibrary] = useState<PartsLibraryRow[]>([]);
+
+  const loadLibrary = useCallback(async () => {
+    const { data } = await axiom
+      .from("parts_library")
+      .select("id, generator_id, generator_version, spec, label")
+      .eq("entity", entity)
+      .order("label");
+    if (data) setLibrary(data as PartsLibraryRow[]);
+  }, [entity]);
+  useEffect(() => { loadLibrary(); }, [loadLibrary]);
 
   const loadParts = useCallback(async () => {
     const { data } = await axiom
@@ -74,6 +95,35 @@ export default function ProjectPartsSection({
   async function deletePart(id: string) {
     await axiom.from("custom_work_parts").delete().eq("id", id);
     loadParts();
+  }
+
+  // Pull a saved library part onto this project (copies the spec — editing it
+  // here won't touch the library original).
+  async function addFromLibrary(lib: PartsLibraryRow) {
+    await axiom.from("custom_work_parts").insert({
+      custom_work_id: customWorkId,
+      generator_id: lib.generator_id,
+      generator_version: lib.generator_version,
+      spec: lib.spec,
+      label: lib.label ?? lib.generator_id,
+      position: savedParts.length,
+    });
+    await logActivity({ action: "created", entity: "project", entity_id: customWorkId, label: `Added part from library: ${lib.label ?? lib.generator_id}`, user_name: userEmail });
+    loadParts();
+  }
+
+  // Save the part currently in the builder to the shared library for reuse.
+  async function saveToLibrary(payload: PartSaveToLibrary) {
+    const label = payload.result.filename || generator.label;
+    const { data } = await axiom.from("parts_library").insert({
+      entity,
+      generator_id: payload.generatorId,
+      generator_version: payload.generatorVersion,
+      spec: payload.spec,
+      label,
+    }).select("id").single();
+    if (data) await logActivity({ action: "created", entity: "part", entity_id: data.id, label: `Saved part to library: ${label}`, user_name: userEmail });
+    loadLibrary();
   }
 
   function pickGenerator(id: string) {
@@ -134,6 +184,23 @@ export default function ProjectPartsSection({
         </div>
       )}
 
+      {/* Pull a saved part from the shared library onto this project */}
+      {library.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted flex items-center gap-1"><Library size={13} /> Add from Library:</span>
+          <select
+            value=""
+            onChange={(e) => { const lib = library.find((l) => l.id === e.target.value); if (lib) addFromLibrary(lib); }}
+            className="bg-card border border-border px-3 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
+          >
+            <option value="">Pick a saved part…</option>
+            {library.map((l) => (
+              <option key={l.id} value={l.id}>{l.label ?? l.generator_id}{byId[l.generator_id] ? ` · ${byId[l.generator_id].label}` : ""}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="bg-card border border-border p-4 space-y-4">
         <GeneratorPicker
           label="Part type"
@@ -146,6 +213,7 @@ export default function ProjectPartsSection({
           initial={initialSpec ?? undefined}
           context={{ bitDiameter: 0.25 }}
           onExport={handleExport}
+          onSaveToLibrary={saveToLibrary}
         />
       </div>
     </div>

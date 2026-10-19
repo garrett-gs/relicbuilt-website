@@ -77,6 +77,7 @@ const navSections = [
     label: "Parts Studio",
     items: [
       { href: "/axiom/parts-studio", icon: Ruler, label: "Parts Studio" },
+      { href: "/axiom/parts-library", icon: Library, label: "Parts Library" },
       { href: "/axiom/bar-designer", icon: Martini, label: "Bar Designer" },
     ],
   },
