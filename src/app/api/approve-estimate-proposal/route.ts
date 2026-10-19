@@ -161,7 +161,9 @@ export async function POST(req: NextRequest) {
             // stays put (just changes from tentative to confirmed).
             start_date: estimate.start_date || null,
             due_date: estimate.due_date || null,
-            status: "new",
+            // Online approval lands the project in the Projects pipeline
+            // (accepted), ready to be made active when work starts.
+            status: "accepted",
           })
           .select("id")
           .single();
