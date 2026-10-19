@@ -526,11 +526,13 @@ export default function ProjectsPage() {
           {p.due_date && (() => { const due = formatDueDate(p.due_date); return <span className={due.soon ? "text-orange-400 font-medium" : ""}> · due {due.text}</span>; })()}
         </p>
       </div>
-      {depositPaid(p.id) ? (
+      {/* Deposits are an Axiom/Stripe concept for RELIC only — Wallflower
+          projects are paid through Nexus, so no deposit badge there. */}
+      {p.entity === "relic" && (depositPaid(p.id) ? (
         <span className="text-xs uppercase tracking-wider text-green-400 bg-green-500/15 px-2 py-1 shrink-0 inline-flex items-center gap-1"><CheckCircle size={13} /> Deposit paid</span>
       ) : (
         <span className="text-xs uppercase tracking-wider text-muted border border-border px-2 py-1 shrink-0">Deposit due</span>
-      )}
+      ))}
       {p.quoted_amount > 0 && <span className="text-accent text-base font-mono font-semibold shrink-0 w-28 text-right">{money(p.quoted_amount)}</span>}
     </button>
   );
@@ -1662,8 +1664,9 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 
   return (
     <div className="space-y-8">
-      {/* Deposit status — updates itself when the deposit is paid */}
-      {depositInvoice && (
+      {/* Deposit status — RELIC only (Wallflower is paid via Nexus). Updates
+          itself when the deposit is paid. */}
+      {project.entity === "relic" && depositInvoice && (
         <div className={cn(
           "flex items-center gap-2 px-3 py-2 text-sm border",
           depositIsPaid ? "border-green-500/40 bg-green-500/10 text-green-400" : "border-border bg-card text-muted"
