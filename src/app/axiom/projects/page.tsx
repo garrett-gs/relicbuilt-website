@@ -1654,8 +1654,27 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     ? `${window.location.origin}/axiom/portal/${project.portal_token}`
     : "";
 
+  // Deposit status for the header — reflects automatically from the linked
+  // deposit invoice (online Stripe payment flips it to paid with no clicking).
+  const depositInvoice = projectInvoices.find((i) => i.invoice_type === "deposit");
+  const depositIsPaid = depositInvoice?.status === "paid";
+  const depositAmt = depositInvoice?.subtotal || 0;
+
   return (
     <div className="space-y-8">
+      {/* Deposit status — updates itself when the deposit is paid */}
+      {depositInvoice && (
+        <div className={cn(
+          "flex items-center gap-2 px-3 py-2 text-sm border",
+          depositIsPaid ? "border-green-500/40 bg-green-500/10 text-green-400" : "border-border bg-card text-muted"
+        )}>
+          {depositIsPaid ? <CheckCircle size={15} /> : <Clock size={15} />}
+          <span className="font-medium">{depositIsPaid ? "Deposit paid" : "Deposit due"}</span>
+          {depositAmt > 0 && <span className="font-mono ml-1">{money(depositAmt)}</span>}
+          <span className="text-xs opacity-70 ml-auto">{depositInvoice.invoice_number}</span>
+        </div>
+      )}
+
       {/* Customer / Contact */}
       <div className="space-y-4">
         <CustomerSearch
