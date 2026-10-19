@@ -527,11 +527,11 @@ export default function ProjectsPage() {
         </p>
       </div>
       {depositPaid(p.id) ? (
-        <span className="text-[10px] uppercase tracking-wider text-green-400 bg-green-500/15 px-1.5 py-0.5 shrink-0 inline-flex items-center gap-1"><CheckCircle size={11} /> Deposit paid</span>
+        <span className="text-xs uppercase tracking-wider text-green-400 bg-green-500/15 px-2 py-1 shrink-0 inline-flex items-center gap-1"><CheckCircle size={13} /> Deposit paid</span>
       ) : (
-        <span className="text-[10px] uppercase tracking-wider text-muted border border-border px-1.5 py-0.5 shrink-0">Deposit due</span>
+        <span className="text-xs uppercase tracking-wider text-muted border border-border px-2 py-1 shrink-0">Deposit due</span>
       )}
-      {p.quoted_amount > 0 && <span className="text-accent text-xs font-mono shrink-0">{money(p.quoted_amount)}</span>}
+      {p.quoted_amount > 0 && <span className="text-accent text-base font-mono font-semibold shrink-0 w-28 text-right">{money(p.quoted_amount)}</span>}
     </button>
   );
 
