@@ -718,6 +718,9 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [masterProjectId, setMasterProjectId] = useState(estimate.master_project_id || "");
   const [masterProjects, setMasterProjects] = useState<{ id: string; name: string; client_name?: string; site_address?: string }[]>([]);
   const [status, setStatus] = useState<Estimate["status"]>(estimate.status);
+  // Set once this estimate has spawned its project (either already linked, or
+  // just created on acceptance). Drives the "in pipeline" confirmation.
+  const [createdProjectId, setCreatedProjectId] = useState<string>(estimate.custom_work_id || "");
   const [lineItems, setLineItems] = useState<EstimateLineItem[]>(estimate.line_items || []);
   const [laborItems, setLaborItems] = useState<EstimateLaborItem[]>(estimate.labor_items || []);
   const [markupPct, setMarkupPct] = useState(estimate.markup_percent || 0);
@@ -1618,7 +1621,22 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     }
   }
 
+  // Set the estimate status; accepting it sends the project into the Projects
+  // pipeline automatically (no separate "Send to Project" step).
+  async function handleStatusChange(newStatus: Estimate["status"]) {
+    setStatus(newStatus);
+    markDirty();
+    if (newStatus === "accepted" && !estimate.custom_work_id && !createdProjectId) {
+      await createProject();
+    }
+  }
+
   async function createProject() {
+    // Never create a second project for the same estimate.
+    if (estimate.custom_work_id || createdProjectId) {
+      setCreatedProjectId(estimate.custom_work_id || createdProjectId);
+      return;
+    }
     save();
 
     // Calculate quoted total from estimate
@@ -1655,13 +1673,15 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       inspiration_images: carriedImages.length > 0 ? carriedImages : undefined,
       start_date: startDate || undefined,
       due_date: dueDate || undefined,
-      status: "new",
+      // Lands in the Projects pipeline, ready to be made active when work starts.
+      status: "accepted",
     }).select().single();
 
     if (data) {
-      // Link the estimate to the new project
+      // Link the estimate to the new project.
       await axiom.from("estimates").update({ custom_work_id: data.id }).eq("id", estimate.id);
-      router.push("/axiom/projects");
+      onUpdate({ custom_work_id: data.id } as Partial<Estimate>);
+      setCreatedProjectId(data.id);
     }
   }
 
@@ -1941,7 +1961,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
             <p className="text-xs text-muted font-mono">{estimate.estimate_number}</p>
             <select
               value={status}
-              onChange={(e) => { setStatus(e.target.value as Estimate["status"]); markDirty(); }}
+              onChange={(e) => handleStatusChange(e.target.value as Estimate["status"])}
               className={`border px-3 py-1.5 text-sm font-semibold uppercase tracking-wider focus:outline-none ${STATUS_STYLES[status].bg} ${STATUS_STYLES[status].border} ${STATUS_STYLES[status].text}`}
             >
               {(["draft", "sent", "accepted", "rejected"] as const).map((s) => (
@@ -2698,14 +2718,16 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t border-border flex-wrap items-center">
         <SaveButton dirty={dirty} saved={saved} onClick={save} />
-        <div className="flex flex-col gap-0.5">
-          <Button variant="outline" onClick={createProject} disabled={status !== "accepted"}>
-            <Hammer size={14} className="mr-1" /> Send to Project
-          </Button>
-          {status !== "accepted" && (
-            <p className="text-[10px] text-muted text-center">Mark as Accepted to enable</p>
-          )}
-        </div>
+        {(estimate.custom_work_id || createdProjectId) ? (
+          <a
+            href={`/axiom/projects?id=${estimate.custom_work_id || createdProjectId}`}
+            className="inline-flex items-center gap-1.5 text-sm text-green-500 hover:underline"
+          >
+            <Hammer size={14} /> In Projects pipeline — open
+          </a>
+        ) : (
+          <span className="text-[11px] text-muted">Mark <span className="text-foreground font-medium">Accepted</span> to send to the Projects pipeline.</span>
+        )}
         <button
           onClick={sendToWR}
           disabled={wrSending}

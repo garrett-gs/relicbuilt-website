@@ -19,7 +19,7 @@ import { cn, formatPhone, formatDueDate, suggestStartDate, formatDate } from "@/
 import { resolveClientEmail } from "@/lib/resolve-email";
 import DateField from "@/components/ui/DateField";
 import FileUpload from "@/components/ui/FileUpload";
-import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee, ChevronDown, ChevronRight, Clock } from "lucide-react";
+import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee, ChevronDown, ChevronRight, Clock, Hammer } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -38,9 +38,12 @@ const STATUS_COLUMNS = [
   { key: "complete", label: "Complete", color: "#22c55e" },
 ] as const;
 
-// Active Kanban only shows in-flight projects. Completed ones live on
-// the Archive tab so the board stays focused on what still needs work.
-const ACTIVE_STATUS_COLUMNS = STATUS_COLUMNS.filter((c) => c.key !== "complete");
+// The project lifecycle now begins at acceptance: an accepted estimate lands
+// a project in the Pipeline; it's manually pulled into Active when work starts.
+// New/In Review/Quoted no longer live on the board (those are estimate stages).
+// Kept for label/color lookups on any legacy rows.
+const PROJECT_STATUS_OPTIONS = STATUS_COLUMNS.filter((c) => ["accepted", "in_progress", "complete"].includes(c.key));
+const statusMeta = (key: string) => STATUS_COLUMNS.find((c) => c.key === key);
 
 const BUDGET_RANGES = [
   "Under $500", "$500 - $1,000", "$1,000 - $2,500", "$2,500 - $5,000",
@@ -331,8 +334,6 @@ export default function ProjectsPage() {
   const [selected, setSelected] = useState<CustomWork | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [showProposal, setShowProposal] = useState(false);
-  const [dragging, setDragging] = useState<string | null>(null);
-  const [dragOver, setDragOver] = useState<string | null>(null);
   const [projectsTab, setProjectsTab] = useState<"active" | "archive">("active");
   const [masters, setMasters] = useState<MasterProject[]>([]);
   // Estimates + expenses power the master-project rollup shown on each project.
@@ -384,7 +385,8 @@ export default function ProjectsPage() {
       customer_id: form.customer_id || null,
       company_id: form.company_id || null,
       company_name: form.company_name || null,
-      status: "new",
+      // Projects now start in the Pipeline (accepted), ready to be pulled active.
+      status: "accepted",
     }).select().single();
     if (data) {
       await logActivity({ action: "created", entity: "project", entity_id: data.id, label: `Created project: ${data.project_name}`, user_name: userEmail });
@@ -490,6 +492,48 @@ export default function ProjectsPage() {
 
   const activeProjects = projects.filter((p) => p.status !== "complete");
   const archivedProjects = projects.filter((p) => p.status === "complete");
+  const inProgressProjects = projects.filter((p) => p.status === "in_progress");
+  const pipelineProjects = projects.filter((p) => p.status === "accepted");
+
+  // Deposit is tracked on the linked estimate; surface it on the project row.
+  const depositPaid = (projectId: string) => estimates.some((e) => e.custom_work_id === projectId && !!e.deposit_paid_at);
+
+  const sortByDue = (list: CustomWork[]) =>
+    list.slice().sort((a, b) => {
+      const aDue = a.due_date || ""; const bDue = b.due_date || "";
+      if (!aDue && !bDue) return (b.updated_at || "").localeCompare(a.updated_at || "");
+      if (!aDue) return 1; if (!bDue) return -1;
+      return aDue.localeCompare(bDue);
+    });
+
+  const renderRow = (p: CustomWork, dotColor: string) => (
+    <button
+      key={p.id}
+      onClick={() => setSelected(p)}
+      className="w-full text-left px-4 py-3 hover:bg-background/40 transition-colors flex items-center gap-3"
+    >
+      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: dotColor }} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium truncate">{p.project_name}</p>
+          {masterName(p.master_project_id) && (
+            <span className="text-[10px] text-accent border border-accent/40 px-1.5 py-0.5 shrink-0 truncate max-w-[40%]">{masterName(p.master_project_id)}</span>
+          )}
+        </div>
+        <p className="text-xs text-muted mt-0.5 truncate">
+          {p.client_name || "—"}
+          {p.company_name && <span className="italic"> · {p.company_name}</span>}
+          {p.due_date && (() => { const due = formatDueDate(p.due_date); return <span className={due.soon ? "text-orange-400 font-medium" : ""}> · due {due.text}</span>; })()}
+        </p>
+      </div>
+      {depositPaid(p.id) ? (
+        <span className="text-[10px] uppercase tracking-wider text-green-400 bg-green-500/15 px-1.5 py-0.5 shrink-0 inline-flex items-center gap-1"><CheckCircle size={11} /> Deposit paid</span>
+      ) : (
+        <span className="text-[10px] uppercase tracking-wider text-muted border border-border px-1.5 py-0.5 shrink-0">Deposit due</span>
+      )}
+      {p.quoted_amount > 0 && <span className="text-accent text-xs font-mono shrink-0">{money(p.quoted_amount)}</span>}
+    </button>
+  );
 
   return (
     <div>
@@ -527,75 +571,40 @@ export default function ProjectsPage() {
         )}
       </div>
 
-      {/* Active Kanban — drops the Complete column. Dragging onto the
-          Archive tab isn't supported (no drop target there); marking a
-          project complete still happens from the detail panel's status
-          dropdown, or by moving the column in code if we add one later. */}
+      {/* Two stacked, full-width sections: Active Projects (in progress) on
+          top, Pipeline (accepted, awaiting start) below. One-line rows. A
+          project moves up to Active via "Make Active" in its detail panel. */}
       {projectsTab === "active" && (
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {ACTIVE_STATUS_COLUMNS.map((col) => {
-            const colProjects = activeProjects
-              .filter((p) => p.status === col.key)
-              .sort((a, b) => {
-                const aDue = a.due_date || "";
-                const bDue = b.due_date || "";
-                if (!aDue && !bDue) return 0;
-                if (!aDue) return 1;
-                if (!bDue) return -1;
-                return aDue.localeCompare(bDue);
-              });
-            return (
-              <div
-                key={col.key}
-                className={cn(
-                  "flex-shrink-0 w-64 bg-card border border-border rounded p-3 min-h-[300px]",
-                  dragOver === col.key && "border-accent"
-                )}
-                onDragOver={(e) => { e.preventDefault(); setDragOver(col.key); }}
-                onDragLeave={() => setDragOver(null)}
-                onDrop={() => {
-                  if (dragging) moveProject(dragging, col.key);
-                  setDragging(null);
-                  setDragOver(null);
-                }}
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="w-2 h-2 rounded-full" style={{ background: col.color }} />
-                  <span className="text-xs uppercase tracking-wider text-muted font-medium">{col.label}</span>
-                  <span className="text-xs text-muted ml-auto">{colProjects.length}</span>
-                </div>
-                <div className="space-y-2">
-                  {colProjects.map((p) => (
-                    <div
-                      key={p.id}
-                      draggable
-                      onDragStart={() => setDragging(p.id)}
-                      onClick={() => setSelected(p)}
-                      className="bg-background border border-border p-3 cursor-pointer hover:border-accent/50 transition-colors text-sm"
-                    >
-                      {masterName(p.master_project_id) && (
-                        <span className="inline-block text-[10px] text-accent border border-accent/40 px-1.5 py-0.5 mb-1 truncate max-w-full">{masterName(p.master_project_id)}</span>
-                      )}
-                      <p className="font-medium mb-1 truncate">{p.project_name}</p>
-                      <p className="text-muted text-xs truncate">{p.client_name}</p>
-                      {p.company_name && <p className="text-muted text-xs truncate italic">{p.company_name}</p>}
-                      {p.due_date && (() => {
-                        const due = formatDueDate(p.due_date);
-                        return (
-                          <p className={`text-xs mt-0.5 ${due.soon ? "text-orange-400 font-medium" : "text-muted"}`}>
-                            Due: {due.text}
-                          </p>
-                        );
-                      })()}
-                      {p.quoted_amount > 0 && (
-                        <p className="text-accent text-xs mt-1 font-mono">{money(p.quoted_amount)}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
+        <div className="space-y-8">
+          <section>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-2 h-2 rounded-full" style={{ background: "#3b82f6" }} />
+              <h2 className="text-sm uppercase tracking-wider text-foreground font-semibold">Active Projects</h2>
+              <span className="text-xs text-muted">{inProgressProjects.length}</span>
+            </div>
+            <div className="bg-card border border-border rounded">
+              {inProgressProjects.length === 0 ? (
+                <p className="text-muted text-sm p-6">No active projects yet — open a Pipeline project and hit <span className="text-foreground font-medium">Make Active</span> when the build starts.</p>
+              ) : (
+                <div className="divide-y divide-border">{sortByDue(inProgressProjects).map((p) => renderRow(p, "#3b82f6"))}</div>
+              )}
+            </div>
+          </section>
+
+          <section>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="w-2 h-2 rounded-full" style={{ background: "#2dd4bf" }} />
+              <h2 className="text-sm uppercase tracking-wider text-foreground font-semibold">Pipeline</h2>
+              <span className="text-xs text-muted">{pipelineProjects.length}</span>
+            </div>
+            <div className="bg-card border border-border rounded">
+              {pipelineProjects.length === 0 ? (
+                <p className="text-muted text-sm p-6">Nothing in the pipeline. Accepted estimates land here, ready to start.</p>
+              ) : (
+                <div className="divide-y divide-border">{sortByDue(pipelineProjects).map((p) => renderRow(p, "#2dd4bf"))}</div>
+              )}
+            </div>
+          </section>
         </div>
       )}
 
@@ -673,6 +682,7 @@ export default function ProjectsPage() {
             onGenerateProposal={() => setShowProposal(true)}
             onGenerateRecap={() => openRecap(selected)}
             onComplete={() => moveProject(selected.id, "complete")}
+            onMakeActive={() => moveProject(selected.id, "in_progress")}
             userEmail={userEmail}
           />
         </Modal>
@@ -927,7 +937,7 @@ function CreateProjectForm({ onSubmit, onCancel }: { onSubmit: (form: Record<str
 
 // ── Detail view ──────────────────────────────────────────────
 
-function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerateInvoice, onGenerateProposal, onGenerateRecap, onComplete, userEmail }: {
+function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerateInvoice, onGenerateProposal, onGenerateRecap, onComplete, onMakeActive, userEmail }: {
   project: CustomWork;
   onUpdate: (u: Partial<CustomWork>) => void;
   onDelete: () => void;
@@ -936,6 +946,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   onGenerateProposal: () => void;
   onGenerateRecap: () => void;
   onComplete: () => void;
+  onMakeActive: () => void;
   userEmail: string;
 }) {
   const [projectName, setProjectName] = useState(project.project_name || "");
@@ -1702,7 +1713,11 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         <div>
           <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Status</label>
           <select value={project.status} onChange={(e) => onUpdate({ status: e.target.value as CustomWork["status"] })} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">
-            {STATUS_COLUMNS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+            {/* Legacy rows may carry an old stage; keep it selectable so the value shows. */}
+            {!PROJECT_STATUS_OPTIONS.some((s) => s.key === project.status) && statusMeta(project.status) && (
+              <option value={project.status}>{statusMeta(project.status)!.label}</option>
+            )}
+            {PROJECT_STATUS_OPTIONS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
         </div>
         <div>
@@ -2710,6 +2725,11 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         <Button variant="outline" onClick={onGenerateRecap}>
           <Printer size={14} className="mr-1" /> Project Recap
         </Button>
+        {project.status === "accepted" && (
+          <Button onClick={onMakeActive} className="bg-blue-600 hover:bg-blue-700 text-white">
+            <Hammer size={14} className="mr-1" /> Make Active
+          </Button>
+        )}
         {project.status === "complete" ? (
           <Link href="/axiom/project-library" className="inline-flex items-center gap-1.5 text-sm text-green-500 hover:underline px-2">
             <CheckCircle size={14} /> Completed — view in Project Library
