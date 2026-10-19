@@ -717,6 +717,9 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [clientName, setClientName] = useState(estimate.client_name || "");
   const [masterProjectId, setMasterProjectId] = useState(estimate.master_project_id || "");
   const [masterProjects, setMasterProjects] = useState<{ id: string; name: string; client_name?: string; site_address?: string }[]>([]);
+  const [creatingMaster, setCreatingMaster] = useState(false);
+  const [newMasterName, setNewMasterName] = useState("");
+  const [busyMaster, setBusyMaster] = useState(false);
   const [status, setStatus] = useState<Estimate["status"]>(estimate.status);
   // Set once this estimate has spawned its project (either already linked, or
   // just created on acceptance). Drives the "in pipeline" confirmation.
@@ -1560,6 +1563,28 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     axiom.from("master_projects").select("id, name, client_name, site_address").eq("entity", estimate.entity || "wallflower_relic").order("name").then(({ data }) => { if (data) setMasterProjects(data); });
   }, [estimate.entity]);
 
+  // Create a new master project on the fly from the estimator and link this
+  // build to it, so you don't have to go elsewhere to set one up first.
+  async function createMaster() {
+    const name = newMasterName.trim();
+    if (!name) return;
+    setBusyMaster(true);
+    const { data } = await axiom
+      .from("master_projects")
+      .insert({ entity: estimate.entity || "wallflower_relic", name, client_name: clientName || null, site_address: siteSameAsClient ? null : (siteAddress || null) })
+      .select("id, name, client_name, site_address")
+      .single();
+    if (data) {
+      await logActivity({ action: "created", entity: "master_project", entity_id: data.id, label: `Created master project: ${name}`, user_name: detailUserEmail });
+      setMasterProjects((prev) => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+      setMasterProjectId(data.id);
+      markDirty();
+    }
+    setBusyMaster(false);
+    setCreatingMaster(false);
+    setNewMasterName("");
+  }
+
   function save() {
     const full = buildFull() as Record<string, unknown>;
     const base = baseRef.current || {};
@@ -1906,23 +1931,40 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
               Master Project
               <span className="text-[10px] text-muted/60 normal-case ml-1.5">(optional — groups this build under a parent)</span>
             </label>
-            <select
-              value={masterProjectId}
-              onChange={(e) => {
-                const id = e.target.value;
-                setMasterProjectId(id);
-                markDirty();
-                const mp = masterProjects.find((m) => m.id === id);
-                if (mp) {
-                  if (!clientName && mp.client_name) setClientName(mp.client_name);
-                  if (!siteAddress && mp.site_address) { setSiteAddress(mp.site_address); setSiteSameAsClient(false); }
-                }
-              }}
-              className="w-full bg-card border border-border px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-accent"
-            >
-              <option value="">— None —</option>
-              {masterProjects.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
+            {creatingMaster ? (
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  value={newMasterName}
+                  onChange={(e) => setNewMasterName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); createMaster(); } if (e.key === "Escape") { setCreatingMaster(false); setNewMasterName(""); } }}
+                  placeholder="New master project name…"
+                  className="flex-1 bg-card border border-border px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-accent"
+                />
+                <button type="button" onClick={createMaster} disabled={busyMaster || !newMasterName.trim()} className="bg-accent text-black px-3 py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-40">Create &amp; link</button>
+                <button type="button" onClick={() => { setCreatingMaster(false); setNewMasterName(""); }} className="text-muted hover:text-foreground px-2 py-2.5 text-sm">Cancel</button>
+              </div>
+            ) : (
+              <select
+                value={masterProjectId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (id === "__new__") { setCreatingMaster(true); setNewMasterName(""); return; }
+                  setMasterProjectId(id);
+                  markDirty();
+                  const mp = masterProjects.find((m) => m.id === id);
+                  if (mp) {
+                    if (!clientName && mp.client_name) setClientName(mp.client_name);
+                    if (!siteAddress && mp.site_address) { setSiteAddress(mp.site_address); setSiteSameAsClient(false); }
+                  }
+                }}
+                className="w-full bg-card border border-border px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-accent"
+              >
+                <option value="">— None —</option>
+                {masterProjects.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                <option value="__new__">＋ New master project…</option>
+              </select>
+            )}
           </div>
           {/* Build window — places this job on the Build Calendar for planning,
               shown as "tentative" until the estimate is approved. */}
