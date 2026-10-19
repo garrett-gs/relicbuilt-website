@@ -45,6 +45,8 @@ const STATUS_COLUMNS = [
 const PROJECT_STATUS_OPTIONS = STATUS_COLUMNS.filter((c) => ["accepted", "in_progress", "complete"].includes(c.key));
 const statusMeta = (key: string) => STATUS_COLUMNS.find((c) => c.key === key);
 
+type InvoiceStatusLite = { id: string; custom_work_id: string | null; invoice_type: string | null; status: string | null };
+
 const BUDGET_RANGES = [
   "Under $500", "$500 - $1,000", "$1,000 - $2,500", "$2,500 - $5,000",
   "$5,000 - $10,000", "$10,000 - $25,000", "$25,000+",
@@ -339,6 +341,7 @@ export default function ProjectsPage() {
   // Estimates + expenses power the master-project rollup shown on each project.
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [expenses, setExpenses] = useState<ExpenseLite[]>([]);
+  const [invoiceStatuses, setInvoiceStatuses] = useState<InvoiceStatusLite[]>([]);
   const { isSuperAdmin } = useAxiomRole(); // Archive is super-admin only
   const { entity } = useEntity();
 
@@ -348,14 +351,16 @@ export default function ProjectsPage() {
   }, [entity]);
 
   const loadMasterData = useCallback(async () => {
-    const [{ data: m }, { data: e }, { data: x }] = await Promise.all([
+    const [{ data: m }, { data: e }, { data: x }, { data: inv }] = await Promise.all([
       axiom.from("master_projects").select("*").eq("entity", entity).order("name"),
       axiom.from("estimates").select("*").eq("entity", entity),
       axiom.from("expenses").select("amount, category, custom_work_id").eq("entity", entity),
+      axiom.from("invoices").select("id, custom_work_id, invoice_type, status").eq("entity", entity),
     ]);
     if (m) setMasters(m);
     if (e) setEstimates(e);
     if (x) setExpenses(x);
+    if (inv) setInvoiceStatuses(inv as InvoiceStatusLite[]);
   }, [entity]);
 
   useEffect(() => { load(); }, [load]);
@@ -495,8 +500,18 @@ export default function ProjectsPage() {
   const inProgressProjects = projects.filter((p) => p.status === "in_progress");
   const pipelineProjects = projects.filter((p) => p.status === "accepted");
 
-  // Deposit is tracked on the linked estimate; surface it on the project row.
-  const depositPaid = (projectId: string) => estimates.some((e) => e.custom_work_id === projectId && !!e.deposit_paid_at);
+  // Payment status for a RELIC project row, from its linked invoices:
+  //  • a deposit invoice → "Deposit paid" / "Deposit due"
+  //  • otherwise any invoice → "Paid" / "Unpaid"
+  //  • no invoices → fall back to the estimate's deposit_paid_at flag
+  const paymentInfo = (projectId: string): { label: string; paid: boolean } => {
+    const inv = invoiceStatuses.filter((i) => i.custom_work_id === projectId);
+    const deposit = inv.find((i) => (i.invoice_type || "").toLowerCase() === "deposit");
+    if (deposit) return { label: deposit.status === "paid" ? "Deposit paid" : "Deposit due", paid: deposit.status === "paid" };
+    if (inv.length > 0) { const allPaid = inv.every((i) => i.status === "paid"); return { label: allPaid ? "Paid" : "Unpaid", paid: allPaid }; }
+    const estPaid = estimates.some((e) => e.custom_work_id === projectId && !!e.deposit_paid_at);
+    return { label: estPaid ? "Deposit paid" : "Deposit due", paid: estPaid };
+  };
 
   const sortByDue = (list: CustomWork[]) =>
     list.slice().sort((a, b) => {
@@ -526,13 +541,15 @@ export default function ProjectsPage() {
           {p.due_date && (() => { const due = formatDueDate(p.due_date); return <span className={due.soon ? "text-orange-400 font-medium" : ""}> · due {due.text}</span>; })()}
         </p>
       </div>
-      {/* Deposits are an Axiom/Stripe concept for RELIC only — Wallflower
-          projects are paid through Nexus, so no deposit badge there. */}
-      {p.entity === "relic" && (depositPaid(p.id) ? (
-        <span className="text-xs uppercase tracking-wider text-green-400 bg-green-500/15 px-2 py-1 shrink-0 inline-flex items-center gap-1"><CheckCircle size={13} /> Deposit paid</span>
-      ) : (
-        <span className="text-xs uppercase tracking-wider text-muted border border-border px-2 py-1 shrink-0">Deposit due</span>
-      ))}
+      {/* Payment status — RELIC only (Wallflower is paid via Nexus). */}
+      {p.entity === "relic" && (() => {
+        const pi = paymentInfo(p.id);
+        return pi.paid ? (
+          <span className="text-xs uppercase tracking-wider text-green-400 bg-green-500/15 px-2 py-1 shrink-0 inline-flex items-center gap-1"><CheckCircle size={13} /> {pi.label}</span>
+        ) : (
+          <span className="text-xs uppercase tracking-wider text-muted border border-border px-2 py-1 shrink-0">{pi.label}</span>
+        );
+      })()}
       {p.quoted_amount > 0 && <span className="text-accent text-base font-mono font-semibold shrink-0 w-28 text-right">{money(p.quoted_amount)}</span>}
     </button>
   );
@@ -1656,25 +1673,28 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     ? `${window.location.origin}/axiom/portal/${project.portal_token}`
     : "";
 
-  // Deposit status for the header — reflects automatically from the linked
-  // deposit invoice (online Stripe payment flips it to paid with no clicking).
-  const depositInvoice = projectInvoices.find((i) => i.invoice_type === "deposit");
-  const depositIsPaid = depositInvoice?.status === "paid";
-  const depositAmt = depositInvoice?.subtotal || 0;
+  // Payment status for the header — reflects automatically from the linked
+  // invoice (online Stripe payment flips it to paid with no clicking). Prefer
+  // the deposit invoice; otherwise use the project's invoice.
+  const payInvoice = projectInvoices.find((i) => i.invoice_type === "deposit") || projectInvoices[0];
+  const payIsDeposit = payInvoice?.invoice_type === "deposit";
+  const payIsPaid = payInvoice?.status === "paid";
+  const payAmt = payInvoice?.subtotal || 0;
+  const payLabel = payIsDeposit ? (payIsPaid ? "Deposit paid" : "Deposit due") : (payIsPaid ? "Paid" : "Unpaid");
 
   return (
     <div className="space-y-8">
-      {/* Deposit status — RELIC only (Wallflower is paid via Nexus). Updates
-          itself when the deposit is paid. */}
-      {project.entity === "relic" && depositInvoice && (
+      {/* Payment status — RELIC only (Wallflower is paid via Nexus). Updates
+          itself when the invoice is paid. */}
+      {project.entity === "relic" && payInvoice && (
         <div className={cn(
           "flex items-center gap-2 px-3 py-2 text-sm border",
-          depositIsPaid ? "border-green-500/40 bg-green-500/10 text-green-400" : "border-border bg-card text-muted"
+          payIsPaid ? "border-green-500/40 bg-green-500/10 text-green-400" : "border-border bg-card text-muted"
         )}>
-          {depositIsPaid ? <CheckCircle size={15} /> : <Clock size={15} />}
-          <span className="font-medium">{depositIsPaid ? "Deposit paid" : "Deposit due"}</span>
-          {depositAmt > 0 && <span className="font-mono ml-1">{money(depositAmt)}</span>}
-          <span className="text-xs opacity-70 ml-auto">{depositInvoice.invoice_number}</span>
+          {payIsPaid ? <CheckCircle size={15} /> : <Clock size={15} />}
+          <span className="font-medium">{payLabel}</span>
+          {payAmt > 0 && <span className="font-mono ml-1">{money(payAmt)}</span>}
+          <span className="text-xs opacity-70 ml-auto">{payInvoice.invoice_number}</span>
         </div>
       )}
 
