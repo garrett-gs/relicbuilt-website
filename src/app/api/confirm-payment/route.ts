@@ -213,6 +213,7 @@ export async function POST(req: NextRequest) {
     // client has paid the deposit via Stripe, we promote the accepted
     // estimate to a real custom_work record without Garrett having to
     // click anything in Axiom.
+    let depositProjectId: string | null = (invoice.custom_work_id as string | null) ?? null;
     if (invoice.invoice_type === "deposit" && invoice.estimate_id) {
       try {
         const { data: estimate } = await supabase
@@ -261,6 +262,7 @@ export async function POST(req: NextRequest) {
           }
 
           if (customWorkId) {
+            depositProjectId = customWorkId;
             // Stamp estimate as paid and link to project
             await supabase.from("estimates").update({
               deposit_paid_at: new Date().toISOString(),
@@ -365,6 +367,7 @@ export async function POST(req: NextRequest) {
       amount: totalPaid,
       method: sessionMethod === "ach" ? "ach" : "card",
       origin: req.headers.get("origin") || `https://${req.headers.get("host") || "relicbuilt.com"}`,
+      projectId: depositProjectId,
     });
 
     return NextResponse.json({

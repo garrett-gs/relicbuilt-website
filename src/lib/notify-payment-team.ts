@@ -26,6 +26,9 @@ interface NotifyPaymentTeamArgs {
   // Used to build the "Open in Axiom" CTA link. Pass req.headers.get("origin")
   // or a host-derived URL from the calling route.
   origin?: string | null;
+  // The linked project. For a deposit, the email points straight at it and
+  // frames the payment as "ready to start".
+  projectId?: string | null;
 }
 
 function money(n: number): string {
@@ -81,6 +84,14 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
     });
 
     const isAch = args.method === "ach" || args.method === "us_bank_account";
+    const isDeposit = (args.invoiceType || "").toLowerCase() === "deposit";
+
+    // A deposit points straight at the project and frames it as ready to start;
+    // any other payment keeps the generic "open invoices" CTA.
+    const projectUrl = args.projectId ? `${origin}/axiom/projects?id=${args.projectId}` : `${origin}/axiom/projects`;
+    const ctaUrl = isDeposit ? projectUrl : invoiceUrl;
+    const ctaLabel = isDeposit ? "Open Project →" : "Open in Axiom →";
+    const headerLabel = isDeposit ? "Deposit Received" : "Payment Received";
 
     const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;background:#fff;">
@@ -88,8 +99,12 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
     <img src="${logoUrl}" alt="${bizName}" style="height:36px;display:block;" />
   </div>
   <div style="padding:28px;">
-    <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:#888;">Payment Received</p>
+    <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:#888;">${headerLabel}</p>
     <h2 style="margin:0 0 18px;font-size:22px;color:#111;font-family:monospace;">${money(args.amount)}</h2>
+    ${isDeposit ? `
+    <p style="margin:0 0 18px;padding:10px 14px;background:#ecfdf5;border:1px solid #6ee7b7;color:#065f46;font-size:13px;line-height:1.5;">
+      The deposit is in${isAch ? " (ACH — see settlement note below)" : ""}. This project is ready to be made active in the Pipeline whenever the build starts.
+    </p>` : ""}
     <table style="width:100%;font-size:14px;border-collapse:collapse;margin-bottom:20px;">
       <tr><td style="padding:6px 0;color:#666;">Invoice:</td><td style="padding:6px 0;text-align:right;font-family:monospace;">${args.invoiceNumber}</td></tr>
       <tr><td style="padding:6px 0;color:#666;">Client:</td><td style="padding:6px 0;text-align:right;font-weight:600;">${args.clientName || "—"}</td></tr>
@@ -102,11 +117,15 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
     <p style="margin:0 0 16px;padding:10px 14px;background:#fffbeb;border:1px solid #fcd34d;color:#92400e;font-size:12px;line-height:1.5;">
       ACH transfers take 3–5 business days to fully clear. The invoice is marked paid in Axiom, but the funds may not appear in your bank until settlement.
     </p>` : ""}
-    <a href="${invoiceUrl}" style="display:inline-block;background:${accent};color:${onAccent};padding:12px 24px;text-decoration:none;font-weight:bold;letter-spacing:0.06em;font-size:13px;text-transform:uppercase;">
-      Open in Axiom →
+    <a href="${ctaUrl}" style="display:inline-block;background:${accent};color:${onAccent};padding:12px 24px;text-decoration:none;font-weight:bold;letter-spacing:0.06em;font-size:13px;text-transform:uppercase;">
+      ${ctaLabel}
     </a>
   </div>
 </div>`.trim();
+
+    const subject = isDeposit
+      ? `Deposit received — ${money(args.amount)} from ${args.clientName || "client"} — ${args.description || args.invoiceNumber}`
+      : `Payment Received — ${money(args.amount)} from ${args.clientName || "client"} (${args.invoiceNumber})`;
 
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -117,7 +136,7 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
       body: JSON.stringify({
         from: `${profile.fromName} <${profile.fromEmail}>`,
         to: Array.from(recipients),
-        subject: `Payment Received — ${money(args.amount)} from ${args.clientName || "client"} (${args.invoiceNumber})`,
+        subject,
         html,
         reply_to: args.clientEmail || undefined,
       }),

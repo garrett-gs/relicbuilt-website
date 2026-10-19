@@ -141,6 +141,7 @@ export async function POST(req: NextRequest) {
         amount: depositInvoice.subtotal,
         method: "manual",
         origin: req.headers.get("origin") || `https://${req.headers.get("host") || "relicbuilt.com"}`,
+        projectId: customWorkId,
       });
     }
 
