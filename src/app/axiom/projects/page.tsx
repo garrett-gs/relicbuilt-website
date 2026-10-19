@@ -7,7 +7,9 @@ import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAxiomRole } from "@/components/axiom/useAxiomRole";
 import { useEntity } from "@/components/axiom/EntityProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
-import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, ProposalScope, ProposalCostSection, ProposalCostItem, BuildComment, ApprovalRequest, ProjectChecklist, Invoice, InventoryItem, TeamMember, EstimateLineItem, EstimateLaborItem } from "@/types/axiom";
+import { CustomWork, Material, LaborEntry, Customer, Company, ProposalHighlight, ProposalScope, ProposalCostSection, ProposalCostItem, BuildComment, ApprovalRequest, ProjectChecklist, Invoice, InventoryItem, TeamMember, EstimateLineItem, EstimateLaborItem, MasterProject, Estimate } from "@/types/axiom";
+import MasterProjectHeader from "@/components/axiom/MasterProjectHeader";
+import type { ExpenseLite } from "@/lib/master-pnl";
 import ChecklistPanel from "@/components/axiom/ChecklistPanel";
 import ProjectPartsSection from "@/components/axiom/ProjectPartsSection";
 import Button from "@/components/ui/Button";
@@ -331,7 +333,10 @@ export default function ProjectsPage() {
   const [dragging, setDragging] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [projectsTab, setProjectsTab] = useState<"active" | "archive">("active");
-  const [masters, setMasters] = useState<{ id: string; name: string }[]>([]);
+  const [masters, setMasters] = useState<MasterProject[]>([]);
+  // Estimates + expenses power the master-project rollup shown on each project.
+  const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseLite[]>([]);
   const { isSuperAdmin } = useAxiomRole(); // Archive is super-admin only
   const { entity } = useEntity();
 
@@ -340,10 +345,19 @@ export default function ProjectsPage() {
     if (data) setProjects(data);
   }, [entity]);
 
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    axiom.from("master_projects").select("id, name").eq("entity", entity).then(({ data }) => { if (data) setMasters(data); });
+  const loadMasterData = useCallback(async () => {
+    const [{ data: m }, { data: e }, { data: x }] = await Promise.all([
+      axiom.from("master_projects").select("*").eq("entity", entity).order("name"),
+      axiom.from("estimates").select("*").eq("entity", entity),
+      axiom.from("expenses").select("amount, category, custom_work_id").eq("entity", entity),
+    ]);
+    if (m) setMasters(m);
+    if (e) setEstimates(e);
+    if (x) setExpenses(x);
   }, [entity]);
+
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => { loadMasterData(); }, [loadMasterData]);
   const masterName = (id?: string) => (id ? masters.find((m) => m.id === id)?.name : undefined);
 
   // Deep-link: open a specific project when arrived via ?id= (e.g. a build
@@ -633,6 +647,22 @@ export default function ProjectsPage() {
       {/* Detail modal */}
       {selected && !showProposal && (
         <Modal title={selected.project_name} onClose={() => { setSelected(null); load(); }} wide>
+          <MasterProjectHeader
+            project={selected}
+            projects={projects}
+            estimates={estimates}
+            expenses={expenses}
+            masters={masters}
+            entity={entity}
+            userEmail={userEmail}
+            onOpenProject={(id) => { const p = projects.find((x) => x.id === id); if (p) setSelected(p); }}
+            onChanged={async () => {
+              await Promise.all([load(), loadMasterData()]);
+              // Refresh the open project so its new master_project_id takes effect.
+              const { data } = await axiom.from("custom_work").select("*").eq("id", selected.id).single();
+              if (data) setSelected(data);
+            }}
+          />
           <ProjectDetail
             project={selected}
             onUpdate={(updates) => updateProject(selected.id, updates)}
