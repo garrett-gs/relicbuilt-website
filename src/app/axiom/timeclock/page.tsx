@@ -91,7 +91,7 @@ export default function TimeClockPage() {
     axiom.from("settings").select("team_members").limit(1).single().then(({ data }) => {
       if (data?.team_members) setMembers(data.team_members.filter((m: TeamMember) => m.name && m.pin));
     });
-    axiom.from("custom_work").select("*").in("status", ["new", "in_review", "quoted", "in_progress"]).order("project_name").then(({ data }) => {
+    axiom.from("custom_work").select("*").in("status", ["new", "in_review", "quoted", "accepted", "in_progress"]).order("project_name").then(({ data }) => {
       if (data) setProjects(data);
     });
     // Catalog products — non-archived only. The picker shows them under

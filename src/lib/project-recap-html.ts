@@ -71,7 +71,7 @@ export function generateProjectRecapHtml({ project, receipts, invoices, biz }: R
 
   // Status label
   const statusLabels: Record<string, string> = {
-    new: "New", in_review: "In Review", quoted: "Quoted",
+    new: "New", in_review: "In Review", quoted: "Quoted", accepted: "Accepted",
     in_progress: "In Progress", complete: "Complete",
   };
 

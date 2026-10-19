@@ -33,6 +33,7 @@ const STATUS_COLUMNS = [
   { key: "new", label: "New", color: "#4d9fff" },
   { key: "in_review", label: "In Review", color: "#f59e0b" },
   { key: "quoted", label: "Quoted", color: "#a78bfa" },
+  { key: "accepted", label: "Accepted", color: "#2dd4bf" },
   { key: "in_progress", label: "In Progress", color: "#3b82f6" },
   { key: "complete", label: "Complete", color: "#22c55e" },
 ] as const;

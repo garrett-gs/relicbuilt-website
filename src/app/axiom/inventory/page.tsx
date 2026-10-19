@@ -61,7 +61,7 @@ export default function InventoryPage() {
       axiom.from("inventory_categories").select("*").order("sort_order"),
       axiom.from("inventory_items").select("*").eq("active", true).order("description"),
       axiom.from("inventory_transactions").select("*").order("date", { ascending: false }).order("created_at", { ascending: false }).limit(200),
-      axiom.from("custom_work").select("id,project_name").in("status", ["new", "in_review", "quoted", "in_progress"]).order("project_name"),
+      axiom.from("custom_work").select("id,project_name").in("status", ["new", "in_review", "quoted", "accepted", "in_progress"]).order("project_name"),
       axiom.from("vendors").select("id,name").eq("status", "active").order("name"),
       axiom.from("settings").select("inventory_locations").limit(1).single(),
     ]);

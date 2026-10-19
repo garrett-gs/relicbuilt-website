@@ -486,7 +486,7 @@ function CreateModal({ onSubmit, onClose }: {
       .from("custom_work")
       .select("id,project_name,client_name")
       .eq("entity", entity)
-      .in("status", ["new", "in_review", "quoted", "in_progress"])
+      .in("status", ["new", "in_review", "quoted", "accepted", "in_progress"])
       .order("project_name")
       .then(({ data }) => {
         if (data) setActiveProjects(data as Array<{ id: string; project_name: string; client_name?: string }>);

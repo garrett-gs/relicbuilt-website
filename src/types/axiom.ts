@@ -94,7 +94,7 @@ export interface CustomWork {
   project_description?: string;
   budget_range?: string;
   timeline?: string;
-  status: "new" | "in_review" | "quoted" | "in_progress" | "complete";
+  status: "new" | "in_review" | "quoted" | "accepted" | "in_progress" | "complete";
   internal_notes?: string;
   // Postmortem written at close-out — what changed, what to do differently
   // next build. Surfaced in the Project Library.

@@ -23,6 +23,7 @@ const STATUS_LABELS: Record<string, string> = {
   new: "New",
   in_review: "In Review",
   quoted: "Quoted",
+  accepted: "Accepted",
   in_progress: "In Progress",
   complete: "Complete",
 };
@@ -31,6 +32,7 @@ const STATUS_COLORS: Record<string, string> = {
   new: "bg-blue-500/20 text-blue-400",
   in_review: "bg-yellow-500/20 text-yellow-400",
   quoted: "bg-purple-500/20 text-purple-400",
+  accepted: "bg-teal-500/20 text-teal-400",
   in_progress: "bg-accent/20 text-accent",
   complete: "bg-green-500/20 text-green-400",
 };

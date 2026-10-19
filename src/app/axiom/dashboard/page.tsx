@@ -9,6 +9,7 @@ const statusColors: Record<string, string> = {
   new: "#4d9fff",
   in_review: "#f59e0b",
   quoted: "#a78bfa",
+  accepted: "#2dd4bf",
   in_progress: "#3b82f6",
   complete: "#22c55e",
 };
@@ -17,6 +18,7 @@ const statusLabels: Record<string, string> = {
   new: "New",
   in_review: "In Review",
   quoted: "Quoted",
+  accepted: "Accepted",
   in_progress: "In Progress",
   complete: "Complete",
 };
