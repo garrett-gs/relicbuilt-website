@@ -1,8 +1,9 @@
 // Deploy-version probe for the in-app "update available" banner.
 //
-// The client (src/components/axiom/UpdateBanner.tsx) snapshots whatever this
+// The client (src/components/axiom/AutoUpdateOverlay.tsx) snapshots whatever this
 // returns on first load, then polls it. When the value changes, a newer deploy
-// is live and the banner offers a hard reload. The value just has to be stable
+// is live and the client auto-applies it (brief "Updating…" flash + hard
+// reload). The value just has to be stable
 // across all function instances of one deploy and change on the next — Vercel's
 // per-commit SHA is exactly that (this app auto-deploys on every push to main),
 // with the deployment id as a fallback and "dev" locally (banner never fires).
