@@ -337,6 +337,9 @@ export default function ProjectsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showProposal, setShowProposal] = useState(false);
   const [projectsTab, setProjectsTab] = useState<"active" | "archive">("active");
+  // Collapse the left list to give the detail pane the full width (desktop
+  // only — on mobile the list already toggles with selection). Persisted.
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
   const [masters, setMasters] = useState<MasterProject[]>([]);
   // Estimates + expenses power the master-project rollup shown on each project.
   const [estimates, setEstimates] = useState<Estimate[]>([]);
@@ -365,6 +368,12 @@ export default function ProjectsPage() {
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { loadMasterData(); }, [loadMasterData]);
+  useEffect(() => {
+    try { if (localStorage.getItem("projects:panelCollapsed") === "1") setPanelCollapsed(true); } catch { /* ignore */ }
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem("projects:panelCollapsed", panelCollapsed ? "1" : "0"); } catch { /* ignore */ }
+  }, [panelCollapsed]);
   const masterName = (id?: string) => (id ? masters.find((m) => m.id === id)?.name : undefined);
 
   // Deep-link: open a specific project when arrived via ?id= (e.g. a build
@@ -579,17 +588,47 @@ export default function ProjectsPage() {
 
   return (
     <div className="flex flex-col md:flex-row md:gap-6 md:h-[calc(100vh-8rem)]">
-      {/* Left — list (hidden on mobile once a project is open). Active/Archive
-          tabs on top; the Active tab stacks Active Projects over Pipeline. */}
-      <div className={cn("w-full md:w-80 flex-shrink-0 flex-col", selected ? "hidden md:flex" : "flex")}>
-        <div className="flex items-center justify-between mb-4">
+      {/* Left — collapsed rail (desktop only): expand it, start a new project,
+          with a vertical label. Shown in place of the full list when collapsed. */}
+      <div className={cn("w-12 flex-shrink-0 flex-col items-center gap-4 pt-1", panelCollapsed ? "hidden md:flex" : "hidden")}>
+        <button
+          onClick={() => setPanelCollapsed(false)}
+          className="w-8 h-8 border border-border rounded-lg text-muted hover:text-foreground hover:border-accent/50 flex items-center justify-center transition-colors"
+          title="Expand project list"
+          aria-label="Expand project list"
+        >
+          <ChevronRight size={16} />
+        </button>
+        <Button size="sm" onClick={() => setShowCreate(true)} className="!px-0 !w-8 !h-8" title="New project">
+          <Plus size={14} />
+        </Button>
+        <span className="[writing-mode:vertical-rl] text-[11px] uppercase tracking-[0.2em] text-muted mt-1 select-none">
+          Projects · {activeProjects.length}
+        </span>
+      </div>
+
+      {/* Left — list (hidden on mobile once a project is open; collapsible on
+          desktop). Active/Archive tabs on top; the Active tab stacks Active
+          Projects over Pipeline. */}
+      <div className={cn("w-full md:w-80 flex-shrink-0 flex-col", selected ? "hidden" : "flex", panelCollapsed ? "md:hidden" : "md:flex")}>
+        <div className="flex items-center justify-between mb-4 gap-2">
           <div>
             <h1 className="text-2xl font-heading font-bold">Projects</h1>
             <p className="text-muted text-sm mt-0.5">{activeProjects.length} active</p>
           </div>
-          <Button onClick={() => setShowCreate(true)} size="sm">
-            <Plus size={14} className="mr-1" /> New
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button onClick={() => setShowCreate(true)} size="sm">
+              <Plus size={14} className="mr-1" /> New
+            </Button>
+            <button
+              onClick={() => setPanelCollapsed(true)}
+              className="w-8 h-8 border border-border rounded-lg text-muted hover:text-foreground hover:border-accent/50 items-center justify-center transition-colors flex-shrink-0 hidden md:flex"
+              title="Collapse list"
+              aria-label="Collapse project list"
+            >
+              <ChevronLeft size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Active / Archive tabs */}
