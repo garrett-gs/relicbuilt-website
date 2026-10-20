@@ -537,7 +537,7 @@ export default function ProjectsPage() {
       className="w-full text-left px-4 py-3 hover:bg-background/40 transition-colors flex items-center gap-3"
     >
       <span className="w-2 h-2 rounded-full shrink-0" style={{ background: dotColor }} />
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 max-w-[48%]">
         <div className="flex items-center gap-2">
           <p className="text-sm font-medium truncate">{p.project_name}</p>
           {masterName(p.master_project_id) && (
@@ -547,8 +547,11 @@ export default function ProjectsPage() {
         <p className="text-xs text-muted mt-0.5 truncate">
           {p.client_name || "—"}
           {p.company_name && <span className="italic"> · {p.company_name}</span>}
-          {p.due_date && (() => { const due = formatDueDate(p.due_date); return <span className={due.soon ? "text-orange-400 font-medium" : ""}> · due {due.text}</span>; })()}
         </p>
+      </div>
+      {/* Due date — centered in the open middle of the row */}
+      <div className="flex-1 min-w-0 text-center">
+        {p.due_date && (() => { const due = formatDueDate(p.due_date); return <span className={cn("text-xs whitespace-nowrap", due.soon ? "text-orange-400 font-medium" : "text-muted")}>due {due.text}</span>; })()}
       </div>
       {/* Payment status. RELIC: from Axiom invoices. Wallflower: shown only
           once paid in Nexus; otherwise no badge. */}
