@@ -6,20 +6,29 @@
 // running whatever bundle it loaded — so someone can sit on a stale build for
 // hours. This polls /api/version (the current deploy's commit SHA), snapshots
 // it on first load, and when the live value changes it applies the update
-// itself: a brief centered "Updating…" flash, then a hard reload that also
-// clears any service worker / Cache Storage. The reload preserves the current
-// URL, so the user lands back on the same page in the new build.
+// itself: a hard reload that clears any service worker / Cache Storage and
+// lands back on the same URL in the fresh build.
 //
-// Unlike the old opt-in banner, there's no button — the update is applied
-// automatically. Detection runs on first load, on focus / tab-visible, and on a
-// 30-min tick; the first successful fetch is the baseline, so a tab that opens
-// already-stale doesn't reload on arrival — only a deploy that lands while the
-// tab is open triggers it.
+// It will NOT reload while someone is working. When a newer deploy is detected
+// the update is held "pending" and only applied at a safe moment:
+//   • the tab is hidden/backgrounded — reload silently; the fresh build is
+//     already there when they come back (no flash), and
+//   • the tab is visible but has been idle (no typing/clicking/scrolling) for
+//     IDLE_MS — then show a brief "Updating…" flash and reload.
+// Axiom autosaves edits ~0.9s after the last keystroke (see useAutosave), so by
+// the time the tab has been idle for 10s the work is long since saved — which
+// is why idle-gating is enough and no cross-form "unsaved" tracking is needed.
+//
+// Snapshot semantics: the FIRST successful fetch is the baseline, so a tab that
+// opens already-stale doesn't reload on arrival — only a deploy that lands while
+// the tab is open does. Never fires in local/dev ("dev").
 
 import { useEffect, useState } from "react";
 
 const POLL_MS = 30 * 60 * 1000; // 30 min
 const DEBOUNCE_MS = 60 * 1000; // ignore focus re-checks within 60s
+const IDLE_MS = 10 * 1000; // visible tab: only reload after this much no-input
+const SETTLE_POLL_MS = 2000; // while an update is pending, re-check for a safe moment this often
 const MIN_OVERLAY_MS = 600; // hold the "Updating…" flash long enough to register
 
 export default function AutoUpdateOverlay() {
@@ -30,13 +39,25 @@ export default function AutoUpdateOverlay() {
     let cancelled = false;
     let lastCheckAt = 0;
     let applied = false; // guard so the reload only kicks off once
+    let pending = false; // a newer deploy is live, waiting for a safe moment
+    let lastActivityAt = Date.now();
+    let settleTimer: ReturnType<typeof setInterval> | null = null;
 
     async function applyUpdate() {
       if (applied) return;
       applied = true;
-      setApplying(true);
-      // Hold the overlay a beat so the flash actually registers to the eye.
-      const minShown = new Promise((r) => setTimeout(r, MIN_OVERLAY_MS));
+      if (settleTimer) {
+        clearInterval(settleTimer);
+        settleTimer = null;
+      }
+      // Only flash the overlay when the tab is actually on screen; a background
+      // reload is silent (nothing to see), and the new build is already loaded
+      // by the time the user returns.
+      let minShown: Promise<unknown> = Promise.resolve();
+      if (document.visibilityState === "visible") {
+        setApplying(true);
+        minShown = new Promise((r) => setTimeout(r, MIN_OVERLAY_MS));
+      }
       // Equivalent to "Empty Cache and Hard Reload": drop any service worker and
       // Cache Storage first, then reload from the network.
       try {
@@ -55,6 +76,23 @@ export default function AutoUpdateOverlay() {
       window.location.reload();
     }
 
+    // Reload only at a safe moment: a hidden tab (user isn't looking) or a
+    // visible tab the user has left idle long enough that autosave has flushed.
+    function tryApply() {
+      if (!pending || applied) return;
+      if (document.visibilityState !== "visible") {
+        applyUpdate();
+        return;
+      }
+      if (Date.now() - lastActivityAt >= IDLE_MS) applyUpdate();
+    }
+
+    function markPending() {
+      pending = true;
+      if (!settleTimer) settleTimer = setInterval(tryApply, SETTLE_POLL_MS);
+      tryApply();
+    }
+
     async function check() {
       if (applied) return;
       if (Date.now() - lastCheckAt < DEBOUNCE_MS) return;
@@ -68,23 +106,32 @@ export default function AutoUpdateOverlay() {
         const { version } = (await res.json()) as { version?: string };
         if (!version || version === "dev") return; // local/dev: never fire
         if (baseline === null) baseline = version;
-        else if (!cancelled && version !== baseline) applyUpdate();
+        else if (!cancelled && version !== baseline) markPending();
       } catch {
         /* network blip — ignore, try again next tick */
       }
     }
 
-    check();
-    const id = setInterval(check, POLL_MS);
+    const bumpActivity = () => {
+      lastActivityAt = Date.now();
+    };
     const onFocus = () => check();
     const onVisible = () => {
       if (document.visibilityState === "visible") check();
+      else tryApply(); // tab just hidden — safe to apply a pending update now
     };
+
+    check();
+    const pollId = setInterval(check, POLL_MS);
+    const activityEvents = ["keydown", "pointerdown", "input", "wheel", "touchstart"] as const;
+    activityEvents.forEach((e) => window.addEventListener(e, bumpActivity, { passive: true }));
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      clearInterval(pollId);
+      if (settleTimer) clearInterval(settleTimer);
+      activityEvents.forEach((e) => window.removeEventListener(e, bumpActivity));
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onVisible);
     };
