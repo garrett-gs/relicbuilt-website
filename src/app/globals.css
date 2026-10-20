@@ -26,7 +26,35 @@
   --color-accent: var(--accent);
   --font-sans: var(--font-geist-sans);
   --font-heading: var(--font-raleway);
+  /* Relic Blueprint — drafting lettering (see @font-face below). Exposes
+     Tailwind utilities `font-blueprint` and `font-blueprint-sc`. */
+  --font-blueprint: "Relic Blueprint", ui-monospace, monospace;
+  --font-blueprint-sc: "Relic Blueprint SC", ui-monospace, monospace;
 }
+
+/* ── Relic Blueprint web fonts ─────────────────────────────────────
+   "Relic Blueprint" = caps-only drafting lettering.
+   "Relic Blueprint SC" = capitals full height, lowercase keys = small caps.
+   Weights: Light 300 / Regular 400 / Bold 700, each with a 68° drafting-slant
+   italic. Use via .font-blueprint / .font-blueprint-sc or the Tailwind tokens.
+   Add `font-feature-settings: "frac" 1;` on anything showing dimensions so
+   "3/16" renders as a stacked fraction. */
+@font-face { font-family: "Relic Blueprint"; src: url("/fonts/relic-blueprint/RelicBlueprint-Light.woff2") format("woff2"); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: "Relic Blueprint"; src: url("/fonts/relic-blueprint/RelicBlueprint-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Relic Blueprint"; src: url("/fonts/relic-blueprint/RelicBlueprint-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Relic Blueprint"; src: url("/fonts/relic-blueprint/RelicBlueprint-LightItalic.woff2") format("woff2"); font-weight: 300; font-style: italic; font-display: swap; }
+@font-face { font-family: "Relic Blueprint"; src: url("/fonts/relic-blueprint/RelicBlueprint-Italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Relic Blueprint"; src: url("/fonts/relic-blueprint/RelicBlueprint-BoldItalic.woff2") format("woff2"); font-weight: 700; font-style: italic; font-display: swap; }
+
+@font-face { font-family: "Relic Blueprint SC"; src: url("/fonts/relic-blueprint/RelicBlueprintSC-Light.woff2") format("woff2"); font-weight: 300; font-style: normal; font-display: swap; }
+@font-face { font-family: "Relic Blueprint SC"; src: url("/fonts/relic-blueprint/RelicBlueprintSC-Regular.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "Relic Blueprint SC"; src: url("/fonts/relic-blueprint/RelicBlueprintSC-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Relic Blueprint SC"; src: url("/fonts/relic-blueprint/RelicBlueprintSC-LightItalic.woff2") format("woff2"); font-weight: 300; font-style: italic; font-display: swap; }
+@font-face { font-family: "Relic Blueprint SC"; src: url("/fonts/relic-blueprint/RelicBlueprintSC-Italic.woff2") format("woff2"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Relic Blueprint SC"; src: url("/fonts/relic-blueprint/RelicBlueprintSC-BoldItalic.woff2") format("woff2"); font-weight: 700; font-style: italic; font-display: swap; }
+
+.font-blueprint    { font-family: "Relic Blueprint", ui-monospace, monospace; }
+.font-blueprint-sc { font-family: "Relic Blueprint SC", ui-monospace, monospace; }
 
 body {
   background: var(--background);
