@@ -7,6 +7,8 @@
   --border: #262626;
   --card: #141414;
   --accent: #5b642e;
+  /* Corner softness used app-wide (cards, inputs, panels). */
+  --radius: 0.5rem;
 }
 
 /* Relic entity: turn the whole app's accent gold as a visual cue you're in
@@ -41,6 +43,23 @@ h1, h2, h3, h4, h5, h6 {
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;
+}
+
+/* ── Rounded surfaces ──────────────────────────────────────────────
+   Soften the UI from hard squares to rounded corners, centrally rather
+   than class-by-class. These sit in @layer base so any inline `rounded-*`
+   utility (rounded-none, rounded-full, etc.) still overrides them where a
+   specific corner is intended. Covers card surfaces and form controls;
+   buttons get `rounded-lg` from the Button component. */
+@layer base {
+  .bg-card {
+    border-radius: var(--radius);
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    border-radius: var(--radius);
+  }
 }
 
 /* PIN shake animation */

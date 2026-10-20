@@ -419,7 +419,7 @@ export default function EstimatorPage() {
         <div className="w-12 flex-shrink-0 flex flex-col items-center gap-4 pt-1">
           <button
             onClick={() => setPanelCollapsed(false)}
-            className="w-8 h-8 border border-border text-muted hover:text-foreground hover:border-accent/50 flex items-center justify-center transition-colors"
+            className="w-8 h-8 border border-border rounded-lg text-muted hover:text-foreground hover:border-accent/50 flex items-center justify-center transition-colors"
             title="Expand estimate list"
             aria-label="Expand estimate list"
           >
@@ -446,7 +446,7 @@ export default function EstimatorPage() {
             </Button>
             <button
               onClick={() => setPanelCollapsed(true)}
-              className="w-8 h-8 border border-border text-muted hover:text-foreground hover:border-accent/50 flex items-center justify-center transition-colors flex-shrink-0"
+              className="w-8 h-8 border border-border rounded-lg text-muted hover:text-foreground hover:border-accent/50 flex items-center justify-center transition-colors flex-shrink-0"
               title="Collapse list"
               aria-label="Collapse estimate list"
             >
@@ -500,7 +500,7 @@ export default function EstimatorPage() {
         <div className="flex items-center gap-1 mb-3 text-[11px]">
           <button
             onClick={() => setListView("tree")}
-            className={cn("flex items-center gap-1 px-2 py-1 border transition-colors",
+            className={cn("flex items-center gap-1 px-2 py-1 border rounded-lg transition-colors",
               listView === "tree" ? "border-accent/50 bg-accent/10 text-accent" : "border-border text-muted hover:text-foreground")}
             title="Group by master project"
           >
@@ -508,7 +508,7 @@ export default function EstimatorPage() {
           </button>
           <button
             onClick={() => setListView("flat")}
-            className={cn("flex items-center gap-1 px-2 py-1 border transition-colors",
+            className={cn("flex items-center gap-1 px-2 py-1 border rounded-lg transition-colors",
               listView === "flat" ? "border-accent/50 bg-accent/10 text-accent" : "border-border text-muted hover:text-foreground")}
             title="Flat list"
           >
@@ -536,7 +536,7 @@ export default function EstimatorPage() {
                   <div key={mid} className="space-y-2">
                     <button
                       onClick={() => toggleGroup(mid)}
-                      className="w-full flex items-center gap-1.5 px-2 py-1.5 border border-border/70 bg-accent/[0.04] hover:border-accent/40 transition-colors text-left"
+                      className="w-full flex items-center gap-1.5 px-2 py-1.5 border border-border/70 rounded-lg bg-accent/[0.04] hover:border-accent/40 transition-colors text-left"
                     >
                       {closed ? <ChevronRight size={13} className="text-muted flex-shrink-0" /> : <ChevronDown size={13} className="text-muted flex-shrink-0" />}
                       <Layers size={12} className="text-accent flex-shrink-0" />
