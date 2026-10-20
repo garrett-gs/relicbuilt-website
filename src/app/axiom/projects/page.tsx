@@ -19,7 +19,7 @@ import { cn, formatPhone, formatDueDate, suggestStartDate, formatDate } from "@/
 import { resolveClientEmail } from "@/lib/resolve-email";
 import DateField from "@/components/ui/DateField";
 import FileUpload from "@/components/ui/FileUpload";
-import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee, ChevronDown, ChevronRight, Clock, Hammer } from "lucide-react";
+import { X, Plus, Trash2, ExternalLink, Copy, FileText, Search, Printer, Send, CheckCircle, ClipboardList, ImageIcon, ShoppingCart, FolderOpen, Pencil, Package, AlertTriangle, Coffee, ChevronDown, ChevronRight, ChevronLeft, Clock, Hammer } from "lucide-react";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -530,194 +530,199 @@ export default function ProjectsPage() {
       return aDue.localeCompare(bDue);
     });
 
-  const renderRow = (p: CustomWork, dotColor: string) => (
-    <button
-      key={p.id}
-      onClick={() => setSelected(p)}
-      className="w-full text-left px-4 py-3 hover:bg-background/40 transition-colors flex items-center gap-3"
-    >
-      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: dotColor }} />
-      <div className="min-w-0 max-w-[48%]">
-        <div className="flex items-center gap-2">
-          <p className="text-sm font-medium truncate">{p.project_name}</p>
-          {masterName(p.master_project_id) && (
-            <span className="text-[10px] text-accent border border-accent/40 px-1.5 py-0.5 shrink-0 truncate max-w-[40%]">{masterName(p.master_project_id)}</span>
-          )}
-        </div>
-        <p className="text-xs text-muted mt-0.5 truncate">
-          {p.client_name || "—"}
-          {p.company_name && <span className="italic"> · {p.company_name}</span>}
-        </p>
-      </div>
-      {/* Due date — centered in the open middle of the row */}
-      <div className="flex-1 min-w-0 text-center">
-        {p.due_date && (() => { const due = formatDueDate(p.due_date); return <span className={cn("text-xs whitespace-nowrap", due.soon ? "text-orange-400 font-medium" : "text-muted")}>Due {due.text}</span>; })()}
-      </div>
-      {/* Payment status. RELIC: from Axiom invoices. Wallflower: shown only
-          once paid in Nexus; otherwise no badge. */}
-      {(() => {
-        const pi = paymentInfo(p);
-        if (!pi) return null;
-        return pi.paid ? (
-          <span className="text-xs uppercase tracking-wider text-green-400 bg-green-500/15 px-2 py-1 shrink-0 inline-flex items-center gap-1"><CheckCircle size={13} /> {pi.label}</span>
-        ) : (
-          <span className="text-xs uppercase tracking-wider text-muted border border-border px-2 py-1 shrink-0">{pi.label}</span>
-        );
-      })()}
-      {p.quoted_amount > 0 && <span className="text-accent text-base font-mono font-semibold shrink-0 w-28 text-right">{money(p.quoted_amount)}</span>}
-    </button>
-  );
-
-  return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-heading font-bold">Projects</h1>
-          <p className="text-muted text-sm mt-1">{activeProjects.length} active</p>
-        </div>
-        <Button onClick={() => setShowCreate(true)} size="sm">
-          <Plus size={14} className="mr-1" /> New Project
-        </Button>
-      </div>
-
-      {/* Active / Archive tabs */}
-      <div className="flex border-b border-border mb-4 text-xs uppercase tracking-wider">
-        <button
-          onClick={() => setProjectsTab("active")}
-          className={cn(
-            "px-4 py-2 transition-colors",
-            projectsTab === "active" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
-          )}
-        >
-          Active <span className="text-muted ml-1">({activeProjects.length})</span>
-        </button>
-        {isSuperAdmin && (
-          <button
-            onClick={() => setProjectsTab("archive")}
-            className={cn(
-              "px-4 py-2 transition-colors",
-              projectsTab === "archive" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
+  // Compact project card for the left list column (estimator style): active
+  // state borders accent; due date + payment badge sit on a second line.
+  const renderCard = (p: CustomWork, dotColor: string) => {
+    const active = selected?.id === p.id;
+    const pi = paymentInfo(p);
+    const due = p.due_date ? formatDueDate(p.due_date) : null;
+    return (
+      <div
+        key={p.id}
+        onClick={() => setSelected(p)}
+        className={cn(
+          "bg-card border p-3 cursor-pointer transition-colors rounded-lg",
+          active ? "border-accent" : "border-border hover:border-accent/40"
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: dotColor }} />
+              <p className="font-medium text-sm truncate">{p.project_name}</p>
+            </div>
+            <p className="text-muted text-xs truncate mt-0.5">
+              {p.client_name || "—"}
+              {p.company_name && <span className="italic"> · {p.company_name}</span>}
+            </p>
+            {masterName(p.master_project_id) && (
+              <span className="inline-block mt-1 text-[10px] text-accent border border-accent/40 rounded px-1.5 py-0.5 truncate max-w-full">{masterName(p.master_project_id)}</span>
             )}
-          >
-            Archive <span className="text-muted ml-1">({archivedProjects.length})</span>
-          </button>
+          </div>
+          {p.quoted_amount > 0 && <p className="text-accent text-sm font-mono shrink-0">{money(p.quoted_amount)}</p>}
+        </div>
+        {(due || pi) && (
+          <div className="flex items-center justify-between gap-2 mt-2">
+            {due ? (
+              <span className={cn("text-[11px] whitespace-nowrap", due.soon ? "text-orange-400 font-medium" : "text-muted")}>Due {due.text}</span>
+            ) : <span />}
+            {pi && (pi.paid ? (
+              <span className="text-[10px] uppercase tracking-wider text-green-400 bg-green-500/15 rounded px-1.5 py-0.5 inline-flex items-center gap-1"><CheckCircle size={11} /> {pi.label}</span>
+            ) : (
+              <span className="text-[10px] uppercase tracking-wider text-muted border border-border rounded px-1.5 py-0.5">{pi.label}</span>
+            ))}
+          </div>
         )}
       </div>
+    );
+  };
 
-      {/* Two stacked, full-width sections: Active Projects (in progress) on
-          top, Pipeline (accepted, awaiting start) below. One-line rows. A
-          project moves up to Active via "Make Active" in its detail panel. */}
-      {projectsTab === "active" && (
-        <div className="space-y-8">
-          <section>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-2 h-2 rounded-full" style={{ background: "#3b82f6" }} />
-              <h2 className="text-sm uppercase tracking-wider text-foreground font-semibold">Active Projects</h2>
-              <span className="text-xs text-muted">{inProgressProjects.length}</span>
-            </div>
-            <div className="bg-card border border-border rounded">
-              {inProgressProjects.length === 0 ? (
-                <p className="text-muted text-sm p-6">No active projects yet — open a Pipeline project and hit <span className="text-foreground font-medium">Make Active</span> when the build starts.</p>
-              ) : (
-                <div className="divide-y divide-border">{sortByDue(inProgressProjects).map((p) => renderRow(p, "#3b82f6"))}</div>
-              )}
-            </div>
-          </section>
-
-          <section>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="w-2 h-2 rounded-full" style={{ background: "#2dd4bf" }} />
-              <h2 className="text-sm uppercase tracking-wider text-foreground font-semibold">Pipeline</h2>
-              <span className="text-xs text-muted">{pipelineProjects.length}</span>
-            </div>
-            <div className="bg-card border border-border rounded">
-              {pipelineProjects.length === 0 ? (
-                <p className="text-muted text-sm p-6">Nothing in the pipeline. Accepted estimates land here, ready to start.</p>
-              ) : (
-                <div className="divide-y divide-border">{sortByDue(pipelineProjects).map((p) => renderRow(p, "#2dd4bf"))}</div>
-              )}
-            </div>
-          </section>
+  return (
+    <div className="flex flex-col md:flex-row md:gap-6 md:h-[calc(100vh-8rem)]">
+      {/* Left — list (hidden on mobile once a project is open). Active/Archive
+          tabs on top; the Active tab stacks Active Projects over Pipeline. */}
+      <div className={cn("w-full md:w-80 flex-shrink-0 flex-col", selected ? "hidden md:flex" : "flex")}>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-heading font-bold">Projects</h1>
+            <p className="text-muted text-sm mt-0.5">{activeProjects.length} active</p>
+          </div>
+          <Button onClick={() => setShowCreate(true)} size="sm">
+            <Plus size={14} className="mr-1" /> New
+          </Button>
         </div>
-      )}
 
-      {/* Archive list — completed projects, most recent first. Click any
-          row to reopen the detail panel; moving them back to an active
-          status (via the status dropdown in the panel) returns them to
-          the Kanban. */}
-      {projectsTab === "archive" && isSuperAdmin && (
-        <div className="bg-card border border-border rounded">
-          {archivedProjects.length === 0 ? (
-            <p className="text-muted text-sm p-6">No archived projects yet.</p>
-          ) : (
-            <div className="divide-y divide-border">
-              {archivedProjects
-                .slice()
-                .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))
-                .map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setSelected(p)}
-                    className="w-full text-left px-4 py-3 hover:bg-background/40 transition-colors flex items-center gap-3"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{p.project_name}</p>
-                      <p className="text-xs text-muted mt-0.5 truncate">
-                        {p.client_name || "—"}
-                        {p.company_name && <span className="italic"> · {p.company_name}</span>}
-                        {masterName(p.master_project_id) && <span className="text-accent"> · {masterName(p.master_project_id)}</span>}
-                        {p.due_date && <> · due {formatDueDate(p.due_date).text}</>}
-                      </p>
-                    </div>
-                    {p.quoted_amount > 0 && (
-                      <span className="text-accent text-xs font-mono shrink-0">{money(p.quoted_amount)}</span>
-                    )}
-                  </button>
-                ))}
-            </div>
+        {/* Active / Archive tabs */}
+        <div className="flex border-b border-border mb-3 text-[11px] uppercase tracking-wider">
+          <button
+            onClick={() => setProjectsTab("active")}
+            className={cn(
+              "flex-1 py-2 transition-colors",
+              projectsTab === "active" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
+            )}
+          >
+            Active <span className="text-muted ml-1">({activeProjects.length})</span>
+          </button>
+          {isSuperAdmin && (
+            <button
+              onClick={() => setProjectsTab("archive")}
+              className={cn(
+                "flex-1 py-2 transition-colors",
+                projectsTab === "archive" ? "text-foreground border-b-2 border-accent -mb-px" : "text-muted hover:text-foreground"
+              )}
+            >
+              Archive <span className="text-muted ml-1">({archivedProjects.length})</span>
+            </button>
           )}
         </div>
-      )}
+
+        <div className="flex-1 md:overflow-y-auto space-y-6 pb-4">
+          {projectsTab === "active" && (
+            <>
+              <section className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full" style={{ background: "#3b82f6" }} />
+                  <h2 className="text-xs uppercase tracking-wider text-foreground font-semibold">Active Projects</h2>
+                  <span className="text-xs text-muted">{inProgressProjects.length}</span>
+                </div>
+                {inProgressProjects.length === 0 ? (
+                  <p className="text-muted text-xs px-1">No active projects yet — open a Pipeline project and hit <span className="text-foreground font-medium">Make Active</span> when the build starts.</p>
+                ) : (
+                  sortByDue(inProgressProjects).map((p) => renderCard(p, "#3b82f6"))
+                )}
+              </section>
+
+              <section className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full" style={{ background: "#2dd4bf" }} />
+                  <h2 className="text-xs uppercase tracking-wider text-foreground font-semibold">Pipeline</h2>
+                  <span className="text-xs text-muted">{pipelineProjects.length}</span>
+                </div>
+                {pipelineProjects.length === 0 ? (
+                  <p className="text-muted text-xs px-1">Nothing in the pipeline. Accepted estimates land here, ready to start.</p>
+                ) : (
+                  sortByDue(pipelineProjects).map((p) => renderCard(p, "#2dd4bf"))
+                )}
+              </section>
+            </>
+          )}
+
+          {projectsTab === "archive" && isSuperAdmin && (
+            <section className="space-y-2">
+              {archivedProjects.length === 0 ? (
+                <p className="text-muted text-xs px-1">No archived projects yet.</p>
+              ) : (
+                archivedProjects
+                  .slice()
+                  .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))
+                  .map((p) => renderCard(p, "#22c55e"))
+              )}
+            </section>
+          )}
+        </div>
+      </div>
+
+      {/* Right — detail (the preview pane). Shows the selected project; on
+          mobile it takes over full width with a Back arrow. */}
+      <div className={cn("flex-1 md:overflow-y-auto", selected && !showProposal ? "block" : "hidden md:block")}>
+        {!selected ? (
+          <div className="h-full flex items-center justify-center text-muted text-sm">
+            Select a project or create a new one
+          </div>
+        ) : !showProposal ? (
+          <div>
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <button
+                onClick={() => { setSelected(null); load(); }}
+                className="text-muted hover:text-foreground flex items-center gap-1.5 text-sm md:hidden"
+              >
+                <ChevronLeft size={18} /> Back
+              </button>
+              <h2 className="text-xl font-heading font-bold truncate flex-1">{selected.project_name}</h2>
+              <button
+                onClick={() => { setSelected(null); load(); }}
+                className="text-muted hover:text-foreground hidden md:block"
+                title="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <MasterProjectHeader
+              project={selected}
+              projects={projects}
+              estimates={estimates}
+              expenses={expenses}
+              masters={masters}
+              entity={entity}
+              userEmail={userEmail}
+              onOpenProject={(id) => { const p = projects.find((x) => x.id === id); if (p) setSelected(p); }}
+              onChanged={async () => {
+                await Promise.all([load(), loadMasterData()]);
+                // Refresh the open project so its new master_project_id takes effect.
+                const { data } = await axiom.from("custom_work").select("*").eq("id", selected.id).single();
+                if (data) setSelected(data);
+              }}
+            />
+            <ProjectDetail
+              project={selected}
+              onUpdate={(updates) => updateProject(selected.id, updates)}
+              onDelete={() => deleteProject(selected.id)}
+              onTogglePortal={() => togglePortal(selected)}
+              onGenerateInvoice={() => generateInvoice(selected)}
+              onGenerateProposal={() => setShowProposal(true)}
+              onGenerateRecap={() => openRecap(selected)}
+              onComplete={() => moveProject(selected.id, "complete")}
+              onMakeActive={() => moveProject(selected.id, "in_progress")}
+              userEmail={userEmail}
+            />
+          </div>
+        ) : null}
+      </div>
 
       {/* Create modal */}
       {showCreate && (
         <Modal title="New Project" onClose={() => setShowCreate(false)}>
           <CreateProjectForm onSubmit={createProject} onCancel={() => setShowCreate(false)} />
-        </Modal>
-      )}
-
-      {/* Detail modal */}
-      {selected && !showProposal && (
-        <Modal title={selected.project_name} onClose={() => { setSelected(null); load(); }} wide>
-          <MasterProjectHeader
-            project={selected}
-            projects={projects}
-            estimates={estimates}
-            expenses={expenses}
-            masters={masters}
-            entity={entity}
-            userEmail={userEmail}
-            onOpenProject={(id) => { const p = projects.find((x) => x.id === id); if (p) setSelected(p); }}
-            onChanged={async () => {
-              await Promise.all([load(), loadMasterData()]);
-              // Refresh the open project so its new master_project_id takes effect.
-              const { data } = await axiom.from("custom_work").select("*").eq("id", selected.id).single();
-              if (data) setSelected(data);
-            }}
-          />
-          <ProjectDetail
-            project={selected}
-            onUpdate={(updates) => updateProject(selected.id, updates)}
-            onDelete={() => deleteProject(selected.id)}
-            onTogglePortal={() => togglePortal(selected)}
-            onGenerateInvoice={() => generateInvoice(selected)}
-            onGenerateProposal={() => setShowProposal(true)}
-            onGenerateRecap={() => openRecap(selected)}
-            onComplete={() => moveProject(selected.id, "complete")}
-            onMakeActive={() => moveProject(selected.id, "in_progress")}
-            userEmail={userEmail}
-          />
         </Modal>
       )}
 
