@@ -9,26 +9,30 @@
 // itself: a hard reload that clears any service worker / Cache Storage and
 // lands back on the same URL in the fresh build.
 //
-// It will NOT reload while someone is working. When a newer deploy is detected
-// the update is held "pending" and only applied at a safe moment:
+// It won't yank the page out from under someone mid-sentence, and it won't lose
+// their work. When a newer deploy is detected the update is held "pending" and
+// applied at the next unobtrusive moment:
 //   • the tab is hidden/backgrounded — reload silently; the fresh build is
-//     already there when they come back (no flash), and
-//   • the tab is visible but has been idle (no typing/clicking/scrolling) for
+//     already there when they come back (no flash), or
+//   • the tab is visible but has gone quiet (no typing/clicking/scrolling) for
 //     IDLE_MS — then show a brief "Updating…" flash and reload.
-// Axiom autosaves edits ~0.9s after the last keystroke (see useAutosave), so by
-// the time the tab has been idle for 10s the work is long since saved — which
-// is why idle-gating is enough and no cross-form "unsaved" tracking is needed.
+// Either way, right before reloading it calls flushPendingAutosaves() to persist
+// any dirty form on demand (Axiom forms autosave ~0.9s after the last keystroke;
+// this just forces that save to happen now). So no edits are lost even though
+// the reload is a hard page refresh.
 //
 // Snapshot semantics: the FIRST successful fetch is the baseline, so a tab that
 // opens already-stale doesn't reload on arrival — only a deploy that lands while
 // the tab is open does. Never fires in local/dev ("dev").
 
 import { useEffect, useState } from "react";
+import { flushPendingAutosaves } from "@/components/axiom/useAutosave";
 
 const POLL_MS = 30 * 60 * 1000; // 30 min
 const DEBOUNCE_MS = 60 * 1000; // ignore focus re-checks within 60s
-const IDLE_MS = 10 * 1000; // visible tab: only reload after this much no-input
-const SETTLE_POLL_MS = 2000; // while an update is pending, re-check for a safe moment this often
+const IDLE_MS = 4 * 1000; // visible tab: reload once input has been quiet this long
+const SETTLE_POLL_MS = 1500; // while an update is pending, re-check for a quiet moment this often
+const FLUSH_CAP_MS = 2000; // don't let a stalled save block the reload forever
 const MIN_OVERLAY_MS = 600; // hold the "Updating…" flash long enough to register
 
 export default function AutoUpdateOverlay() {
@@ -57,6 +61,16 @@ export default function AutoUpdateOverlay() {
       if (document.visibilityState === "visible") {
         setApplying(true);
         minShown = new Promise((r) => setTimeout(r, MIN_OVERLAY_MS));
+      }
+      // Save any dirty form on demand before the hard reload so nothing is lost.
+      // Capped so a stalled save can't hold the reload open indefinitely.
+      try {
+        await Promise.race([
+          flushPendingAutosaves(),
+          new Promise((r) => setTimeout(r, FLUSH_CAP_MS)),
+        ]);
+      } catch {
+        /* ignore — reload anyway */
       }
       // Equivalent to "Empty Cache and Hard Reload": drop any service worker and
       // Cache Storage first, then reload from the network.
