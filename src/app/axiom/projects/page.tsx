@@ -1713,6 +1713,12 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         </div>
       )}
 
+      {/* Project Details */}
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Project Details</h3>
+      </div>
+      <div className="space-y-4">
       {/* Customer / Contact */}
       <div className="space-y-4">
         <CustomerSearch
@@ -1844,6 +1850,8 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
           </div>
         )}
       </div>
+      </div>
+      </div>
 
       {/* Profit box */}
       <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
@@ -1877,7 +1885,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       </div>
 
       {/* Receipts */}
-      <div>
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Receipts</h3>
         </div>
@@ -1925,7 +1933,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       </div>
 
       {/* Materials (locked to inventory allocation) */}
-      <div>
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Materials</h3>
           <div className="flex items-center gap-2">
@@ -2076,7 +2084,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       </div>
 
       {/* Labor */}
-      <div>
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Labor Log</h3>
           <button onClick={addLabor} className="text-accent text-xs flex items-center gap-1"><Plus size={12} /> Add</button>
@@ -2179,7 +2187,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
           so smaller one-off files (signed proposals, spec sheets,
           delivery confirmations, etc.) can be attached directly to the
           project without round-tripping through Dropbox. */}
-      <div>
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">
             Documents <span className="text-muted text-xs font-normal">({projectDocs.length})</span>
@@ -2345,7 +2353,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       </div>
 
       {/* Proposal Content */}
-      <div className="border border-border">
+      <div className="border border-border border-t-2 border-t-accent/30">
         <div className="bg-card px-4 py-3 flex items-center justify-between border-b border-border">
           <div>
             <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Proposal Content</h3>
