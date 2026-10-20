@@ -1756,13 +1756,6 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       <div className="grid grid-cols-2 gap-4">
         <Field label="Contact Email" value={clientEmail} onChange={(v) => { setClientEmail(v); markDirty(); }} type="email" />
         <Field label="Contact Phone" value={clientPhone} onChange={(v) => { setClientPhone(formatPhone(v)); markDirty(); }} />
-        <div>
-          <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Budget Range</label>
-          <select value={budgetRange} onChange={(e) => { setBudgetRange(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">
-            <option value="">Select...</option>
-            {BUDGET_RANGES.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
-        </div>
       </div>
       <div>
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Description</label>
