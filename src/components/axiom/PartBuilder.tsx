@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import Button from "@/components/ui/Button";
 import { buildSvg, buildDxf, downloadSvg, downloadDxf } from "@/lib/partSvg";
+import { appendEngravedLabel, ENGRAVE_ROLE } from "@/lib/relic-blueprint/engrave";
 import type {
   PartGenerator,
   PartSpec,
@@ -47,6 +48,10 @@ export default function PartBuilder({
     () => ({ ...generator.defaults, ...initial }) as PartSpec
   );
   const [savedToLib, setSavedToLib] = useState(false);
+  // Optional single-line engraving stamped onto the cut file (ENGRAVE layer),
+  // in the Relic Blueprint lettering. Export-time only — not part of the
+  // saved part spec.
+  const [engraveLabel, setEngraveLabel] = useState("");
   const result = useMemo(
     () => generator.solve(spec, context),
     [generator, spec, context]
@@ -63,7 +68,11 @@ export default function PartBuilder({
 
   const handleExport = (format: "dxf" | "svg", ok: SolveOk) => {
     const name = ok.filename ?? generator.id;
-    const text = format === "dxf" ? buildDxf(ok) : buildSvg(ok);
+    // Stamp the engraved label (if any) onto its own ENGRAVE layer so CAM can
+    // assign a V-bit / engrave toolpath to it alone. The saved part stays the
+    // original geometry.
+    const geo = engraveLabel.trim() ? appendEngravedLabel(ok, engraveLabel) : ok;
+    const text = format === "dxf" ? buildDxf(geo) : buildSvg(geo);
     onExport?.({
       format,
       text,
@@ -136,6 +145,8 @@ export default function PartBuilder({
           result={result}
           label={generator.label}
           onExport={handleExport}
+          engraveLabel={engraveLabel}
+          onEngraveLabelChange={setEngraveLabel}
           onSave={onSaveToLibrary ? () => handleSaveToLibrary(result) : undefined}
           saved={savedToLib}
         />
@@ -222,12 +233,16 @@ function PartOkPanel({
   onExport,
   onSave,
   saved,
+  engraveLabel,
+  onEngraveLabelChange,
 }: {
   result: SolveOk;
   label: string;
   onExport: (format: "dxf" | "svg", ok: SolveOk) => void;
   onSave?: () => void;
   saved?: boolean;
+  engraveLabel?: string;
+  onEngraveLabelChange?: (v: string) => void;
 }) {
   const pad = 0.5;
   // Preview-only orientation. Rotating the display 90° lets you eyeball a
@@ -235,8 +250,14 @@ function PartOkPanel({
   // say) — the cut file and dimensions are unchanged.
   const [rotated, setRotated] = useState(false);
 
-  const entries =
-    result.paths ?? (result.path ? [{ d: result.path, role: "cut" }] : []);
+  // Reflect the engraved label in the preview so you see exactly what the cut
+  // file carries. Engrave strokes are open polylines — rendered stroke-only
+  // (no fill) and separated from the cut outline.
+  const labeled = engraveLabel?.trim() ? appendEngravedLabel(result, engraveLabel) : result;
+  const allEntries =
+    labeled.paths ?? (labeled.path ? [{ d: labeled.path, role: "cut" }] : []);
+  const entries = allEntries.filter((p) => p.role !== ENGRAVE_ROLE);
+  const engraveEntries = allEntries.filter((p) => p.role === ENGRAVE_ROLE);
   const vbW = (rotated ? result.height : result.width) + pad * 2;
   const vbH = (rotated ? result.width : result.height) + pad * 2;
   // Rotate 90° CW about the origin, then shift back into positive space.
@@ -304,6 +325,17 @@ function PartOkPanel({
                 vectorEffect="non-scaling-stroke"
               />
             ))}
+            {engraveEntries.map((p, i) => (
+              <path
+                key={`engrave-${i}`}
+                d={p.d}
+                fill="none"
+                stroke="currentColor"
+                className="text-foreground"
+                strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
           </g>
         </svg>
       </div>
@@ -341,8 +373,26 @@ function PartOkPanel({
         </p>
       ))}
 
+      {onEngraveLabelChange && (
+        <div className="mt-5">
+          <label className="mb-1.5 block text-xs uppercase tracking-wider text-muted">
+            Engrave Label <span className="normal-case text-muted/60">(optional — single-line, on its own ENGRAVE layer)</span>
+          </label>
+          <input
+            value={engraveLabel ?? ""}
+            onChange={(e) => onEngraveLabelChange(e.target.value)}
+            placeholder="e.g. P1 · 3/16 · RELIC"
+            className="w-full bg-card border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent font-blueprint"
+            style={{ letterSpacing: "0.04em" }}
+          />
+          <p className="mt-1 text-xs text-muted">
+            Engraved in Relic Blueprint lettering. CAM can toolpath the ENGRAVE layer with a V-bit or engrave bit.
+          </p>
+        </div>
+      )}
+
       {onSave && (
-        <Button onClick={onSave} className="mt-5 w-full">
+        <Button onClick={onSave} className="mt-3 w-full">
           {saved ? "Saved to Library ✓" : "Save to Library"}
         </Button>
       )}
