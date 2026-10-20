@@ -2015,7 +2015,11 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
 
   return (
     <div className="space-y-6 pb-12">
-      {/* Header */}
+      {/* Project Details */}
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Project Details</h3>
+      </div>
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 space-y-3">
           <Field label="Project / Description" value={projectName} onChange={(v) => { setProjectName(v); markDirty(); }} />
@@ -2208,9 +2212,10 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
           <p className="text-3xl font-mono font-bold text-accent">{money(total)}</p>
         </div>
       </div>
+      </div>
 
       {/* Sales Notes — append-only communication log under client info */}
-      <div className="bg-card border border-border p-4">
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">
             Sales Notes <span className="text-muted text-xs font-normal ml-1.5">({salesNotes.length})</span>
@@ -2273,7 +2278,11 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
         )}
       </div>
 
-      {/* Materials / Line Items — two-column with vendor catalog */}
+      {/* Line Items & Labor */}
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Line Items &amp; Labor</h3>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: line items */}
         <div>
@@ -2426,10 +2435,11 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
           )
         )}
       </div>
+      </div>
 
       {/* Markup + Totals */}
-      <div className="bg-card border border-border p-4">
-        <h3 className="text-xs uppercase tracking-wider text-muted mb-4">Markup & Totals</h3>
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
+        <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3 mb-4">Markup &amp; Totals</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
           <div>
             <span className="text-muted block text-xs mb-1">Materials</span>
