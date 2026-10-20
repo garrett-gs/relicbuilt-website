@@ -607,11 +607,11 @@ export interface MasterProposalBuild {
 }
 
 /**
- * A combined "master proposal": one document covering every build grouped
- * under a master project. Renders a cover summary (each build + grand total),
- * then each build's full proposal as its own section — reusing the single
- * estimate renderer with its signature block suppressed, since one signature
- * at the end (added by the proposal page) approves them all.
+ * A combined "master proposal" — the client-facing document covering every
+ * build grouped under a master project. Client-facing means NO itemization:
+ * each build shows only its lump-sum total, a plain-language "What's included"
+ * scope, and any visuals / documents attached to that build. Used for the PDF
+ * and the email; the live page renders its own interactive per-build sign-off.
  */
 export function generateMasterProposalHtml({
   masterName,
@@ -622,6 +622,8 @@ export function generateMasterProposalHtml({
   forEmail = false,
   sentAt,
   expiresAt,
+  logoUrl,
+  brandName = "RELIC",
 }: {
   masterName: string;
   builds: MasterProposalBuild[];
@@ -631,11 +633,14 @@ export function generateMasterProposalHtml({
   forEmail?: boolean;
   sentAt?: string;
   expiresAt?: string;
+  logoUrl?: string;
+  brandName?: string;
 }): string {
-  const logoUrl = biz.logo_url ?? "https://relicbuilt.com/wr-logo-black.png";
   const accent = biz.accent || "#5b642e";
-  const grandTotal = builds.reduce((s, b) => s + (b.totals.total || 0), 0);
-  const first = builds[0]?.estimate;
+  // Only builds the client can still act on (not already declined) appear.
+  const activeBuilds = builds.filter((b) => b.estimate.proposal_status !== "declined");
+  const grandTotal = activeBuilds.reduce((s, b) => s + (b.totals.total || 0), 0);
+  const first = activeBuilds[0]?.estimate || builds[0]?.estimate;
   const clientName = first?.client_name || "";
   const preparedFor = clientName
     ? clientCompany ? `${clientName} of ${clientCompany}` : clientName
@@ -645,18 +650,22 @@ export function generateMasterProposalHtml({
     ? new Date(expiresAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
     : "";
   const wrapMax = forEmail ? 680 : 760;
+  const shield = logoUrl || biz.logo_url || "";
 
-  const summaryRows = builds.map((b) => `
+  const summaryRows = activeBuilds.map((b) => `
     <tr>
       <td style="padding:10px 0;border-bottom:1px solid #eee;font-size:14px;color:#222;">${esc(b.estimate.project_name || b.estimate.estimate_number)}</td>
-      <td style="padding:10px 0;border-bottom:1px solid #eee;font-size:13px;color:#888;font-family:monospace;text-align:right;white-space:nowrap;">${esc(b.estimate.estimate_number)}</td>
       <td style="padding:10px 0 10px 16px;border-bottom:1px solid #eee;font-size:14px;color:#111;font-family:monospace;text-align:right;white-space:nowrap;font-weight:600;">${money(b.totals.total)}</td>
     </tr>`).join("");
+
+  const brandBlock = shield
+    ? `<span style="display:inline-flex;align-items:center;gap:12px;"><img src="${shield}" alt="${esc(brandName)}" style="height:40px;width:auto;display:block;" /><span style="font-weight:800;letter-spacing:0.16em;font-size:24px;color:#111;">${esc(brandName)}</span></span>`
+    : `<span style="font-weight:800;letter-spacing:0.16em;font-size:22px;color:#111;">${esc(brandName)}</span>`;
 
   const cover = `
   <section style="padding:${forEmail ? "28px" : "40px"};">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;border-bottom:3px solid ${accent};padding-bottom:16px;margin-bottom:24px;">
-      <img src="${logoUrl}" alt="${esc(biz.biz_name || "RELIC")}" style="height:40px;" />
+      ${brandBlock}
       <div style="text-align:right;">
         <p style="margin:0;font-size:11px;text-transform:uppercase;letter-spacing:0.16em;color:#888;">Combined Proposal</p>
         <p style="margin:4px 0 0;font-size:13px;color:#555;">${dateText}</p>
@@ -665,36 +674,61 @@ export function generateMasterProposalHtml({
     <h1 style="margin:0 0 6px;font-size:26px;color:#111;">${esc(masterName)}</h1>
     <p style="margin:0 0 24px;font-size:14px;color:#666;">Prepared for <strong>${esc(preparedFor)}</strong>${clientAddress ? ` &middot; ${esc(clientAddress)}` : ""}</p>
 
-    <p style="margin:0 0 10px;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:0.14em;color:${accent};">What's Included (${builds.length} ${builds.length === 1 ? "build" : "builds"})</p>
+    <p style="margin:0 0 10px;font-size:11px;font-weight:bold;text-transform:uppercase;letter-spacing:0.14em;color:${accent};">What's Included (${activeBuilds.length} ${activeBuilds.length === 1 ? "build" : "builds"})</p>
     <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
       <tbody>${summaryRows}</tbody>
       <tfoot>
         <tr>
-          <td style="padding:14px 0 0;font-size:15px;font-weight:bold;color:#111;" colspan="2">Total Investment</td>
+          <td style="padding:14px 0 0;font-size:15px;font-weight:bold;color:#111;">Total Investment</td>
           <td style="padding:14px 0 0 16px;font-size:18px;font-weight:bold;color:${accent};font-family:monospace;text-align:right;">${money(grandTotal)}</td>
         </tr>
       </tfoot>
     </table>
     <p style="margin:18px 0 0;font-size:13px;color:#555;line-height:1.6;">
-      Each build is detailed on the pages that follow. Signing once at the end approves all of them together.
+      Each build can be approved on its own — review the details below and sign off on the ones you&apos;d like to move forward with.
     </p>
     ${expiresText ? `<p style="margin:12px 0 0;font-size:12px;color:#888;">This proposal is valid through <strong>${expiresText}</strong>.</p>` : ""}
   </section>`;
 
-  const buildSections = builds.map((b) => {
-    const inner = generateEstimateProposalHtml({
-      estimate: b.estimate,
-      biz,
-      totals: b.totals,
-      forEmail,
-      hideAcceptance: true,
-      clientCompany,
-      clientAddress,
-    });
+  const buildSections = activeBuilds.map((b) => {
+    const e = b.estimate;
+    const scope = e.proposal_scope?.included !== false ? (e.proposal_scope?.body || "") : "";
+    const includeImages = e.proposal_images_included !== false;
+    const cover = e.proposal_cover_image_url || "";
+    const gallery = includeImages ? [cover, ...((e.proposal_images || []).filter((u) => u !== cover))].filter(Boolean) : [];
+    const docs = (e.proposal_documents || []) as { name?: string; url?: string }[];
+
+    const scopeHtml = scope ? `
+      <p style="margin:14px 0 6px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:${accent};">What's included</p>
+      <p style="margin:0;font-size:14px;color:#444;line-height:1.75;white-space:pre-wrap;">${esc(scope)}</p>` : "";
+
+    const imagesHtml = gallery.length ? `
+      <p style="margin:18px 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:${accent};">Visuals</p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">
+        ${gallery.map((u) => `<img src="${u}" alt="" style="width:${gallery.length === 1 ? "100%" : "calc(50% - 5px)"};max-width:100%;border-radius:8px;border:1px solid #eee;display:block;" />`).join("")}
+      </div>` : "";
+
+    const docsHtml = docs.length ? `
+      <p style="margin:18px 0 8px;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.12em;color:${accent};">Attachments</p>
+      <div>
+        ${docs.map((d) => {
+          const label = esc(d.name || "Document");
+          return forEmail && d.url
+            ? `<a href="${d.url}" style="display:inline-block;margin:0 8px 8px 0;padding:8px 12px;border:1px solid #e5e5e5;border-radius:8px;font-size:13px;color:#111;text-decoration:none;">📄 ${label}</a>`
+            : `<span style="display:inline-block;margin:0 8px 8px 0;padding:8px 12px;border:1px solid #e5e5e5;border-radius:8px;font-size:13px;color:#111;">${label}</span>`;
+        }).join("")}
+      </div>` : "";
+
     return `
-  <div style="margin-top:${forEmail ? "20px" : "32px"};padding-top:${forEmail ? "20px" : "32px"};border-top:2px dashed #ddd;">
-    ${inner}
-  </div>`;
+  <section style="padding:${forEmail ? "20px 28px" : "28px 40px"};border-top:1px solid #eee;page-break-inside:avoid;">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:12px;border-left:3px solid ${accent};padding-left:12px;">
+      <h2 style="margin:0;font-size:20px;color:#111;">${esc(e.project_name || e.estimate_number)}</h2>
+      <span style="font-size:17px;font-weight:bold;color:${accent};font-family:monospace;white-space:nowrap;">${money(b.totals.total)}</span>
+    </div>
+    ${scopeHtml}
+    ${imagesHtml}
+    ${docsHtml}
+  </section>`;
   }).join("");
 
   const wrap = forEmail

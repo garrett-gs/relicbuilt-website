@@ -137,6 +137,8 @@ export async function POST(req: NextRequest) {
         clientAddress,
         sentAt,
         expiresAt,
+        logoUrl: entity === "relic" ? `${origin}/relic-shield-gold.png` : (profile.logoUrl || undefined),
+        brandName: profile.name,
       });
       const pdfBuffer = await renderHtmlToPdf(proposalHtml);
       pdfBase64 = pdfBuffer.toString("base64");

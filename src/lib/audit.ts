@@ -15,6 +15,7 @@ export type ProposalEventType =
   | "sent"
   | "viewed"
   | "signed"
+  | "declined"
   | "deposit_paid"
   | "resent"
   | "voided";

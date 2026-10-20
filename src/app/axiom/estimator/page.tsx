@@ -907,7 +907,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   // disabled and the on-acceptance flow creates a single full invoice.
   const [payInFull, setPayInFull] = useState<boolean>(estimate.pay_in_full === true);
   const [proposalToken, setProposalToken] = useState<string>(estimate.proposal_token || "");
-  const [proposalStatus, setProposalStatus] = useState<"draft" | "sent" | "approved">(
+  const [proposalStatus, setProposalStatus] = useState<"draft" | "sent" | "approved" | "declined">(
     estimate.proposal_status || "draft"
   );
   const [proposalSentAt, setProposalSentAt] = useState<string>(estimate.proposal_sent_at || "");

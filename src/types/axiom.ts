@@ -378,9 +378,14 @@ export interface Estimate {
   // Client-facing attachments on the proposal (PDFs, spec sheets, etc.).
   proposal_documents?: ProposalDocument[];
   proposal_token?: string;
-  proposal_status?: "draft" | "sent" | "approved";
+  // "declined" = the client rejected this build in a combined master proposal;
+  // it drops out of the proposal and comes back to the shop to revise.
+  proposal_status?: "draft" | "sent" | "approved" | "declined";
   proposal_sent_at?: string;
   proposal_approved_at?: string;
+  proposal_signed_by?: string;
+  proposal_declined_at?: string;
+  proposal_decline_reason?: string;
   // 30 days from proposal_sent_at — also serves as the deposit due date
   // once the client accepts.
   proposal_expires_at?: string;
