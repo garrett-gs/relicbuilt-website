@@ -264,6 +264,15 @@ export interface MasterProject {
   // net sales (charged − tax); otherwise it falls back to the quoted total.
   charged_amount?: number | null;
   tax_collected?: number | null;
+  // Combined "master proposal" — one proposal/signature covering every build
+  // grouped under this master. The token is the client's access link, same
+  // shape as a single estimate's proposal_token.
+  proposal_token?: string | null;
+  proposal_status?: "draft" | "sent" | "approved" | null;
+  proposal_sent_at?: string | null;
+  proposal_expires_at?: string | null;
+  proposal_approved_at?: string | null;
+  proposal_signed_by?: string | null;
   created_at: string;
   updated_at: string;
 }

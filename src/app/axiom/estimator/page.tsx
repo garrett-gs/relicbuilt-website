@@ -16,7 +16,7 @@ import DateField from "@/components/ui/DateField";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { generateEstimateProposalHtml, composeClientAddress } from "@/lib/proposal-html";
 import { fuzzyRank } from "@/lib/fuzzy-match";
-import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip, Layers } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const STATUS_STYLES: Record<Estimate["status"], { text: string; bg: string; border: string }> = {
@@ -720,6 +720,11 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [creatingMaster, setCreatingMaster] = useState(false);
   const [newMasterName, setNewMasterName] = useState("");
   const [busyMaster, setBusyMaster] = useState(false);
+  // Sibling builds grouped under the same master, plus the master's own
+  // combined-proposal state — drives the "these go out together" panel.
+  const [masterSiblings, setMasterSiblings] = useState<{ id: string; estimate_number: string; project_name: string | null }[]>([]);
+  const [masterMeta, setMasterMeta] = useState<{ proposal_token: string | null; proposal_status: string | null } | null>(null);
+  const [sendingMaster, setSendingMaster] = useState(false);
   const [status, setStatus] = useState<Estimate["status"]>(estimate.status);
   // Set once this estimate has spawned its project (either already linked, or
   // just created on acceptance). Drives the "in pipeline" confirmation.
@@ -1585,6 +1590,43 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     setNewMasterName("");
   }
 
+  // When this build belongs to a master, load the sibling builds + the
+  // master's combined-proposal state so we can show what will go out together.
+  const loadMasterGroup = useCallback(async (mid: string) => {
+    if (!mid) { setMasterSiblings([]); setMasterMeta(null); return; }
+    const [{ data: sibs }, { data: m }] = await Promise.all([
+      axiom.from("estimates").select("id, estimate_number, project_name").eq("master_project_id", mid).order("created_at", { ascending: true }),
+      axiom.from("master_projects").select("proposal_token, proposal_status").eq("id", mid).single(),
+    ]);
+    setMasterSiblings(sibs || []);
+    setMasterMeta(m ? { proposal_token: m.proposal_token ?? null, proposal_status: m.proposal_status ?? null } : null);
+  }, []);
+
+  useEffect(() => { loadMasterGroup(masterProjectId); }, [masterProjectId, loadMasterGroup]);
+
+  // Send one combined proposal covering every build under the master.
+  async function sendMasterProposal() {
+    if (sendingMaster || !masterProjectId) return;
+    setSendingMaster(true);
+    try {
+      if (dirty) await save();
+      const res = await fetch("/api/send-master-proposal-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ master_project_id: masterProjectId, subject: emailSubject || undefined, message: emailMessage || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(`Could not send combined proposal: ${data.error || "unknown error"}`); return; }
+      await loadMasterGroup(masterProjectId);
+      const warn = data.pdf_attached === false ? "\n\nNote: the PDF attachment failed to generate — the client still got the Review & Sign link." : " with PDF attached.";
+      alert(`Combined proposal for ${data.builds} ${data.builds === 1 ? "build" : "builds"} sent to ${data.sent_to}${warn}`);
+    } catch (e) {
+      alert(`Could not send combined proposal: ${e instanceof Error ? e.message : "unknown error"}`);
+    } finally {
+      setSendingMaster(false);
+    }
+  }
+
   function save() {
     const full = buildFull() as Record<string, unknown>;
     const base = baseRef.current || {};
@@ -1964,6 +2006,16 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
                 {masterProjects.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                 <option value="__new__">＋ New master project…</option>
               </select>
+            )}
+            {masterProjectId && masterSiblings.length > 1 && (
+              <div className="mt-2 flex items-start gap-2 bg-accent/5 border border-accent/30 px-3 py-2 text-xs">
+                <Layers size={13} className="text-accent shrink-0 mt-0.5" />
+                <span className="text-muted">
+                  Grouped with {masterSiblings.length - 1} other {masterSiblings.length - 1 === 1 ? "build" : "builds"}:{" "}
+                  <span className="text-foreground">{masterSiblings.filter((s) => s.id !== estimate.id).map((s) => s.project_name || s.estimate_number).join(", ")}</span>.
+                  {" "}These can go out as <span className="text-accent font-medium">one combined proposal</span> — see the Send section below.
+                </span>
+              </div>
             )}
           </div>
           {/* Build window — places this job on the Build Calendar for planning,
@@ -2709,6 +2761,40 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
           <p className="text-xs text-muted mt-2 italic">
             Add a client {!clientName && !clientEmail ? "name and email" : !clientName ? "name" : "email"} above before sending the proposal.
           </p>
+        )}
+
+        {/* Combined master proposal — one proposal/signature covering every
+            build grouped under this master. Only shown when there's more than
+            one build to combine. */}
+        {masterProjectId && masterSiblings.length > 1 && (
+          <div className="mt-4 bg-accent/5 border border-accent/40 p-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <Layers size={14} className="text-accent" />
+              <span className="text-sm font-semibold">Combined Master Proposal</span>
+              {masterMeta?.proposal_status === "approved" && <span className="text-[10px] uppercase tracking-wider bg-green-600/20 text-green-500 px-1.5 py-0.5 rounded">Signed</span>}
+              {masterMeta?.proposal_status === "sent" && <span className="text-[10px] uppercase tracking-wider bg-accent/20 text-accent px-1.5 py-0.5 rounded">Sent</span>}
+            </div>
+            <p className="text-xs text-muted mb-2.5">
+              Sends <span className="text-foreground">one proposal</span> for all {masterSiblings.length} builds under this master — the client signs once and all are approved:
+              {" "}<span className="text-foreground">{masterSiblings.map((s) => s.project_name || s.estimate_number).join(", ")}</span>.
+            </p>
+            <div className="flex gap-2 flex-wrap">
+              <Button onClick={sendMasterProposal} disabled={sendingMaster || !clientName || !clientEmail}>
+                {sendingMaster ? <><Loader2 size={14} className="mr-1 animate-spin" /> Sending…</> : <><Send size={14} className="mr-1" /> {masterMeta?.proposal_status === "sent" || masterMeta?.proposal_status === "approved" ? "Re-Send Combined Proposal" : "Send Combined Proposal"}</>}
+              </Button>
+              {masterMeta?.proposal_token && (
+                <>
+                  <Button variant="outline" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/proposal/master/${masterMeta.proposal_token}`); }}>
+                    <Copy size={14} className="mr-1" /> Copy Link
+                  </Button>
+                  <Button variant="outline" onClick={() => window.open(`/proposal/master/${masterMeta.proposal_token}`, "_blank")}>
+                    <ExternalLink size={14} className="mr-1" /> Open Combined Proposal
+                  </Button>
+                </>
+              )}
+            </div>
+            <p className="text-[11px] text-muted mt-2 italic">Each build still becomes its own project in the pipeline. Sent to the client email on these builds.</p>
+          </div>
         )}
 
         {/* Proposal expiration — so you can see at a glance whether the live
