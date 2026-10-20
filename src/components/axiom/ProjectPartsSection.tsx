@@ -1,14 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import PartBuilder, { type PartBuilderExport, type PartSaveToLibrary } from "./PartBuilder";
-import GeneratorPicker from "./GeneratorPicker";
-import { GENERATORS, byId, type PartSpec } from "@/lib/parts";
+import { byId } from "@/lib/parts";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useEntity } from "@/components/axiom/EntityProvider";
 import type { CustomWorkPart } from "@/types/axiom";
-import { Ruler, RotateCcw, Trash2, Library } from "lucide-react";
+import { Ruler, Trash2, Library } from "lucide-react";
 
 type PartsLibraryRow = {
   id: string;
@@ -23,20 +21,14 @@ interface ProjectPartsSectionProps {
   userEmail: string;
 }
 
-// Project tab equivalent of Parts Studio. Renders the same PartBuilder;
-// the only difference is that this side wires `initial` + `onExport` so
-// specs are stored on custom_work_parts and can be reopened for a change
-// order without redrawing.
+// Parts on a project. Parts are drawn in the Parts Studio and saved to the
+// shared Parts Library; here you pull those saved parts onto the project. No
+// in-project builder — build in Parts Studio, then add from the library.
 export default function ProjectPartsSection({
   customWorkId,
   userEmail,
 }: ProjectPartsSectionProps) {
-  const [generatorId, setGeneratorId] = useState<string>(GENERATORS[0].id);
   const [savedParts, setSavedParts] = useState<CustomWorkPart[]>([]);
-  const [initialSpec, setInitialSpec] = useState<PartSpec | null>(null);
-  const [builderKey, setBuilderKey] = useState(0);
-
-  const generator = byId[generatorId] ?? GENERATORS[0];
   const { entity } = useEntity();
   const [library, setLibrary] = useState<PartsLibraryRow[]>([]);
 
@@ -64,41 +56,13 @@ export default function ProjectPartsSection({
     loadParts();
   }, [loadParts]);
 
-  async function handleExport(payload: PartBuilderExport) {
-    const position = savedParts.length;
-    const label = payload.result.filename;
-    await axiom.from("custom_work_parts").insert({
-      custom_work_id: customWorkId,
-      generator_id: payload.generatorId,
-      generator_version: payload.generatorVersion,
-      spec: payload.spec,
-      label,
-      position,
-    });
-    await logActivity({
-      action: "created",
-      entity: "project",
-      entity_id: customWorkId,
-      label: `Exported part: ${label} (${payload.format.toUpperCase()})`,
-      user_name: userEmail,
-    });
-    loadParts();
-  }
-
-  function reopen(part: CustomWorkPart) {
-    if (!byId[part.generator_id]) return;
-    setGeneratorId(part.generator_id);
-    setInitialSpec(part.spec as PartSpec);
-    setBuilderKey((k) => k + 1);
-  }
-
   async function deletePart(id: string) {
     await axiom.from("custom_work_parts").delete().eq("id", id);
     loadParts();
   }
 
   // Pull a saved library part onto this project (copies the spec — editing it
-  // here won't touch the library original).
+  // in Parts Studio later won't touch what's on this project).
   async function addFromLibrary(lib: PartsLibraryRow) {
     await axiom.from("custom_work_parts").insert({
       custom_work_id: customWorkId,
@@ -110,26 +74,6 @@ export default function ProjectPartsSection({
     });
     await logActivity({ action: "created", entity: "project", entity_id: customWorkId, label: `Added part from library: ${lib.label ?? lib.generator_id}`, user_name: userEmail });
     loadParts();
-  }
-
-  // Save the part currently in the builder to the shared library for reuse.
-  async function saveToLibrary(payload: PartSaveToLibrary) {
-    const label = payload.result.filename || generator.label;
-    const { data } = await axiom.from("parts_library").insert({
-      entity,
-      generator_id: payload.generatorId,
-      generator_version: payload.generatorVersion,
-      spec: payload.spec,
-      label,
-    }).select("id").single();
-    if (data) await logActivity({ action: "created", entity: "part", entity_id: data.id, label: `Saved part to library: ${label}`, user_name: userEmail });
-    loadLibrary();
-  }
-
-  function pickGenerator(id: string) {
-    setGeneratorId(id);
-    setInitialSpec(null);
-    setBuilderKey((k) => k + 1);
   }
 
   return (
@@ -165,16 +109,9 @@ export default function ProjectPartsSection({
                   </p>
                 </div>
                 <button
-                  onClick={() => reopen(p)}
-                  className="text-xs text-muted hover:text-accent flex items-center gap-1 px-2 py-1"
-                  title="Reopen this part"
-                >
-                  <RotateCcw size={12} /> Reopen
-                </button>
-                <button
                   onClick={() => deletePart(p.id)}
                   className="text-muted hover:text-red-500 p-1"
-                  title="Delete"
+                  title="Remove from project"
                 >
                   <Trash2 size={13} />
                 </button>
@@ -184,8 +121,8 @@ export default function ProjectPartsSection({
         </div>
       )}
 
-      {/* Pull a saved part from the shared library onto this project */}
-      {library.length > 0 && (
+      {/* Add a saved part from the shared library onto this project */}
+      {library.length > 0 ? (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-muted flex items-center gap-1"><Library size={13} /> Add from Library:</span>
           <select
@@ -199,23 +136,11 @@ export default function ProjectPartsSection({
             ))}
           </select>
         </div>
+      ) : (
+        <p className="text-xs text-muted italic flex items-center gap-1">
+          <Library size={13} /> No saved parts yet. Build parts in Parts Studio and save them to the library, then add them here.
+        </p>
       )}
-
-      <div className="bg-card border border-border p-4 space-y-4">
-        <GeneratorPicker
-          label="Part type"
-          value={generatorId}
-          onChange={pickGenerator}
-        />
-        <PartBuilder
-          key={builderKey}
-          generator={generator}
-          initial={initialSpec ?? undefined}
-          context={{ bitDiameter: 0.25 }}
-          onExport={handleExport}
-          onSaveToLibrary={saveToLibrary}
-        />
-      </div>
     </div>
   );
 }
