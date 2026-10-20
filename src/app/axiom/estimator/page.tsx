@@ -868,6 +868,10 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   // just created on acceptance). Drives the "in pipeline" confirmation.
   const [createdProjectId, setCreatedProjectId] = useState<string>(estimate.custom_work_id || "");
   const [lineItems, setLineItems] = useState<EstimateLineItem[]>(estimate.line_items || []);
+  // Import a vendor quote (PDF/image) and auto-fill the material lines.
+  const [importingQuote, setImportingQuote] = useState(false);
+  const [quoteMsg, setQuoteMsg] = useState("");
+  const quoteInputRef = useRef<HTMLInputElement>(null);
   const [laborItems, setLaborItems] = useState<EstimateLaborItem[]>(estimate.labor_items || []);
   const [markupPct, setMarkupPct] = useState(estimate.markup_percent || 0);
   const [adjustment, setAdjustment] = useState(estimate.adjustment || 0);
@@ -1506,6 +1510,45 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
 
   function addLine() {
     setLineItems([...lineItems, { item_number: "", description: "", quantity: 1, unit_price: 0, unit: "ea" }]); markDirty();
+  }
+
+  // Read a vendor quote (PDF/image), extract its line items with AI, and append
+  // them to the materials. The user reviews/edits after — it's a head start.
+  async function importQuote(file: File) {
+    setImportingQuote(true);
+    setQuoteMsg("");
+    try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(",")[1] || "");
+        r.onerror = () => reject(new Error("read failed"));
+        r.readAsDataURL(file);
+      });
+      const res = await fetch("/api/parse-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_base64: base64, media_type: file.type || "application/pdf" }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setQuoteMsg(data.error || "Could not read that quote."); return; }
+      const parsed: EstimateLineItem[] = (data.items || [])
+        .map((it: { item_number?: string; description?: string; qty?: number; quantity?: number; unit?: string; unit_price?: number }) => ({
+          item_number: String(it.item_number ?? "").trim(),
+          description: String(it.description ?? "").trim(),
+          quantity: Number(it.qty ?? it.quantity ?? 1) || 1,
+          unit_price: Number(it.unit_price ?? 0) || 0,
+          unit: String(it.unit ?? "ea").trim() || "ea",
+        }))
+        .filter((it: EstimateLineItem) => it.description);
+      if (parsed.length === 0) { setQuoteMsg("No line items found in that file."); return; }
+      setLineItems((prev) => [...prev, ...parsed]);
+      markDirty();
+      setQuoteMsg(`Added ${parsed.length} line ${parsed.length === 1 ? "item" : "items"}${data.vendor ? ` from ${data.vendor}` : ""}. Review the prices and units before sending.`);
+    } catch {
+      setQuoteMsg("Something went wrong reading the file.");
+    } finally {
+      setImportingQuote(false);
+    }
   }
   function updateLine(i: number, field: keyof EstimateLineItem, value: string | number) {
     const updated = [...lineItems];
@@ -2288,10 +2331,25 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
         <div>
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs uppercase tracking-wider text-muted">Materials & Line Items</h3>
-            <button onClick={addLine} className="text-accent text-xs flex items-center gap-1">
-              <Plus size={12} /> Add Custom Item
-            </button>
+            <div className="flex items-center gap-3">
+              <button onClick={() => quoteInputRef.current?.click()} disabled={importingQuote} className="text-accent text-xs flex items-center gap-1 disabled:opacity-50">
+                {importingQuote ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />} {importingQuote ? "Reading quote…" : "Import Quote"}
+              </button>
+              <button onClick={addLine} className="text-accent text-xs flex items-center gap-1">
+                <Plus size={12} /> Add Custom Item
+              </button>
+            </div>
+            <input
+              ref={quoteInputRef}
+              type="file"
+              accept="application/pdf,image/*"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) importQuote(f); e.target.value = ""; }}
+            />
           </div>
+          {quoteMsg && (
+            <p className="text-xs text-muted mb-3 bg-card border border-border rounded-lg px-3 py-2">{quoteMsg}</p>
+          )}
           {lineItems.length === 0 ? (
             <p className="text-muted text-sm bg-card border border-border p-4">
               {vendorId ? "Click catalog items to add, or use Add Custom Item." : "Select a vendor to load their catalog, or add custom items manually."}
