@@ -16,7 +16,7 @@ import DateField from "@/components/ui/DateField";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { generateEstimateProposalHtml, composeClientAddress } from "@/lib/proposal-html";
 import { fuzzyRank } from "@/lib/fuzzy-match";
-import { Plus, Trash2, X, ChevronDown, ChevronRight, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip, Layers } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, ChevronRight, ChevronLeft, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip, Layers, List } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const STATUS_STYLES: Record<Estimate["status"], { text: string; bg: string; border: string }> = {
@@ -258,6 +258,14 @@ export default function EstimatorPage() {
   const [tab, setTab] = useState<"working" | "accepted" | "archive">("working");
   const { isSuperAdmin } = useAxiomRole(); // Archive is super-admin only
   const { entity } = useEntity();
+  // Master projects (id → name) so the list can group builds under their
+  // parent. Loaded separately from estimates so names resolve for the tree.
+  const [masters, setMasters] = useState<{ id: string; name: string }[]>([]);
+  // Left-panel layout prefs — grouped tree vs flat list, and whether the
+  // whole panel is collapsed to a rail. Both remembered per browser.
+  const [listView, setListView] = useState<"flat" | "tree">("tree");
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
+  const [closedGroups, setClosedGroups] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     const { data } = await axiom.from("estimates").select("*").eq("entity", entity).order("created_at", { ascending: false });
@@ -265,6 +273,21 @@ export default function EstimatorPage() {
   }, [entity]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    axiom.from("master_projects").select("id, name").eq("entity", entity).then(({ data }) => { if (data) setMasters(data); });
+  }, [entity]);
+
+  // Restore / persist the panel prefs.
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem("estimator:listView");
+      if (v === "flat" || v === "tree") setListView(v);
+      if (localStorage.getItem("estimator:panelCollapsed") === "1") setPanelCollapsed(true);
+    } catch { /* ignore */ }
+  }, []);
+  useEffect(() => { try { localStorage.setItem("estimator:listView", listView); } catch { /* ignore */ } }, [listView]);
+  useEffect(() => { try { localStorage.setItem("estimator:panelCollapsed", panelCollapsed ? "1" : "0"); } catch { /* ignore */ } }, [panelCollapsed]);
 
   // Deep-link: open a specific estimate when arrived via ?id= (e.g. a build
   // clicked from a Master Project). Read client-side to avoid a Suspense
@@ -334,18 +357,102 @@ export default function EstimatorPage() {
     load();
   }
 
+  const masterName = (id?: string | null) => masters.find((m) => m.id === id)?.name || "Master project";
+  function toggleGroup(id: string) {
+    setClosedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  // Build the master-project groups for the current tab. Masters appear in the
+  // order their first build shows in the list; estimates with no master fall
+  // into a plain list rendered under the groups.
+  const masterOrder: string[] = [];
+  const byMaster = new Map<string, Estimate[]>();
+  const ungrouped: Estimate[] = [];
+  for (const est of visibleEstimates) {
+    const mid = est.master_project_id;
+    if (mid) {
+      if (!byMaster.has(mid)) { byMaster.set(mid, []); masterOrder.push(mid); }
+      byMaster.get(mid)!.push(est);
+    } else {
+      ungrouped.push(est);
+    }
+  }
+
+  // One estimate card — shared by both the flat list and the tree.
+  const renderCard = (est: Estimate) => {
+    const { total } = calcTotals(est);
+    const active = selected?.id === est.id;
+    return (
+      <div
+        key={est.id}
+        onClick={() => setSelected(est)}
+        className={cn(
+          "bg-card border border-border p-3 cursor-pointer transition-colors",
+          active ? "border-accent" : "hover:border-accent/40"
+        )}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-medium text-sm truncate">{est.project_name || "—"}</p>
+            <p className="text-muted text-xs font-mono">{est.estimate_number}</p>
+            {est.client_name && <p className="text-muted text-xs truncate">{est.client_name}</p>}
+          </div>
+          <div className="text-right flex-shrink-0">
+            <p className="text-accent text-sm font-mono">{money(total)}</p>
+            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 border ${STATUS_STYLES[est.status].text} ${STATUS_STYLES[est.status].bg} ${STATUS_STYLES[est.status].border}`}>
+              {est.status}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex gap-6 h-[calc(100vh-8rem)]">
+      {/* Left — collapsed rail */}
+      {panelCollapsed && (
+        <div className="w-12 flex-shrink-0 flex flex-col items-center gap-4 pt-1">
+          <button
+            onClick={() => setPanelCollapsed(false)}
+            className="w-8 h-8 border border-border text-muted hover:text-foreground hover:border-accent/50 flex items-center justify-center transition-colors"
+            title="Expand estimate list"
+            aria-label="Expand estimate list"
+          >
+            <ChevronRight size={16} />
+          </button>
+          <Button size="sm" onClick={() => setShowCreate(true)} className="!px-0 !w-8 !h-8" title="New estimate">
+            <Plus size={14} />
+          </Button>
+          <span className="[writing-mode:vertical-rl] text-[11px] uppercase tracking-[0.2em] text-muted mt-1 select-none">
+            Estimates · {visibleEstimates.length}
+          </span>
+        </div>
+      )}
       {/* Left — list */}
-      <div className="w-72 flex-shrink-0 flex flex-col">
+      <div className={cn("w-72 flex-shrink-0 flex-col", panelCollapsed ? "hidden" : "flex")}>
         <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-2xl font-heading font-bold">Estimator</h1>
             <p className="text-muted text-sm mt-0.5">{visibleEstimates.length} estimates</p>
           </div>
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <Plus size={14} className="mr-1" /> New
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <Plus size={14} className="mr-1" /> New
+            </Button>
+            <button
+              onClick={() => setPanelCollapsed(true)}
+              className="w-8 h-8 border border-border text-muted hover:text-foreground hover:border-accent/50 flex items-center justify-center transition-colors flex-shrink-0"
+              title="Collapse list"
+              aria-label="Collapse estimate list"
+            >
+              <ChevronLeft size={16} />
+            </button>
+          </div>
         </div>
         <div className="flex border-b border-border mb-3 text-[11px] uppercase tracking-wider">
           <button
@@ -389,6 +496,25 @@ export default function EstimatorPage() {
             </button>
           )}
         </div>
+        {/* View toggle — group builds under their master project, or a flat list */}
+        <div className="flex items-center gap-1 mb-3 text-[11px]">
+          <button
+            onClick={() => setListView("tree")}
+            className={cn("flex items-center gap-1 px-2 py-1 border transition-colors",
+              listView === "tree" ? "border-accent/50 bg-accent/10 text-accent" : "border-border text-muted hover:text-foreground")}
+            title="Group by master project"
+          >
+            <Layers size={12} /> Tree
+          </button>
+          <button
+            onClick={() => setListView("flat")}
+            className={cn("flex items-center gap-1 px-2 py-1 border transition-colors",
+              listView === "flat" ? "border-accent/50 bg-accent/10 text-accent" : "border-border text-muted hover:text-foreground")}
+            title="Flat list"
+          >
+            <List size={12} /> Flat
+          </button>
+        </div>
         <div className="flex-1 overflow-y-auto space-y-2">
           {visibleEstimates.length === 0 && (
             <p className="text-muted text-sm">
@@ -397,34 +523,46 @@ export default function EstimatorPage() {
                 : "No archived estimates yet. Rejected estimates land here."}
             </p>
           )}
-          {visibleEstimates.map((est) => {
-            const { total } = calcTotals(est);
-            const active = selected?.id === est.id;
-            return (
-              <div
-                key={est.id}
-                onClick={() => setSelected(est)}
-                className={cn(
-                  "bg-card border border-border p-3 cursor-pointer transition-colors",
-                  active ? "border-accent" : "hover:border-accent/40"
-                )}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm truncate">{est.project_name || "—"}</p>
-                    <p className="text-muted text-xs font-mono">{est.estimate_number}</p>
-                    {est.client_name && <p className="text-muted text-xs truncate">{est.client_name}</p>}
+
+          {listView === "flat" && visibleEstimates.map(renderCard)}
+
+          {listView === "tree" && (
+            <>
+              {masterOrder.map((mid) => {
+                const kids = byMaster.get(mid)!;
+                const groupTotal = kids.reduce((s, e) => s + calcTotals(e).total, 0);
+                const closed = closedGroups.has(mid);
+                return (
+                  <div key={mid} className="space-y-2">
+                    <button
+                      onClick={() => toggleGroup(mid)}
+                      className="w-full flex items-center gap-1.5 px-2 py-1.5 border border-border/70 bg-accent/[0.04] hover:border-accent/40 transition-colors text-left"
+                    >
+                      {closed ? <ChevronRight size={13} className="text-muted flex-shrink-0" /> : <ChevronDown size={13} className="text-muted flex-shrink-0" />}
+                      <Layers size={12} className="text-accent flex-shrink-0" />
+                      <span className="text-xs font-semibold truncate flex-1 min-w-0">{masterName(mid)}
+                        <span className="text-[10px] text-muted font-normal ml-1">· {kids.length} {kids.length === 1 ? "build" : "builds"}</span>
+                      </span>
+                      <span className="text-[11px] font-mono text-accent flex-shrink-0">{money(groupTotal)}</span>
+                    </button>
+                    {!closed && (
+                      <div className="pl-3 border-l border-border/50 ml-2 space-y-2">
+                        {kids.map(renderCard)}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-accent text-sm font-mono">{money(total)}</p>
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 border ${STATUS_STYLES[est.status].text} ${STATUS_STYLES[est.status].bg} ${STATUS_STYLES[est.status].border}`}>
-                      {est.status}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                );
+              })}
+              {ungrouped.length > 0 && (
+                <>
+                  {masterOrder.length > 0 && (
+                    <p className="text-[10px] uppercase tracking-wider text-muted/70 px-1 pt-1">No master project</p>
+                  )}
+                  {ungrouped.map(renderCard)}
+                </>
+              )}
+            </>
+          )}
         </div>
       </div>
 
