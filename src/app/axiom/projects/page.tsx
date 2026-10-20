@@ -551,7 +551,7 @@ export default function ProjectsPage() {
       </div>
       {/* Due date — centered in the open middle of the row */}
       <div className="flex-1 min-w-0 text-center">
-        {p.due_date && (() => { const due = formatDueDate(p.due_date); return <span className={cn("text-xs whitespace-nowrap", due.soon ? "text-orange-400 font-medium" : "text-muted")}>due {due.text}</span>; })()}
+        {p.due_date && (() => { const due = formatDueDate(p.due_date); return <span className={cn("text-xs whitespace-nowrap", due.soon ? "text-orange-400 font-medium" : "text-muted")}>Due {due.text}</span>; })()}
       </div>
       {/* Payment status. RELIC: from Axiom invoices. Wallflower: shown only
           once paid in Nexus; otherwise no badge. */}
