@@ -14,9 +14,9 @@ import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import DateField from "@/components/ui/DateField";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
-import { generateEstimateProposalHtml, composeClientAddress } from "@/lib/proposal-html";
+import { generateEstimateProposalHtml, generateMasterProposalHtml, composeClientAddress, type MasterProposalBuild } from "@/lib/proposal-html";
 import { fuzzyRank } from "@/lib/fuzzy-match";
-import { Plus, Trash2, X, ChevronDown, ChevronRight, ChevronLeft, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip, Layers, List } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, ChevronRight, ChevronLeft, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip, Layers, List, Eye } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 const STATUS_STYLES: Record<Estimate["status"], { text: string; bg: string; border: string }> = {
@@ -863,6 +863,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [masterSiblings, setMasterSiblings] = useState<{ id: string; estimate_number: string; project_name: string | null }[]>([]);
   const [masterMeta, setMasterMeta] = useState<{ proposal_token: string | null; proposal_status: string | null } | null>(null);
   const [sendingMaster, setSendingMaster] = useState(false);
+  const [previewingMaster, setPreviewingMaster] = useState(false);
   const [status, setStatus] = useState<Estimate["status"]>(estimate.status);
   // Set once this estimate has spawned its project (either already linked, or
   // just created on acceptance). Drives the "in pipeline" confirmation.
@@ -1805,6 +1806,106 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       alert(`Could not send combined proposal: ${e instanceof Error ? e.message : "unknown error"}`);
     } finally {
       setSendingMaster(false);
+    }
+  }
+
+  // Build the exact combined proposal the client would receive and open it in a
+  // new tab as a print-ready preview — no send, no DB writes. The master mirror
+  // of previewProposalPdf(): assembles every build under the master the same way
+  // /api/send-master-proposal-email does, then renders generateMasterProposalHtml.
+  async function previewMasterProposalPdf() {
+    if (previewingMaster || !masterProjectId) return;
+    setPreviewingMaster(true);
+    try {
+      // Flush this build's unsaved edits so the preview reflects them.
+      if (dirty) await save();
+
+      const [{ data: settings }, { data: sibs }] = await Promise.all([
+        axiom
+          .from("settings")
+          .select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text,relic_profile")
+          .limit(1)
+          .single(),
+        axiom
+          .from("estimates")
+          .select("*")
+          .eq("master_project_id", masterProjectId)
+          .order("created_at", { ascending: true }),
+      ]);
+
+      const builds = (sibs || []) as Estimate[];
+      if (builds.length === 0) {
+        alert("No builds are linked to this master project yet.");
+        return;
+      }
+
+      // Resolve client company / address from the first linked customer — the
+      // same resolution the send route uses, so the preview matches what ships.
+      let clientCompany: string | undefined;
+      let clientAddr: string | undefined;
+      const customerId = builds.find((b) => b.customer_id)?.customer_id;
+      if (customerId) {
+        const { data: cust } = await axiom
+          .from("customers")
+          .select("company_id,company_name,address")
+          .eq("id", customerId)
+          .single();
+        clientAddr = composeClientAddress(cust) || undefined;
+        if (cust?.company_name) clientCompany = cust.company_name;
+        else if (cust?.company_id) {
+          const { data: co } = await axiom.from("companies").select("name").eq("id", cust.company_id).single();
+          if (co?.name) clientCompany = co.name;
+        }
+      }
+
+      const entity = builds[0]?.entity;
+      const masterName = masterProjects.find((m) => m.id === masterProjectId)?.name || "Combined Proposal";
+      const buildArgs: MasterProposalBuild[] = builds.map((e) => ({ estimate: e, totals: calcTotals(e) }));
+
+      const proposalBody = generateMasterProposalHtml({
+        masterName,
+        builds: buildArgs,
+        biz: proposalBiz(entity, settings),
+        clientCompany,
+        clientAddress: clientAddr,
+        logoUrl: entity === "relic" ? `${window.location.origin}/relic-shield-gold.png` : undefined,
+      });
+
+      const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Combined Proposal — ${masterName.replace(/[<>"']/g, "")}</title>
+  <style>
+    @page { margin: 0.5in; }
+    @media print { .no-print { display: none !important; } body { background: #fff; } }
+    body { margin: 0; padding: 0; background: #f0f0f0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  </style>
+</head>
+<body>
+  <div class="no-print" style="position:sticky;top:0;background:#111;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;gap:16px;z-index:1000;">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <button onclick="window.close()" aria-label="Close preview" style="background:transparent;border:1px solid #555;color:#fff;width:38px;height:38px;font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✕</button>
+      <span style="color:#fff;font-size:14px;letter-spacing:1px;">Combined Proposal Preview — ${builds.length} ${builds.length === 1 ? "build" : "builds"}</span>
+    </div>
+    <button onclick="window.print()" style="background:#5b642e;color:#0a0a0a;border:none;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:1px;">SAVE AS PDF / PRINT</button>
+  </div>
+  ${proposalBody}
+</body>
+</html>`;
+
+      const win = window.open("", "_blank");
+      if (win) {
+        win.document.write(html);
+        win.document.close();
+      } else {
+        alert("The preview was blocked by the browser. Allow pop-ups for this site and try again.");
+      }
+    } catch (e) {
+      alert(`Could not build the combined preview: ${e instanceof Error ? e.message : "unknown error"}`);
+    } finally {
+      setPreviewingMaster(false);
     }
   }
 
@@ -2985,6 +3086,9 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
               {" "}<span className="text-foreground">{masterSiblings.map((s) => s.project_name || s.estimate_number).join(", ")}</span>.
             </p>
             <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" onClick={previewMasterProposalPdf} disabled={previewingMaster}>
+                {previewingMaster ? <><Loader2 size={14} className="mr-1 animate-spin" /> Building…</> : <><Eye size={14} className="mr-1" /> Preview Combined</>}
+              </Button>
               <Button onClick={sendMasterProposal} disabled={sendingMaster || !clientName || !clientEmail}>
                 {sendingMaster ? <><Loader2 size={14} className="mr-1 animate-spin" /> Sending…</> : <><Send size={14} className="mr-1" /> {masterMeta?.proposal_status === "sent" || masterMeta?.proposal_status === "approved" ? "Re-Send Combined Proposal" : "Send Combined Proposal"}</>}
               </Button>
