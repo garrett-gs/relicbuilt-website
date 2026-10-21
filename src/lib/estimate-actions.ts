@@ -20,10 +20,23 @@ export async function persistEstimate(
   updates: Partial<Estimate>,
   _userEmail: string,
 ) {
-  await axiom
+  // `.select()` so we can see how many rows the update actually touched.
+  // Supabase returns 200 with an empty array when RLS rejects the write —
+  // typically a stale/expired auth session that's dropped to the read-only
+  // anon role. Without this check a failed save looks successful and the
+  // user's edits are silently lost. Throw so the caller can surface it.
+  const { data, error } = await axiom
     .from("estimates")
     .update({ ...updates, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id");
+
+  if (error) throw new Error(error.message || "Could not save changes.");
+  if (!data || data.length === 0) {
+    throw new Error(
+      "Your session expired, so your changes couldn't be saved. Reload the page and sign in again — your edits are still on screen.",
+    );
+  }
 
   if (updates.status) {
     fetch("/api/wallflower-status", {

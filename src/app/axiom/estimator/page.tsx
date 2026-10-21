@@ -829,7 +829,7 @@ function CreateModal({ onSubmit, onClose }: {
 
 export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   estimate: Estimate;
-  onUpdate: (u: Partial<Estimate>) => void;
+  onUpdate: (u: Partial<Estimate>) => Promise<void>;
   onDelete: () => void;
 }) {
   const { userEmail: detailUserEmail } = useAuth();
@@ -946,7 +946,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     if (!confirm("Remove this field note from the estimate?")) return;
     const next = fieldNotes.filter((u) => u !== url);
     setFieldNotes(next);
-    onUpdate({ images: next.length > 0 ? next : undefined } as Partial<Estimate>);
+    onUpdate({ images: next.length > 0 ? next : undefined } as Partial<Estimate>)
+      .catch((e) => setSaveError(e instanceof Error ? e.message : "Couldn't save your changes."));
   }
 
   // ── Proposal helpers ────────────────────────────────────────────────
@@ -1220,7 +1221,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       }
       alert(`Project created: ${data.project_name}`);
       // Refresh the local estimate so the button hides
-      onUpdate({ deposit_paid_at: data.deposit_paid_at, custom_work_id: data.custom_work_id } as Partial<Estimate>);
+      onUpdate({ deposit_paid_at: data.deposit_paid_at, custom_work_id: data.custom_work_id } as Partial<Estimate>)
+        .catch((e) => setSaveError(e instanceof Error ? e.message : "Couldn't save your changes."));
     } catch (err) {
       alert(`Network error: ${err instanceof Error ? err.message : "unknown"}`);
     }
@@ -1306,6 +1308,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [laborOpen, setLaborOpen] = useState(true);
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null); // last failed save (e.g. expired session)
   const [rev, setRev] = useState(0); // bumps on every edit; drives autosave debounce
 
   // ── Claude chat ───────────────────────────────────────────────
@@ -1909,19 +1912,33 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     }
   }
 
-  function save() {
+  async function save() {
     const full = buildFull() as Record<string, unknown>;
     const base = baseRef.current || {};
     const changed: Record<string, unknown> = {};
     for (const k of Object.keys(full)) {
       if (JSON.stringify(full[k]) !== JSON.stringify(base[k])) changed[k] = full[k];
     }
-    if (Object.keys(changed).length > 0) {
-      onUpdate(changed as Partial<Estimate>);
-      baseRef.current = { ...base, ...changed };
+    if (Object.keys(changed).length === 0) {
+      setDirty(false);
+      setSaved(true);
+      setSaveError(null);
+      return;
     }
-    setDirty(false);
-    setSaved(true);
+    try {
+      // Only advance the baseline and mark the form clean once the write is
+      // confirmed. If it fails (e.g. an expired session), we leave the form
+      // dirty with the edits intact so the next change or a manual Save retries,
+      // and we surface why — instead of silently losing the work.
+      await onUpdate(changed as Partial<Estimate>);
+      baseRef.current = { ...base, ...changed };
+      setDirty(false);
+      setSaved(true);
+      setSaveError(null);
+    } catch (e) {
+      setSaved(false);
+      setSaveError(e instanceof Error ? e.message : "Couldn't save your changes.");
+    }
   }
 
   // Autosave the estimate ~900ms after the last edit (rev bumps per change).
@@ -1955,7 +1972,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
         setProposalStatus("sent");
         sentPatch.proposal_status = "sent";
       }
-      onUpdate(sentPatch);
+      onUpdate(sentPatch)
+        .catch((e) => setSaveError(e instanceof Error ? e.message : "Couldn't save your changes."));
       await logActivity({
         action: "sent",
         entity: "estimate",
@@ -2029,7 +2047,8 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     if (data) {
       // Link the estimate to the new project.
       await axiom.from("estimates").update({ custom_work_id: data.id }).eq("id", estimate.id);
-      onUpdate({ custom_work_id: data.id } as Partial<Estimate>);
+      onUpdate({ custom_work_id: data.id } as Partial<Estimate>)
+        .catch((e) => setSaveError(e instanceof Error ? e.message : "Couldn't save your changes."));
       setCreatedProjectId(data.id);
     }
   }
@@ -3156,6 +3175,11 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
       {/* Actions */}
       <div className="flex gap-3 pt-4 border-t border-border flex-wrap items-center">
         <SaveButton dirty={dirty} saved={saved} onClick={save} />
+        {saveError && (
+          <span className="basis-full text-xs text-red-500 font-medium">
+            {saveError}
+          </span>
+        )}
         {(estimate.custom_work_id || createdProjectId) ? (
           <a
             href={`/axiom/projects?id=${estimate.custom_work_id || createdProjectId}`}

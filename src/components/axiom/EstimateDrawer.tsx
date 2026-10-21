@@ -48,8 +48,14 @@ export default function EstimateDrawer({
 
   async function handleUpdate(u: Partial<Estimate>) {
     setEstimate((prev) => (prev ? { ...prev, ...u } : prev));
-    await persistEstimate(estimateId, u, userEmail);
-    onChange?.();
+    try {
+      await persistEstimate(estimateId, u, userEmail);
+      onChange?.();
+    } catch (e) {
+      // Surface a blocked/failed write (e.g. an expired session) rather than
+      // letting the optimistic update masquerade as saved.
+      alert(e instanceof Error ? e.message : "Couldn't save changes.");
+    }
   }
 
   async function handleDelete() {
