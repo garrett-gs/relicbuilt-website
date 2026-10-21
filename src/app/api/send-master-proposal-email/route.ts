@@ -93,6 +93,15 @@ export async function POST(req: NextRequest) {
       updated_at: sentAt,
     }).eq("master_project_id", master.id).neq("proposal_status", "approved");
 
+    // Also advance the estimate's workflow status draft → sent, the same way
+    // the single-proposal send does (estimator sets status "sent" on send), so
+    // the estimates list badge reflects that the combined proposal went out.
+    // Scoped to drafts so accepted/rejected builds keep their status.
+    await supabase.from("estimates").update({
+      status: "sent",
+      updated_at: sentAt,
+    }).eq("master_project_id", master.id).eq("status", "draft");
+
     const { data: settings } = await supabase
       .from("settings")
       .select("biz_name,biz_phone,biz_email,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text,relic_profile")
