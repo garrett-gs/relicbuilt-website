@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
+import { NEXUS_CONNECTED } from "@/lib/axiom-site";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useEntity } from "@/components/axiom/EntityProvider";
@@ -258,6 +259,7 @@ export default function CustomersPage() {
       <div className="w-72 flex-shrink-0 flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-heading font-bold">Customers</h1>
+          {NEXUS_CONNECTED && (
           <button
             onClick={syncFromWallflower}
             disabled={syncing}
@@ -267,9 +269,10 @@ export default function CustomersPage() {
             <RefreshCw size={13} className={cn(syncing && "animate-spin")} />
             {syncing ? "Syncing…" : "Sync"}
           </button>
+          )}
         </div>
 
-        {syncResult && (
+        {NEXUS_CONNECTED && syncResult && (
           <p className="mb-3 text-xs text-muted bg-card border border-border px-3 py-2 leading-relaxed">
             {syncResult}
           </p>

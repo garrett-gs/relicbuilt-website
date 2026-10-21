@@ -8,6 +8,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { runWallflowerSync } from "@/lib/sync-wallflower";
 
 export async function GET(req: NextRequest) {
+  // Both Vercel projects share this vercel.json, so its crons would otherwise
+  // fire on both. Only the project with CRONS_ENABLED=true actually runs them.
+  if (process.env.CRONS_ENABLED !== "true") {
+    return Response.json({ skipped: true });
+  }
+
   const expected = process.env.CRON_SECRET;
   if (expected) {
     const auth = req.headers.get("authorization");

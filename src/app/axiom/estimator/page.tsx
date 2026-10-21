@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
+import { NEXUS_CONNECTED } from "@/lib/axiom-site";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAxiomRole } from "@/components/axiom/useAxiomRole";
@@ -3190,6 +3191,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
         ) : (
           <span className="text-[11px] text-muted">Mark <span className="text-foreground font-medium">Accepted</span> to send to the Projects pipeline.</span>
         )}
+        {NEXUS_CONNECTED && (
         <button
           onClick={sendToWR}
           disabled={wrSending}
@@ -3211,6 +3213,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
             <><ExternalLink size={14} /> Send to WR Nexus</>
           )}
         </button>
+        )}
         <button
           onClick={() => setChatOpen(true)}
           className={cn(

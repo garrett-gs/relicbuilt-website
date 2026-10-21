@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
+import { NEXUS_CONNECTED } from "@/lib/axiom-site";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
@@ -311,6 +312,20 @@ export default function WallflowerPage() {
       setOrders((prev) => prev.map((o) => (o.id === d.id ? { ...o, status } : o))); // optimistic
       updateOrder(d.id, { status }); // persists + notifies Nexus + reloads
     }
+  }
+
+  // The Work Orders inbox is a Nexus-only surface. On a deployment that isn't
+  // connected to a Nexus, the nav item is already hidden; this guard also
+  // blocks direct navigation to the route.
+  if (!NEXUS_CONNECTED) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-8rem)] text-center px-6">
+        <ClipboardList size={28} className="text-muted mb-3" />
+        <p className="text-sm text-muted max-w-sm">
+          Work Orders aren&apos;t available on this workspace.
+        </p>
+      </div>
+    );
   }
 
   return (

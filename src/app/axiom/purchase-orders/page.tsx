@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
+import { NEXUS_CONNECTED } from "@/lib/axiom-site";
 import { logActivity } from "@/lib/activity";
 import { syncInventoryUnitCost } from "@/lib/inventory-price-sync";
 import { useAuth } from "@/components/axiom/AuthProvider";
@@ -502,7 +503,7 @@ function OrdersTab() {
                     <span className="text-muted">Est. Tax: {money(total * TAX_RATE)}</span>
                     <span className="font-bold text-accent">Est. Total: {money(total + total * TAX_RATE)}</span>
                     {po.need_by_date && <span className="text-muted">Need by: {po.need_by_date}</span>}
-                    {po.work_order_id && (() => {
+                    {NEXUS_CONNECTED && po.work_order_id && (() => {
                       const wo = workOrders.find((w) => w.id === po.work_order_id);
                       return wo ? <span className="text-accent text-xs">Work Order: {wo.item_name}</span> : null;
                     })()}
@@ -900,7 +901,8 @@ function CreatePOModal({ vendors, workOrders, onSubmit, onClose }: {
                 )}
               </div>
 
-              {/* Work Order */}
+              {/* Work Order — only when connected to a Nexus (the list is empty otherwise) */}
+              {NEXUS_CONNECTED && (
               <div>
                 <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Work Order (project auto-links for inventory)</label>
                 <select
@@ -912,6 +914,7 @@ function CreatePOModal({ vendors, workOrders, onSubmit, onClose }: {
                   {workOrders.map((w) => <option key={w.id} value={w.id}>{w.item_name}</option>)}
                 </select>
               </div>
+              )}
 
               {/* Line items table */}
               <div>
@@ -1185,7 +1188,8 @@ function EditPOModal({ po, vendors, workOrders, onSubmit, onClose }: {
                 </select>
               </div>
 
-              {/* Project */}
+              {/* Work Order — only when connected to a Nexus (the list is empty otherwise) */}
+              {NEXUS_CONNECTED && (
               <div>
                 <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Work Order (project auto-links for inventory)</label>
                 <select value={workOrderId} onChange={(e) => setWorkOrderId(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">
@@ -1193,6 +1197,7 @@ function EditPOModal({ po, vendors, workOrders, onSubmit, onClose }: {
                   {workOrders.map((w) => <option key={w.id} value={w.id}>{w.item_name}</option>)}
                 </select>
               </div>
+              )}
 
               <div>
                 <div className="flex items-center justify-between mb-2">

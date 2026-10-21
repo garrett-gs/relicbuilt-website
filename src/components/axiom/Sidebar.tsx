@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import { useEntity } from "./EntityProvider";
 import { axiom } from "@/lib/axiom-supabase";
+import { NEXUS_CONNECTED } from "@/lib/axiom-site";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -103,7 +104,7 @@ const navSections = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { signOut, userEmail } = useAuth();
-  const { entity, setEntity, hasRelicAccess } = useEntity();
+  const { entity, setEntity, hasRelicAccess, locked } = useEntity();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAdminOrManager, setIsAdminOrManager] = useState(false);
   const [wfPendingCount, setWfPendingCount] = useState(0);
@@ -127,8 +128,11 @@ export default function Sidebar() {
       });
   }, [userEmail]);
 
-  // Poll for pending Wallflower work orders
+  // Poll for pending Wallflower work orders. Skip entirely when this
+  // deployment isn't connected to a Nexus — there are no work orders to count,
+  // and the table shouldn't be hit from the RELIC site.
   useEffect(() => {
+    if (!NEXUS_CONNECTED) return;
     function fetchCount() {
       axiom
         .from("wallflower_work_orders")
@@ -161,8 +165,9 @@ export default function Sidebar() {
         </Link>
       </div>
 
-      {/* Business entity switcher — only for members granted Relic access */}
-      {hasRelicAccess && (
+      {/* Business entity switcher — only for members granted Relic access, and
+          never on a deployment pinned to a single entity. */}
+      {hasRelicAccess && !locked && (
         <div className="px-3 pt-3">
           <div className="flex gap-1 bg-background border border-border rounded p-1">
             <button
@@ -197,6 +202,9 @@ export default function Sidebar() {
             {section.items
               .filter((item) => !("adminOnly" in item && item.adminOnly) || isAdminOrManager)
               .filter((item) => !("wallflowerOnly" in item && item.wallflowerOnly && entity === "relic"))
+              // Nexus-tied nav (Work Orders inbox) is hidden when this
+              // deployment isn't connected to a Nexus.
+              .filter((item) => !("wallflowerOnly" in item && item.wallflowerOnly && !NEXUS_CONNECTED))
               .map((item) => {
               const active = pathname === item.href;
               const isSub = "sub" in item && item.sub;

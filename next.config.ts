@@ -20,13 +20,27 @@ const nextConfig: NextConfig = {
   // /axiom/parts moved to /axiom/parts-studio when the tool got its own
   // top-level nav section. Redirect old bookmarks so nobody hits a 404.
   async redirects() {
-    return [
+    const redirects = [
       {
         source: "/axiom/parts",
         destination: "/axiom/parts-studio",
         permanent: true,
       },
     ];
+
+    // Wallflower site only (axiom.wallflower-relic.com): the public marketing
+    // pages belong to relicbuilt.com, so send them to the Axiom dashboard.
+    // Temporary (307) so the method is preserved and nothing is cached — and
+    // so RELIC / local dev, where the var is unset, are never affected.
+    // Every other route (/build, /proposal, /approve, /pay, /client, /api, …)
+    // must keep working on both sites, so it is deliberately not listed here.
+    if (process.env.NEXT_PUBLIC_AXIOM_ENTITY === "wallflower_relic") {
+      for (const source of ["/", "/about", "/shop", "/contact", "/work"]) {
+        redirects.push({ source, destination: "/axiom/dashboard", permanent: false });
+      }
+    }
+
+    return redirects;
   },
 };
 
