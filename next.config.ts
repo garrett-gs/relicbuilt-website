@@ -20,7 +20,12 @@ const nextConfig: NextConfig = {
   // /axiom/parts moved to /axiom/parts-studio when the tool got its own
   // top-level nav section. Redirect old bookmarks so nobody hits a 404.
   async redirects() {
-    const redirects = [
+    const redirects: {
+      source: string;
+      destination: string;
+      permanent: boolean;
+      has?: { type: "host"; value: string }[];
+    }[] = [
       {
         source: "/axiom/parts",
         destination: "/axiom/parts-studio",
@@ -28,16 +33,34 @@ const nextConfig: NextConfig = {
       },
     ];
 
-    // Wallflower site only (axiom.wallflower-relic.com): the public marketing
-    // pages belong to relicbuilt.com, so send them to the Axiom dashboard.
-    // Temporary (307) so the method is preserved and nothing is cached — and
-    // so RELIC / local dev, where the var is unset, are never affected.
+    // The public marketing pages that should hand off to the Axiom dashboard.
     // Every other route (/build, /proposal, /approve, /pay, /client, /api, …)
-    // must keep working on both sites, so it is deliberately not listed here.
+    // must keep working, so it is deliberately not listed here.
+    const marketingRoutes = ["/", "/about", "/shop", "/contact", "/work"];
+
+    // Wallflower site (axiom.wallflower-relic.com): the whole deployment is
+    // locked to Wallflower, so the marketing pages (which belong to
+    // relicbuilt.com) redirect to the dashboard. Temporary (307) so the method
+    // is preserved and nothing is cached. Entity-gated, so RELIC / local dev
+    // (where the var is unset) are never affected.
     if (process.env.NEXT_PUBLIC_AXIOM_ENTITY === "wallflower_relic") {
-      for (const source of ["/", "/about", "/shop", "/contact", "/work"]) {
+      for (const source of marketingRoutes) {
         redirects.push({ source, destination: "/axiom/dashboard", permanent: false });
       }
+    }
+
+    // RELIC site: axiom.relicbuilt.com is the Axiom entry point, but it shares
+    // the RELIC deployment with the relicbuilt.com marketing site — so this is
+    // host-gated, not entity-gated: only requests arriving on axiom.relicbuilt.com
+    // redirect to the dashboard; relicbuilt.com keeps serving marketing. Inert
+    // on the Wallflower deployment and local dev, where that host never occurs.
+    for (const source of marketingRoutes) {
+      redirects.push({
+        source,
+        has: [{ type: "host", value: "axiom.relicbuilt.com" }],
+        destination: "/axiom/dashboard",
+        permanent: false,
+      });
     }
 
     return redirects;
