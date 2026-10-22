@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore, R
 import { axiom } from "@/lib/axiom-supabase";
 import { useAuth } from "./AuthProvider";
 import { TeamMember, BusinessEntity, RelicProfile } from "@/types/axiom";
-import { SITE_ENTITY, NEXUS_CONNECTED } from "@/lib/axiom-site";
+import { SITE_ENTITY, NEXUS_CONNECTED, isOwnerEmail } from "@/lib/axiom-site";
 
 /**
  * Which business entity the app is currently scoped to.
@@ -86,6 +86,12 @@ export function EntityProvider({ children }: { children: ReactNode }) {
       setAccessLoading(false);
       return;
     }
+    // Break-glass: a configured owner always has access, independent of the
+    // editable roster — so a typo in Settings (or a failed settings read) can
+    // never lock an owner out of their own RELIC site. Set it up front so it
+    // holds even if the fetch below errors.
+    const owner = isOwnerEmail(userEmail);
+    if (owner) setHasRelicAccess(true);
     let active = true;
     setAccessLoading(true);
     axiom.from("settings").select("team_members, accent_color, biz_name, biz_email, nexus_connected, relic_profile").limit(1).single().then(({ data }) => {
@@ -94,7 +100,7 @@ export function EntityProvider({ children }: { children: ReactNode }) {
       const me = (data?.team_members || []).find(
         (m: TeamMember) => m.email?.toLowerCase() === userEmail.toLowerCase()
       );
-      setHasRelicAccess(!!me && (me.role === "superadmin" || me.relic_access === true));
+      setHasRelicAccess(owner || (!!me && (me.role === "superadmin" || me.relic_access === true)));
       setAccessLoading(false);
     });
     return () => { active = false; };

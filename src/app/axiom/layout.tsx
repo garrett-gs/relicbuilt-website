@@ -10,7 +10,7 @@ import AutoUpdateOverlay from "@/components/axiom/AutoUpdateOverlay";
 import { SITE_ENTITY } from "@/lib/axiom-site";
 
 function AxiomShell({ children }: { children: React.ReactNode }) {
-  const { session, loading, signOut } = useAuth();
+  const { session, loading, signOut, userEmail } = useAuth();
   const { accessDenied, loading: accessLoading } = useEntity();
   const pathname = usePathname();
 
@@ -49,8 +49,11 @@ function AxiomShell({ children }: { children: React.ReactNode }) {
         <h1 className="text-lg font-heading font-bold text-foreground mb-2">
           This is the RELIC workspace.
         </h1>
-        <p className="text-sm text-muted mb-6 max-w-sm">
-          Your account doesn&apos;t have RELIC access.
+        <p className="text-sm text-muted mb-2 max-w-sm">
+          {userEmail ? <>You&apos;re signed in as <span className="text-foreground">{userEmail}</span>, which doesn&apos;t have RELIC access.</> : "Your account doesn't have RELIC access."}
+        </p>
+        <p className="text-xs text-muted/70 mb-6 max-w-sm">
+          Sign out and sign back in with your RELIC account, or ask an owner to grant this address access in Settings.
         </p>
         <button
           onClick={signOut}
