@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, ReactNode } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { useAuth } from "./AuthProvider";
-import { TeamMember, BusinessEntity } from "@/types/axiom";
+import { TeamMember, BusinessEntity, RelicProfile } from "@/types/axiom";
 import { SITE_ENTITY } from "@/lib/axiom-site";
 
 /**
@@ -50,6 +50,8 @@ interface EntityContextType {
   locked: boolean;                 // deployment is pinned to SITE_ENTITY (no switcher)
   accessDenied: boolean;           // RELIC site + signed-in user without Relic access
   loading: boolean;                // the Relic-access check is still resolving
+  brandName: string;               // the entity's business name, from settings
+  accent: string;                  // the entity's accent color, from settings
 }
 
 const EntityContext = createContext<EntityContextType | null>(null);
@@ -61,6 +63,12 @@ export function EntityProvider({ children }: { children: ReactNode }) {
   // resolves, instead of flashing the access-denied screen at a user who
   // actually has access.
   const [accessLoading, setAccessLoading] = useState(true);
+  // Business identity (name + accent) from settings, resolved per entity below.
+  const [settingsRow, setSettingsRow] = useState<{
+    accent_color?: string;
+    biz_name?: string;
+    relic_profile?: RelicProfile | null;
+  } | null>(null);
 
   const stored = useSyncExternalStore(subscribe, readStored, () => "wallflower_relic" as BusinessEntity);
 
@@ -76,8 +84,9 @@ export function EntityProvider({ children }: { children: ReactNode }) {
     }
     let active = true;
     setAccessLoading(true);
-    axiom.from("settings").select("team_members").limit(1).single().then(({ data }) => {
+    axiom.from("settings").select("team_members, accent_color, biz_name, relic_profile").limit(1).single().then(({ data }) => {
       if (!active) return;
+      setSettingsRow(data as typeof settingsRow);
       const me = (data?.team_members || []).find(
         (m: TeamMember) => m.email?.toLowerCase() === userEmail.toLowerCase()
       );
@@ -97,13 +106,27 @@ export function EntityProvider({ children }: { children: ReactNode }) {
   // the check has settled) rather than shown the Wallflower side.
   const accessDenied = SITE_ENTITY === "relic" && !accessLoading && !hasRelicAccess;
 
-  // Flag the document so CSS can swing the app's accent to gold in Relic mode.
+  // Per-entity business identity, from settings (falls back to the defaults
+  // until settings load). The accent drives the whole app's --accent token
+  // (buttons, highlights, borders) so each business can theme its workspace.
+  const brandName =
+    entity === "relic"
+      ? settingsRow?.relic_profile?.name || "RELIC"
+      : settingsRow?.biz_name || "Wallflower RELIC";
+  const accent =
+    entity === "relic"
+      ? settingsRow?.relic_profile?.accent_color || "#b8963c"
+      : settingsRow?.accent_color || "#5b642e";
+
+  // Stamp data-entity (for any entity-specific CSS) and drive --accent from the
+  // business's chosen color so the UI recolors to match.
   useEffect(() => {
     const el = document.documentElement;
     if (entity === "relic") el.setAttribute("data-entity", "relic");
     else el.removeAttribute("data-entity");
+    el.style.setProperty("--accent", accent);
     return () => el.removeAttribute("data-entity");
-  }, [entity]);
+  }, [entity, accent]);
 
   const setEntity = (e: BusinessEntity) => {
     if (locked) return;                       // switcher disabled on a pinned site
@@ -113,7 +136,7 @@ export function EntityProvider({ children }: { children: ReactNode }) {
 
   return (
     <EntityContext.Provider
-      value={{ entity, setEntity, hasRelicAccess, locked, accessDenied, loading: accessLoading }}
+      value={{ entity, setEntity, hasRelicAccess, locked, accessDenied, loading: accessLoading, brandName, accent }}
     >
       {children}
     </EntityContext.Provider>

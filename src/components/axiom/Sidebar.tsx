@@ -103,7 +103,7 @@ const navSections = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { signOut, userEmail } = useAuth();
-  const { entity, setEntity, hasRelicAccess, locked } = useEntity();
+  const { entity, setEntity, hasRelicAccess, locked, brandName } = useEntity();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAdminOrManager, setIsAdminOrManager] = useState(false);
   const [wfPendingCount, setWfPendingCount] = useState(0);
@@ -158,8 +158,15 @@ export default function Sidebar() {
             alt="Axiom by Relicon"
             className="h-7 w-7 shrink-0 object-contain"
           />
-          <span className="text-lg font-heading font-bold tracking-wide text-foreground">
-            Axiom
+          <span className="flex flex-col leading-tight min-w-0">
+            <span className="text-lg font-heading font-bold tracking-wide text-foreground">
+              Axiom
+            </span>
+            {brandName && (
+              <span className="text-[11px] text-muted font-medium tracking-wide truncate">
+                {brandName}
+              </span>
+            )}
           </span>
         </Link>
       </div>
