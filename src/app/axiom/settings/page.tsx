@@ -187,8 +187,8 @@ export default function SettingsPage() {
           {isSuperAdmin && (
             <div className="pt-6 mt-6 border-t border-border space-y-4">
               <div>
-                <h3 className="text-sm font-heading font-bold text-foreground">Relic Entity — Invoice Identity</h3>
-                <p className="text-xs text-muted mt-0.5">Branding for documents and email created under the separate Relic entity. Blank fields fall back to the Relic name.</p>
+                <h3 className="text-sm font-heading font-bold text-foreground">Relic Entity — Branding</h3>
+                <p className="text-xs text-muted mt-0.5">Branding for the RELIC workspace: the name shown under Axiom, the accent color that themes the app, and the logo/identity on RELIC documents &amp; email. Blank fields fall back to the defaults.</p>
               </div>
               <Field label="Business Name" value={settings.relic_profile?.name || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), name: v })} />
               <Field label="Email" value={settings.relic_profile?.email || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), email: v })} type="email" />
