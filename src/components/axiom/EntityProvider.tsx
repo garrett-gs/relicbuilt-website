@@ -51,6 +51,7 @@ interface EntityContextType {
   accessDenied: boolean;           // RELIC site + signed-in user without Relic access
   loading: boolean;                // the Relic-access check is still resolving
   brandName: string;               // the entity's business name, from settings
+  brandEmail: string;              // the entity's business email, from settings
   accent: string;                  // the entity's accent color, from settings
   nexusConnected: boolean;         // whether this workspace is linked to Nexus
 }
@@ -68,6 +69,7 @@ export function EntityProvider({ children }: { children: ReactNode }) {
   const [settingsRow, setSettingsRow] = useState<{
     accent_color?: string;
     biz_name?: string;
+    biz_email?: string;
     nexus_connected?: boolean;
     relic_profile?: RelicProfile | null;
   } | null>(null);
@@ -86,7 +88,7 @@ export function EntityProvider({ children }: { children: ReactNode }) {
     }
     let active = true;
     setAccessLoading(true);
-    axiom.from("settings").select("team_members, accent_color, biz_name, nexus_connected, relic_profile").limit(1).single().then(({ data }) => {
+    axiom.from("settings").select("team_members, accent_color, biz_name, biz_email, nexus_connected, relic_profile").limit(1).single().then(({ data }) => {
       if (!active) return;
       setSettingsRow(data as typeof settingsRow);
       const me = (data?.team_members || []).find(
@@ -115,6 +117,10 @@ export function EntityProvider({ children }: { children: ReactNode }) {
     entity === "relic"
       ? settingsRow?.relic_profile?.name || "RELIC"
       : settingsRow?.biz_name || "Wallflower RELIC";
+  // Business contact email from settings; falls back to the signed-in user's
+  // email until the business email is set.
+  const brandEmail =
+    (entity === "relic" ? settingsRow?.relic_profile?.email : settingsRow?.biz_email) || userEmail || "";
   const accent =
     entity === "relic"
       ? settingsRow?.relic_profile?.accent_color || "#b8963c"
@@ -143,7 +149,7 @@ export function EntityProvider({ children }: { children: ReactNode }) {
 
   return (
     <EntityContext.Provider
-      value={{ entity, setEntity, hasRelicAccess, locked, accessDenied, loading: accessLoading, brandName, accent, nexusConnected }}
+      value={{ entity, setEntity, hasRelicAccess, locked, accessDenied, loading: accessLoading, brandName, brandEmail, accent, nexusConnected }}
     >
       {children}
     </EntityContext.Provider>

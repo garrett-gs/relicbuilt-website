@@ -102,7 +102,7 @@ const navSections = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { signOut, userEmail } = useAuth();
-  const { entity, setEntity, hasRelicAccess, locked, brandName, nexusConnected } = useEntity();
+  const { entity, setEntity, hasRelicAccess, locked, brandName, brandEmail, nexusConnected } = useEntity();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAdminOrManager, setIsAdminOrManager] = useState(false);
   const [wfPendingCount, setWfPendingCount] = useState(0);
@@ -261,7 +261,7 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="px-5 py-4 border-t border-border">
-        <p className="text-xs text-muted truncate mb-2">{userEmail}</p>
+        <p className="text-xs text-muted truncate mb-2">{brandEmail}</p>
         <button
           onClick={signOut}
           className="flex items-center gap-2 text-xs text-muted hover:text-foreground transition-colors"
