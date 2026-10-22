@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
-import { NEXUS_CONNECTED } from "@/lib/axiom-site";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useEntity } from "@/components/axiom/EntityProvider";
@@ -29,7 +28,7 @@ const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
 
 export default function CustomersPage() {
   const { userEmail } = useAuth();
-  const { entity } = useEntity();
+  const { entity, nexusConnected } = useEntity();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
@@ -259,7 +258,7 @@ export default function CustomersPage() {
       <div className="w-72 flex-shrink-0 flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-heading font-bold">Customers</h1>
-          {NEXUS_CONNECTED && (
+          {nexusConnected && (
           <button
             onClick={syncFromWallflower}
             disabled={syncing}
@@ -272,7 +271,7 @@ export default function CustomersPage() {
           )}
         </div>
 
-        {NEXUS_CONNECTED && syncResult && (
+        {nexusConnected && syncResult && (
           <p className="mb-3 text-xs text-muted bg-card border border-border px-3 py-2 leading-relaxed">
             {syncResult}
           </p>

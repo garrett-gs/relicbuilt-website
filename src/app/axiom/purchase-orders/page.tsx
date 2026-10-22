@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
-import { NEXUS_CONNECTED } from "@/lib/axiom-site";
 import { logActivity } from "@/lib/activity";
 import { syncInventoryUnitCost } from "@/lib/inventory-price-sync";
 import { useAuth } from "@/components/axiom/AuthProvider";
@@ -200,7 +199,7 @@ interface SimpleWorkOrder { id: string; item_name: string }
 
 function OrdersTab() {
   const { userEmail } = useAuth();
-  const { entity } = useEntity();
+  const { entity, nexusConnected } = useEntity();
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [projects, setProjects] = useState<SimpleProject[]>([]);
@@ -503,7 +502,7 @@ function OrdersTab() {
                     <span className="text-muted">Est. Tax: {money(total * TAX_RATE)}</span>
                     <span className="font-bold text-accent">Est. Total: {money(total + total * TAX_RATE)}</span>
                     {po.need_by_date && <span className="text-muted">Need by: {po.need_by_date}</span>}
-                    {NEXUS_CONNECTED && po.work_order_id && (() => {
+                    {nexusConnected && po.work_order_id && (() => {
                       const wo = workOrders.find((w) => w.id === po.work_order_id);
                       return wo ? <span className="text-accent text-xs">Work Order: {wo.item_name}</span> : null;
                     })()}
@@ -807,6 +806,7 @@ function CreatePOModal({ vendors, workOrders, onSubmit, onClose }: {
   onSubmit: (vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, workOrderId?: string) => void;
   onClose: () => void;
 }) {
+  const { nexusConnected } = useEntity();
   const [vendorId, setVendorId] = useState("");
   const [vendorName, setVendorName] = useState("");
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
@@ -902,7 +902,7 @@ function CreatePOModal({ vendors, workOrders, onSubmit, onClose }: {
               </div>
 
               {/* Work Order — only when connected to a Nexus (the list is empty otherwise) */}
-              {NEXUS_CONNECTED && (
+              {nexusConnected && (
               <div>
                 <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Work Order (project auto-links for inventory)</label>
                 <select
@@ -1089,6 +1089,7 @@ function EditPOModal({ po, vendors, workOrders, onSubmit, onClose }: {
   onSubmit: (vendorId: string, vendorName: string, lineItems: POLineItem[], notes: string, needByDate: string, deliveryMethod: string, deliveryDate: string, shipToAddress: string, sidemark: string, workOrderId?: string) => void;
   onClose: () => void;
 }) {
+  const { nexusConnected } = useEntity();
   const [vendorId, setVendorId] = useState(po.vendor_id || "");
   const [vendorName, setVendorName] = useState(po.vendor_name || "");
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
@@ -1189,7 +1190,7 @@ function EditPOModal({ po, vendors, workOrders, onSubmit, onClose }: {
               </div>
 
               {/* Work Order — only when connected to a Nexus (the list is empty otherwise) */}
-              {NEXUS_CONNECTED && (
+              {nexusConnected && (
               <div>
                 <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Work Order (project auto-links for inventory)</label>
                 <select value={workOrderId} onChange={(e) => setWorkOrderId(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">

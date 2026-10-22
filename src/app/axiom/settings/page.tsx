@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
-import { SITE_ENTITY } from "@/lib/axiom-site";
+import { SITE_ENTITY, NEXUS_CONNECTED } from "@/lib/axiom-site";
 import { Settings, TeamMember } from "@/types/axiom";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
@@ -152,6 +152,14 @@ export default function SettingsPage() {
       setSaved(false);
     }
   };
+  // Nexus connection toggle (per site). Until an admin sets it explicitly, the
+  // effective state is the build-time NEXUS_CONNECTED default for this deploy.
+  const nexusStored = isRelicSite ? rp.nexus_connected : settings.nexus_connected;
+  const nexusOn = nexusStored ?? NEXUS_CONNECTED;
+  const setNexus = (on: boolean) => {
+    if (isRelicSite) updateField("relic_profile", { ...rp, nexus_connected: on });
+    else updateField("nexus_connected", on);
+  };
   // Upload a logo PNG → stored in the `branding` bucket, its URL saved on the
   // identity's logo field (used on documents & email).
   async function handleLogoUpload(file: File) {
@@ -259,6 +267,32 @@ export default function SettingsPage() {
             </div>
             <p className="text-xs text-muted mt-1">Shown on your proposals, invoices &amp; email. PNG works best; max 5&nbsp;MB.</p>
           </div>
+
+          {isAdmin && (
+            <div className="pt-6 mt-6 border-t border-border">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-heading font-bold text-foreground">Nexus Connection</h3>
+                  <p className="text-xs text-muted mt-0.5 max-w-sm">Link this workspace to a Nexus rental side — turns on Work Orders, Send&nbsp;to&nbsp;Nexus, and sync. Leave off if this business doesn&apos;t use the rental side.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNexus(!nexusOn)}
+                  aria-pressed={nexusOn}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors mt-1",
+                    nexusOn ? "bg-accent" : "bg-border"
+                  )}
+                >
+                  <span className={cn(
+                    "inline-block h-4 w-4 rounded-full bg-white shadow transition-transform",
+                    nexusOn ? "translate-x-6" : "translate-x-1"
+                  )} />
+                </button>
+              </div>
+              <p className="text-xs text-muted mt-2">{nexusOn ? "Connected — Nexus features are available in this workspace." : "Not connected — Nexus features are hidden."}</p>
+            </div>
+          )}
         </div>
       )}
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
-import { NEXUS_CONNECTED } from "@/lib/axiom-site";
+import { useEntity } from "@/components/axiom/EntityProvider";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
@@ -102,6 +102,7 @@ function formatElapsed(clockIn: string, nowMs: number) {
 
 export default function WallflowerPage() {
   const { userEmail } = useAuth();
+  const { nexusConnected } = useEntity();
   const [orders, setOrders] = useState<WallflowerWorkOrder[]>([]);
   const [selected, setSelected] = useState<WallflowerWorkOrder | null>(null);
   const [drawerEstimateId, setDrawerEstimateId] = useState<string | null>(null);
@@ -317,7 +318,7 @@ export default function WallflowerPage() {
   // The Work Orders inbox is a Nexus-only surface. On a deployment that isn't
   // connected to a Nexus, the nav item is already hidden; this guard also
   // blocks direct navigation to the route.
-  if (!NEXUS_CONNECTED) {
+  if (!nexusConnected) {
     return (
       <div className="flex flex-col items-center justify-center h-[calc(100vh-8rem)] text-center px-6">
         <ClipboardList size={28} className="text-muted mb-3" />

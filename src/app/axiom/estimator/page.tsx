@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
-import { NEXUS_CONNECTED } from "@/lib/axiom-site";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAxiomRole } from "@/components/axiom/useAxiomRole";
@@ -834,6 +833,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   onDelete: () => void;
 }) {
   const { userEmail: detailUserEmail } = useAuth();
+  const { nexusConnected } = useEntity();
   const [customerId, setCustomerId] = useState(estimate.customer_id || "");
   const [customerName, setCustomerName] = useState("");
   // Flips true the moment the user picks or clears the Customer by hand. Once
@@ -3191,7 +3191,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
         ) : (
           <span className="text-[11px] text-muted">Mark <span className="text-foreground font-medium">Accepted</span> to send to the Projects pipeline.</span>
         )}
-        {NEXUS_CONNECTED && (
+        {nexusConnected && (
         <button
           onClick={sendToWR}
           disabled={wrSending}

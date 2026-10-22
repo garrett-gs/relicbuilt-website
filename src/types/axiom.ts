@@ -661,6 +661,8 @@ export interface RelicProfile {
   from_email?: string;
   accent_color?: string;
   terms?: string;
+  /** Whether this (RELIC) workspace is connected to a Nexus rental side. */
+  nexus_connected?: boolean;
 }
 
 export interface Settings {
@@ -673,6 +675,9 @@ export interface Settings {
   biz_state?: string;
   biz_zip?: string;
   biz_website?: string;
+  /** Whether this (default/Wallflower) workspace is connected to a Nexus
+   *  rental side. Admin-toggleable; falls back to the NEXUS_CONNECTED env. */
+  nexus_connected?: boolean;
   logo_url?: string;
   /** Dormant: former per-entity sidebar logo (sidebar now shows the Axiom
    *  product mark). Kept so existing rows don't error. */

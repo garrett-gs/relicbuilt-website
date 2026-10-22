@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "./AuthProvider";
 import { useEntity } from "./EntityProvider";
 import { axiom } from "@/lib/axiom-supabase";
-import { NEXUS_CONNECTED } from "@/lib/axiom-site";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -103,7 +102,7 @@ const navSections = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { signOut, userEmail } = useAuth();
-  const { entity, setEntity, hasRelicAccess, locked, brandName } = useEntity();
+  const { entity, setEntity, hasRelicAccess, locked, brandName, nexusConnected } = useEntity();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAdminOrManager, setIsAdminOrManager] = useState(false);
   const [wfPendingCount, setWfPendingCount] = useState(0);
@@ -131,7 +130,7 @@ export default function Sidebar() {
   // deployment isn't connected to a Nexus — there are no work orders to count,
   // and the table shouldn't be hit from the RELIC site.
   useEffect(() => {
-    if (!NEXUS_CONNECTED) return;
+    if (!nexusConnected) return;
     function fetchCount() {
       axiom
         .from("wallflower_work_orders")
@@ -144,7 +143,7 @@ export default function Sidebar() {
     fetchCount();
     const interval = setInterval(fetchCount, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [nexusConnected]);
 
   const nav = (
     <>
@@ -209,8 +208,8 @@ export default function Sidebar() {
               .filter((item) => !("adminOnly" in item && item.adminOnly) || isAdminOrManager)
               .filter((item) => !("wallflowerOnly" in item && item.wallflowerOnly && entity === "relic"))
               // Nexus-tied nav (Work Orders inbox) is hidden when this
-              // deployment isn't connected to a Nexus.
-              .filter((item) => !("wallflowerOnly" in item && item.wallflowerOnly && !NEXUS_CONNECTED))
+              // workspace isn't connected to a Nexus.
+              .filter((item) => !("wallflowerOnly" in item && item.wallflowerOnly && !nexusConnected))
               .map((item) => {
               const active = pathname === item.href;
               const isSub = "sub" in item && item.sub;

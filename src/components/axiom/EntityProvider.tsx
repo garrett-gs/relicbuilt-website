@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore, R
 import { axiom } from "@/lib/axiom-supabase";
 import { useAuth } from "./AuthProvider";
 import { TeamMember, BusinessEntity, RelicProfile } from "@/types/axiom";
-import { SITE_ENTITY } from "@/lib/axiom-site";
+import { SITE_ENTITY, NEXUS_CONNECTED } from "@/lib/axiom-site";
 
 /**
  * Which business entity the app is currently scoped to.
@@ -52,6 +52,7 @@ interface EntityContextType {
   loading: boolean;                // the Relic-access check is still resolving
   brandName: string;               // the entity's business name, from settings
   accent: string;                  // the entity's accent color, from settings
+  nexusConnected: boolean;         // whether this workspace is linked to Nexus
 }
 
 const EntityContext = createContext<EntityContextType | null>(null);
@@ -67,6 +68,7 @@ export function EntityProvider({ children }: { children: ReactNode }) {
   const [settingsRow, setSettingsRow] = useState<{
     accent_color?: string;
     biz_name?: string;
+    nexus_connected?: boolean;
     relic_profile?: RelicProfile | null;
   } | null>(null);
 
@@ -84,7 +86,7 @@ export function EntityProvider({ children }: { children: ReactNode }) {
     }
     let active = true;
     setAccessLoading(true);
-    axiom.from("settings").select("team_members, accent_color, biz_name, relic_profile").limit(1).single().then(({ data }) => {
+    axiom.from("settings").select("team_members, accent_color, biz_name, nexus_connected, relic_profile").limit(1).single().then(({ data }) => {
       if (!active) return;
       setSettingsRow(data as typeof settingsRow);
       const me = (data?.team_members || []).find(
@@ -117,6 +119,11 @@ export function EntityProvider({ children }: { children: ReactNode }) {
     entity === "relic"
       ? settingsRow?.relic_profile?.accent_color || "#b8963c"
       : settingsRow?.accent_color || "#5b642e";
+  // Nexus link is a per-site setting; until an admin sets it, fall back to the
+  // build-time NEXUS_CONNECTED default for this deployment.
+  const nexusStored =
+    entity === "relic" ? settingsRow?.relic_profile?.nexus_connected : settingsRow?.nexus_connected;
+  const nexusConnected = nexusStored ?? NEXUS_CONNECTED;
 
   // Stamp data-entity (for any entity-specific CSS) and drive --accent from the
   // business's chosen color so the UI recolors to match.
@@ -136,7 +143,7 @@ export function EntityProvider({ children }: { children: ReactNode }) {
 
   return (
     <EntityContext.Provider
-      value={{ entity, setEntity, hasRelicAccess, locked, accessDenied, loading: accessLoading, brandName, accent }}
+      value={{ entity, setEntity, hasRelicAccess, locked, accessDenied, loading: accessLoading, brandName, accent, nexusConnected }}
     >
       {children}
     </EntityContext.Provider>
