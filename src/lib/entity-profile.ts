@@ -36,6 +36,9 @@ interface SettingsLike {
   biz_city?: string;
   biz_state?: string;
   biz_zip?: string;
+  biz_website?: string;
+  accent_color?: string;
+  logo_url?: string;
   terms_text?: string;
   deposit_percent?: number;
   app_logo_url?: string;
@@ -109,13 +112,13 @@ export function resolveEntityProfile(
     city: s.biz_city,
     state: s.biz_state,
     zip: s.biz_zip,
-    website: "wallflower-relic.com",
-    logoUrl: "https://axiom.relicbuilt.com/wr-logo-black.png",
+    website: s.biz_website || "wallflower-relic.com",
+    logoUrl: s.logo_url || "https://axiom.relicbuilt.com/wr-logo-black.png",
     appLogoUrl: s.app_logo_url || "",
     footer: "Wallflower RELIC  ·  (402) 235-8179  ·  wallflower-relic.com",
     fromName: "Wallflower RELIC",
     fromEmail: DEFAULT_FROM_EMAIL,
-    accent: "#5b642e",     // Wallflower olive (unchanged)
+    accent: s.accent_color || "#5b642e",     // Wallflower default olive, now settings-driven
     onAccent: "#ffffff",   // white text on olive (unchanged)
     accentDark: "#454d23",
     invoiceBarBg: "#454d23",   // dark olive Items bar (unchanged)

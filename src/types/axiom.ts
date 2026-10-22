@@ -672,9 +672,10 @@ export interface Settings {
   biz_city?: string;
   biz_state?: string;
   biz_zip?: string;
+  biz_website?: string;
   logo_url?: string;
-  /** Square-ish logo shown in the Axiom sidebar header for the Wallflower
-   *  (default) entity. Falls back to the bundled emblem when unset. */
+  /** Dormant: former per-entity sidebar logo (sidebar now shows the Axiom
+   *  product mark). Kept so existing rows don't error. */
   app_logo_url?: string;
   accent_color: string;
   terms_text?: string;

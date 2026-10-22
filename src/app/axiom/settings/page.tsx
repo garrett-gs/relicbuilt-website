@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
+import { SITE_ENTITY } from "@/lib/axiom-site";
 import { Settings, TeamMember } from "@/types/axiom";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
@@ -25,6 +26,7 @@ export default function SettingsPage() {
   const [tab, setTab] = useState<Tab>("General");
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
 
   // "Add User (with login)" modal
   const [showAddUser, setShowAddUser] = useState(false);
@@ -116,6 +118,59 @@ export default function SettingsPage() {
 
   if (!settings) return <div className="text-muted animate-pulse">Loading settings...</div>;
 
+  // This deployment's own entity. Each site edits only its own business
+  // identity: the RELIC site writes to relic_profile, everyone else to the
+  // biz_* / settings fields. (Both live in one shared settings row, scoped by
+  // which deployment is editing.)
+  const isRelicSite = SITE_ENTITY === "relic";
+  const rp = settings.relic_profile || {};
+  type IdField = "name" | "email" | "phone" | "website" | "address" | "city" | "state" | "zip" | "accent" | "logo";
+  const BIZ_KEY: Record<IdField, keyof Settings> = {
+    name: "biz_name", email: "biz_email", phone: "biz_phone", website: "biz_website",
+    address: "biz_address", city: "biz_city", state: "biz_state", zip: "biz_zip", accent: "accent_color", logo: "logo_url",
+  };
+  const RP_KEY: Record<IdField, string> = {
+    name: "name", email: "email", phone: "phone", website: "website",
+    address: "address", city: "city", state: "state", zip: "zip", accent: "accent_color", logo: "logo_url",
+  };
+  const idVal = (f: IdField): string =>
+    isRelicSite
+      ? ((rp as Record<string, unknown>)[RP_KEY[f]] as string) ?? ""
+      : ((settings[BIZ_KEY[f]] as string | undefined) ?? "");
+  const idSet = (f: IdField, v: string) => {
+    if (isRelicSite) updateField("relic_profile", { ...rp, [RP_KEY[f]]: v });
+    else updateField(BIZ_KEY[f], v);
+  };
+  // Address autocomplete fills street + city/state/zip at once (must be a single
+  // write so the relic_profile branch doesn't clobber its own fields).
+  const idSetAddress = (r: { street: string; city: string; state: string; zip: string }) => {
+    if (isRelicSite) {
+      updateField("relic_profile", { ...rp, address: r.street, city: r.city, state: r.state, zip: r.zip });
+    } else {
+      setSettings((s) => (s ? { ...s, biz_address: r.street, biz_city: r.city, biz_state: r.state, biz_zip: r.zip } : s));
+      setDirty(true);
+      setSaved(false);
+    }
+  };
+  // Upload a logo PNG → stored in the `branding` bucket, its URL saved on the
+  // identity's logo field (used on documents & email).
+  async function handleLogoUpload(file: File) {
+    setLogoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("entity", SITE_ENTITY ?? "wallflower_relic");
+      const res = await fetch("/api/upload-logo", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Upload failed.");
+      idSet("logo", json.url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -138,26 +193,27 @@ export default function SettingsPage() {
 
       {tab === "General" && (
         <div className="space-y-4 max-w-lg">
-          <Field label="Business Name" value={settings.biz_name} onChange={(v) => updateField("biz_name", v)} />
-          <Field label="Email" value={settings.biz_email || ""} onChange={(v) => updateField("biz_email", v)} type="email" />
-          <Field label="Phone" value={settings.biz_phone || ""} onChange={(v) => updateField("biz_phone", formatPhone(v))} type="tel" placeholder="(###) ###-####" />
+          <div>
+            <h3 className="text-sm font-heading font-bold text-foreground">Business Identity</h3>
+            <p className="text-xs text-muted mt-0.5">Your business name, contact info, and accent — shown in this workspace and on your client-facing proposals, invoices &amp; email.</p>
+          </div>
+          <Field label="Business Name" value={idVal("name")} onChange={(v) => idSet("name", v)} />
+          <Field label="Email" value={idVal("email")} onChange={(v) => idSet("email", v)} type="email" />
+          <Field label="Phone" value={idVal("phone")} onChange={(v) => idSet("phone", formatPhone(v))} type="tel" placeholder="(###) ###-####" />
+          <Field label="Website" value={idVal("website")} onChange={(v) => idSet("website", v)} placeholder="yourbusiness.com" />
           <div>
             <label className="block text-xs text-muted mb-1">Street Address</label>
             <AddressAutocomplete
-              value={settings.biz_address || ""}
-              onChange={(v) => updateField("biz_address", v)}
-              onSelect={(r) => {
-                setSettings((s) => s ? { ...s, biz_address: r.street, biz_city: r.city, biz_state: r.state, biz_zip: r.zip } : s);
-                setDirty(true);
-                setSaved(false);
-              }}
+              value={idVal("address")}
+              onChange={(v) => idSet("address", v)}
+              onSelect={idSetAddress}
               className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-accent"
             />
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <Field label="City" value={settings.biz_city || ""} onChange={(v) => updateField("biz_city", v)} />
-            <Field label="State" value={settings.biz_state || ""} onChange={(v) => updateField("biz_state", v)} />
-            <Field label="ZIP" value={settings.biz_zip || ""} onChange={(v) => updateField("biz_zip", v)} />
+            <Field label="City" value={idVal("city")} onChange={(v) => idSet("city", v)} />
+            <Field label="State" value={idVal("state")} onChange={(v) => idSet("state", v)} />
+            <Field label="ZIP" value={idVal("zip")} onChange={(v) => idSet("zip", v)} />
           </div>
           <div>
             <label className="block text-xs text-muted mb-1">Mobile Receipt PIN</label>
@@ -172,55 +228,37 @@ export default function SettingsPage() {
             />
             <p className="text-xs text-muted mt-1">Used to access the Receipts page on mobile without a full login.</p>
           </div>
-          <Field label="Accent Color" value={settings.accent_color} onChange={(v) => updateField("accent_color", v)} />
+          <Field label="Accent Color" value={idVal("accent") || "#5b642e"} onChange={(v) => idSet("accent", v)} />
           <div className="flex gap-2 mt-2">
             {["#5b642e", "#b8963c", "#1e3a5f", "#3d5a3e", "#5a2d5a", "#8b1a1a", "#1a5a5a", "#2d3a6b", "#1a1a1a"].map((c) => (
               <button
                 key={c}
-                onClick={() => updateField("accent_color", c)}
-                className={cn("w-8 h-8 rounded border-2", settings.accent_color === c ? "border-foreground" : "border-transparent")}
+                onClick={() => idSet("accent", c)}
+                className={cn("w-8 h-8 rounded border-2", idVal("accent") === c ? "border-foreground" : "border-transparent")}
                 style={{ background: c }}
               />
             ))}
           </div>
 
-          {isSuperAdmin && (
-            <div className="pt-6 mt-6 border-t border-border space-y-4">
-              <div>
-                <h3 className="text-sm font-heading font-bold text-foreground">Relic Entity — Branding</h3>
-                <p className="text-xs text-muted mt-0.5">Branding for the RELIC workspace: the name shown under Axiom, the accent color that themes the app, and the logo/identity on RELIC documents &amp; email. Blank fields fall back to the defaults.</p>
-              </div>
-              <Field label="Business Name" value={settings.relic_profile?.name || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), name: v })} />
-              <Field label="Email" value={settings.relic_profile?.email || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), email: v })} type="email" />
-              <Field label="Phone" value={settings.relic_profile?.phone || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), phone: formatPhone(v) })} type="tel" placeholder="(###) ###-####" />
-              <Field label="Street Address" value={settings.relic_profile?.address || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), address: v })} />
-              <div className="grid grid-cols-3 gap-3">
-                <Field label="City" value={settings.relic_profile?.city || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), city: v })} />
-                <Field label="State" value={settings.relic_profile?.state || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), state: v })} />
-                <Field label="ZIP" value={settings.relic_profile?.zip || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), zip: v })} />
-              </div>
-              <Field label="Website" value={settings.relic_profile?.website || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), website: v })} placeholder="relic.com" />
-              <Field label="Logo URL" value={settings.relic_profile?.logo_url || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), logo_url: v })} placeholder="https://axiom.relicbuilt.com/logo-full.png" />
-              <div>
-                <label className="block text-xs text-muted mb-1">Accent Color (gold)</label>
-                <div className="flex items-center gap-2">
-                  <input type="color" value={settings.relic_profile?.accent_color || "#b8963c"} onChange={(e) => updateField("relic_profile", { ...(settings.relic_profile || {}), accent_color: e.target.value })} className="w-10 h-9 bg-background border border-border p-0.5 cursor-pointer" />
-                  <input value={settings.relic_profile?.accent_color || "#b8963c"} onChange={(e) => updateField("relic_profile", { ...(settings.relic_profile || {}), accent_color: e.target.value })} className="w-32 bg-background border border-border px-3 py-2 text-sm text-foreground font-mono" placeholder="#b8963c" />
-                </div>
-              </div>
-              <Field label="Footer Line" value={settings.relic_profile?.footer || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), footer: v })} placeholder="RELIC · (###) ###-#### · relic.com" />
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Email From Name" value={settings.relic_profile?.from_name || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), from_name: v })} placeholder="RELIC" />
-                <Field label="Email From Address" value={settings.relic_profile?.from_email || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), from_email: v })} placeholder="notifications@relicbuilt.com" />
-              </div>
-              <p className="text-xs text-muted">A custom From Address only sends once its domain is verified in Resend — otherwise leave it blank to send from the shared address under the Relic name.</p>
-              <div>
-                <label className="block text-xs text-muted mb-1">Terms &amp; Conditions</label>
-                <textarea value={settings.relic_profile?.terms || ""} onChange={(e) => updateField("relic_profile", { ...(settings.relic_profile || {}), terms: e.target.value })} rows={10} placeholder="These terms appear at the bottom of Relic proposals." className="w-full bg-background border border-border px-3 py-2 text-sm text-foreground font-mono leading-relaxed focus:outline-none focus:border-accent" />
-                <p className="text-xs text-muted mt-1">Shown on every Relic proposal. One point per line.</p>
-              </div>
+          <div>
+            <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Logo</label>
+            <div className="flex items-center gap-3 flex-wrap">
+              {idVal("logo") ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={idVal("logo")} alt="Business logo" className="h-10 w-auto max-w-[160px] object-contain bg-card border border-border rounded p-1" />
+              ) : (
+                <span className="text-xs text-muted">No logo yet</span>
+              )}
+              <label className={cn("inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold cursor-pointer border border-border bg-card hover:border-accent transition-colors", logoUploading && "opacity-60 pointer-events-none")}>
+                <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); e.target.value = ""; }} />
+                {logoUploading ? "Uploading…" : idVal("logo") ? "Replace PNG" : "Upload PNG"}
+              </label>
+              {idVal("logo") && (
+                <button onClick={() => idSet("logo", "")} className="text-xs text-muted hover:text-red-500">Remove</button>
+              )}
             </div>
-          )}
+            <p className="text-xs text-muted mt-1">Shown on your proposals, invoices &amp; email. PNG works best; max 5&nbsp;MB.</p>
+          </div>
         </div>
       )}
 
