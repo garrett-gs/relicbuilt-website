@@ -248,7 +248,7 @@ export async function POST(req: NextRequest) {
         const bizNameInternal = internalProfile.name;
         const internalAccent = internalProfile.accent;
         const internalOnAccent = internalProfile.onAccent;
-        const internalLogo = internalProfile.logoUrl || "https://relicbuilt.com/wr-logo-black.png";
+        const internalLogo = internalProfile.logoUrl || "https://axiom.relicbuilt.com/wr-logo-black.png";
         const paymentLine = estimate.entity === "relic"
           ? "The client approved this proposal. Open it in Axiom to proceed — the deposit is collected via the Stripe pay link."
           : "The client approved this proposal. Open it in Axiom to proceed — payment is handled in Nexus.";

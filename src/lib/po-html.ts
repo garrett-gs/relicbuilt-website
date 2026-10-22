@@ -54,7 +54,7 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false, profile?: En
   const bizName = profile?.name || "Wallflower RELIC";
   const logoSrc = profile
     ? (profile.logoUrl || "")
-    : (forEmail ? "https://relicbuilt.com/wr-logo-black.png" : "/wr-logo-black.png");
+    : (forEmail ? "https://axiom.relicbuilt.com/wr-logo-black.png" : "/wr-logo-black.png");
   const footer = profile?.footer || "Wallflower RELIC &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; wallflower-relic.com";
 
   return `

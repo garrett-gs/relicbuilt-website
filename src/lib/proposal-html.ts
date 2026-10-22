@@ -56,7 +56,7 @@ export function generateProposalHtml(
   const accent = biz.accent || "#5b642e";
   const accentDark = biz.accent_dark || "#454d23";
   const stripeColor = accentDark;
-  const logoUrl = biz.logo_url ?? "https://relicbuilt.com/wr-logo-black.png";
+  const logoUrl = biz.logo_url ?? "https://axiom.relicbuilt.com/wr-logo-black.png";
   const website = biz.website ?? "wallflower-relic.com";
 
   const quotedAmount = project.quoted_amount || 0;
@@ -311,7 +311,7 @@ export function generateEstimateProposalHtml({
   // the cover. Cover image is filtered out so it doesn't repeat.
   const coverImage = estimate.proposal_cover_image_url || "";
   const projectImages: string[] = (estimate.proposal_images || []).filter((u) => u !== coverImage);
-  const logoUrl = biz.logo_url ?? "https://relicbuilt.com/wr-logo-black.png";
+  const logoUrl = biz.logo_url ?? "https://axiom.relicbuilt.com/wr-logo-black.png";
   const accent = biz.accent || "#5b642e";
   const accentDark = biz.accent_dark || "#454d23";
 

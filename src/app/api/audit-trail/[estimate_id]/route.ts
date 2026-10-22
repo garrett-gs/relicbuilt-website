@@ -131,7 +131,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ estimate_id
     <!-- Header -->
     <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #5b642e;padding-bottom:20px;margin-bottom:32px;">
       <div>
-        <img src="https://relicbuilt.com/wr-logo-black.png" alt="${esc(bizName)}" style="height:36px;display:block;margin-bottom:8px;" />
+        <img src="https://axiom.relicbuilt.com/wr-logo-black.png" alt="${esc(bizName)}" style="height:36px;display:block;margin-bottom:8px;" />
         <p style="margin:0;font-size:11px;color:#666;line-height:1.5;">
           ${esc(bizName)}<br/>
           ${esc([settings?.biz_address, [settings?.biz_city, settings?.biz_state].filter(Boolean).join(", "), settings?.biz_zip].filter(Boolean).join(" · "))}<br/>

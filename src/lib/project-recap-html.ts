@@ -37,7 +37,7 @@ interface RecapData {
 
 export function generateProjectRecapHtml({ project, receipts, invoices, biz }: RecapData): string {
   const stripeColor = "#454d23";
-  const logoUrl = "https://relicbuilt.com/wr-logo-black.png";
+  const logoUrl = "https://axiom.relicbuilt.com/wr-logo-black.png";
   const addressLine2 = [biz.biz_city, biz.biz_state, biz.biz_zip].filter(Boolean).join(", ");
 
   const materials: Material[] = project.materials || [];

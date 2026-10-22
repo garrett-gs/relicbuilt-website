@@ -19,7 +19,7 @@ function depositEmailHtml(opts: {
   return `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
   <div style="padding:20px 32px;border-bottom:3px solid #5b642e;margin-bottom:0;">
-    <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style="height:40px;object-fit:contain;display:block;" />
+    <img src="https://axiom.relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style="height:40px;object-fit:contain;display:block;" />
   </div>
   <div style="padding:32px;">
     <h2 style="margin:0 0 6px;font-size:22px;color:#111;">Deposit Invoice</h2>
@@ -79,7 +79,7 @@ function adminNotifyHtml(opts: {
   return `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#222;">
   <div style="padding:16px 24px;border-bottom:3px solid #5b642e;margin-bottom:0;">
-    <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style="height:32px;object-fit:contain;display:block;" />
+    <img src="https://axiom.relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style="height:32px;object-fit:contain;display:block;" />
   </div>
   <div style="padding:24px;">
     <h2 style="margin:0 0 16px;font-size:18px;color:#111;">Proposal Approved</h2>

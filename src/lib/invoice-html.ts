@@ -34,7 +34,7 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
   const amountDue = balance > 0 ? balance : total;
 
   const bizName = profile?.name || "Wallflower RELIC";
-  const logoUrl = profile ? (profile.logoUrl || "") : "https://relicbuilt.com/wr-logo-black.png";
+  const logoUrl = profile ? (profile.logoUrl || "") : "https://axiom.relicbuilt.com/wr-logo-black.png";
   const website = profile ? (profile.website || "") : "wallflower-relic.com";
   const footer = profile?.footer || "Wallflower RELIC  ·  (402) 235-8179  ·  wallflower-relic.com";
   const accent = profile?.accent || "#5b642e";

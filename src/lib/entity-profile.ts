@@ -110,7 +110,7 @@ export function resolveEntityProfile(
     state: s.biz_state,
     zip: s.biz_zip,
     website: "wallflower-relic.com",
-    logoUrl: "https://relicbuilt.com/wr-logo-black.png",
+    logoUrl: "https://axiom.relicbuilt.com/wr-logo-black.png",
     appLogoUrl: s.app_logo_url || "",
     footer: "Wallflower RELIC  ·  (402) 235-8179  ·  wallflower-relic.com",
     fromName: "Wallflower RELIC",

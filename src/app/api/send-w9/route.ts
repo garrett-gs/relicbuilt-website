@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:600px;margin:0 auto;color:#222;background:#fff;">
   <div style="padding:20px 32px;border-bottom:3px solid #5b642e;">
-    <img src="https://relicbuilt.com/wr-logo-black.png" alt="${escape(bizName)}" style="height:36px;display:block;" />
+    <img src="https://axiom.relicbuilt.com/wr-logo-black.png" alt="${escape(bizName)}" style="height:36px;display:block;" />
   </div>
   <div style="padding:32px;">
     <h2 style="margin:0 0 18px;font-size:22px;color:#111;">Our W-9</h2>

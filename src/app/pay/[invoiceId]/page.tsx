@@ -54,7 +54,7 @@ export default function PayInvoicePage() {
   // Entity branding, defaulting to Wallflower RELIC until the invoice loads.
   const [brand, setBrand] = useState<Brand>({
     name: "Wallflower RELIC",
-    logoUrl: "https://relicbuilt.com/wr-logo-black.png",
+    logoUrl: "https://axiom.relicbuilt.com/wr-logo-black.png",
     phone: "(402) 235-8179",
     website: "wallflower-relic.com",
     accent: "#5b642e",

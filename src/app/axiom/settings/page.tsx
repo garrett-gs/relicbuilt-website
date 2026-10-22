@@ -200,7 +200,7 @@ export default function SettingsPage() {
                 <Field label="ZIP" value={settings.relic_profile?.zip || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), zip: v })} />
               </div>
               <Field label="Website" value={settings.relic_profile?.website || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), website: v })} placeholder="relic.com" />
-              <Field label="Logo URL" value={settings.relic_profile?.logo_url || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), logo_url: v })} placeholder="https://relicbuilt.com/logo-full.png" />
+              <Field label="Logo URL" value={settings.relic_profile?.logo_url || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), logo_url: v })} placeholder="https://axiom.relicbuilt.com/logo-full.png" />
               <div>
                 <label className="block text-xs text-muted mb-1">Accent Color (gold)</label>
                 <div className="flex items-center gap-2">

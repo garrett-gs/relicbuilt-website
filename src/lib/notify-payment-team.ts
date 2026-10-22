@@ -74,7 +74,7 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
     const bizName = profile.name;
     const accent = profile.accent;
     const onAccent = profile.onAccent;
-    const logoUrl = profile.logoUrl || "https://relicbuilt.com/wr-logo-black.png";
+    const logoUrl = profile.logoUrl || "https://axiom.relicbuilt.com/wr-logo-black.png";
     const origin = args.origin || "https://relicbuilt.com";
     const invoiceUrl = `${origin}/axiom/invoices`;
     const dateFormatted = new Date().toLocaleDateString("en-US", {

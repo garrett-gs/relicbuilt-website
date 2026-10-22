@@ -24,7 +24,7 @@ function buildHtml(opts: {
   return `
     <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111">
       <div style="background:#fff;padding:20px 32px;border-bottom:3px solid #5b642e;margin-bottom:24px">
-        <img src="https://relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style="height:36px;width:auto;display:block;" />
+        <img src="https://axiom.relicbuilt.com/wr-logo-black.png" alt="Wallflower RELIC" style="height:36px;width:auto;display:block;" />
       </div>
       <div style="padding:0 32px 32px">
         <h2 style="font-size:18px;margin:0 0 8px">${project_name}</h2>
