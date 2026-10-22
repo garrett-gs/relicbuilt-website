@@ -4,6 +4,27 @@ import "./globals.css";
 import SiteShell from "@/components/layout/SiteShell";
 import { CartProvider } from "@/components/shop/CartProvider";
 import PwaRegistrar from "@/components/layout/PwaRegistrar";
+import { SITE_ENTITY } from "@/lib/axiom-site";
+
+const IS_RELIC = SITE_ENTITY === "relic";
+
+// Per-deployment tab/title branding (see axiom-site.ts). The RELIC site shows
+// RELIC marks; the Wallflower (default) deployment keeps its historic metadata.
+const BRAND = IS_RELIC
+  ? {
+      name: "RELIC",
+      titleDefault: "RELIC · Axiom",
+      icon: "/relic-shield-gold.png",
+      themeColor: "#b8963c",
+      url: "https://axiom.relicbuilt.com",
+    }
+  : {
+      name: "Wallflower RELIC",
+      titleDefault: "Wallflower RELIC | Custom Woodworking & Metalworks",
+      icon: "/favicon.ico",
+      themeColor: "#5b642e",
+      url: "https://www.relicbuilt.com",
+    };
 
 const raleway = Raleway({
   variable: "--font-raleway",
@@ -18,8 +39,8 @@ const geistSans = Geist({
 
 export const metadata: Metadata = {
   title: {
-    default: "Wallflower RELIC | Custom Woodworking & Metalworks",
-    template: "%s | Wallflower RELIC",
+    default: BRAND.titleDefault,
+    template: `%s | ${BRAND.name}`,
   },
   description:
     "Custom woodworking and metalworks shop. We build with dedication to craftsmanship, purpose, and care. Residential and commercial projects.",
@@ -41,21 +62,27 @@ export const metadata: Metadata = {
     startupImage: ["/apple-touch-icon.png"],
   },
   // Relicon brass "A" icon set (see RELICON_APP_ICONS.md). Served from public/.
-  icons: {
-    icon: [
-      { url: "/favicon.ico", sizes: "any" },
-      { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
-      { url: "/favicon-16.png", type: "image/png", sizes: "16x16" },
-    ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
-    shortcut: ["/favicon.ico"],
-  },
+  icons: IS_RELIC
+    ? {
+        icon: [{ url: "/relic-shield-gold.png", type: "image/png" }],
+        apple: [{ url: "/relic-shield-gold.png" }],
+        shortcut: ["/relic-shield-gold.png"],
+      }
+    : {
+        icon: [
+          { url: "/favicon.ico", sizes: "any" },
+          { url: "/favicon-32.png", type: "image/png", sizes: "32x32" },
+          { url: "/favicon-16.png", type: "image/png", sizes: "16x16" },
+        ],
+        apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+        shortcut: ["/favicon.ico"],
+      },
   openGraph: {
-    title: "Wallflower RELIC | Custom Woodworking & Metalworks",
+    title: BRAND.titleDefault,
     description:
       "Custom woodworking and metalworks shop built on craftsmanship and care.",
-    url: "https://www.relicbuilt.com",
-    siteName: "Wallflower RELIC",
+    url: BRAND.url,
+    siteName: BRAND.name,
     type: "website",
   },
 };
@@ -63,7 +90,7 @@ export const metadata: Metadata = {
 // Pinned theme color matches the manifest accent so installed PWAs render
 // the status bar / title bar in RELIC gold instead of the default white.
 export const viewport: Viewport = {
-  themeColor: "#5b642e",
+  themeColor: BRAND.themeColor,
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
