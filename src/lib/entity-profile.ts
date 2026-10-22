@@ -16,6 +16,7 @@ export interface EntityProfile {
   zip?: string;
   website?: string;
   logoUrl?: string;   // empty → templates fall back to the name as text
+  appLogoUrl?: string; // sidebar header logo (empty → sidebar emblem fallback)
   footer: string;
   fromName: string;
   fromEmail: string;
@@ -37,6 +38,7 @@ interface SettingsLike {
   biz_zip?: string;
   terms_text?: string;
   deposit_percent?: number;
+  app_logo_url?: string;
   relic_profile?: RelicProfile | null;
 }
 
@@ -85,6 +87,7 @@ export function resolveEntityProfile(
       zip: rp.zip,
       website: rp.website || "",
       logoUrl: rp.logo_url || "",
+      appLogoUrl: rp.app_logo_url || "",
       footer,
       fromName: rp.from_name || name,
       fromEmail: rp.from_email || DEFAULT_FROM_EMAIL,
@@ -108,6 +111,7 @@ export function resolveEntityProfile(
     zip: s.biz_zip,
     website: "wallflower-relic.com",
     logoUrl: "https://relicbuilt.com/wr-logo-black.png",
+    appLogoUrl: s.app_logo_url || "",
     footer: "Wallflower RELIC  ·  (402) 235-8179  ·  wallflower-relic.com",
     fromName: "Wallflower RELIC",
     fromEmail: DEFAULT_FROM_EMAIL,

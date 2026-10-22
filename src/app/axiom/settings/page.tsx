@@ -184,6 +184,11 @@ export default function SettingsPage() {
             ))}
           </div>
 
+          <div>
+            <Field label="Sidebar Logo URL" value={settings.app_logo_url || ""} onChange={(v) => updateField("app_logo_url", v)} placeholder="https://.../logo.png" />
+            <p className="text-xs text-muted mt-1">Shown in the Axiom sidebar header on this workspace. A small square logo works best. Leave blank for the default emblem.</p>
+          </div>
+
           {isSuperAdmin && (
             <div className="pt-6 mt-6 border-t border-border space-y-4">
               <div>
@@ -201,6 +206,10 @@ export default function SettingsPage() {
               </div>
               <Field label="Website" value={settings.relic_profile?.website || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), website: v })} placeholder="relic.com" />
               <Field label="Logo URL" value={settings.relic_profile?.logo_url || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), logo_url: v })} placeholder="https://relicbuilt.com/logo-full.png" />
+              <div>
+                <Field label="Sidebar Logo URL" value={settings.relic_profile?.app_logo_url || ""} onChange={(v) => updateField("relic_profile", { ...(settings.relic_profile || {}), app_logo_url: v })} placeholder="https://relicbuilt.com/relic-emblem.png" />
+                <p className="text-xs text-muted mt-1">Shown in the Axiom sidebar header on the RELIC workspace. A small square logo works best. Leave blank for the default emblem.</p>
+              </div>
               <div>
                 <label className="block text-xs text-muted mb-1">Accent Color (gold)</label>
                 <div className="flex items-center gap-2">

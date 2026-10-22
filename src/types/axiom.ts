@@ -653,6 +653,9 @@ export interface RelicProfile {
   zip?: string;
   website?: string;
   logo_url?: string;
+  /** Square-ish logo shown in the Axiom sidebar header (distinct from the
+   *  horizontal logo_url used on documents). Falls back to the emblem. */
+  app_logo_url?: string;
   footer?: string;
   from_name?: string;
   from_email?: string;
@@ -670,6 +673,9 @@ export interface Settings {
   biz_state?: string;
   biz_zip?: string;
   logo_url?: string;
+  /** Square-ish logo shown in the Axiom sidebar header for the Wallflower
+   *  (default) entity. Falls back to the bundled emblem when unset. */
+  app_logo_url?: string;
   accent_color: string;
   terms_text?: string;
   deposit_percent: number;

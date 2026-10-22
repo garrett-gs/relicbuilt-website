@@ -8,6 +8,8 @@ import { useAuth } from "./AuthProvider";
 import { useEntity } from "./EntityProvider";
 import { axiom } from "@/lib/axiom-supabase";
 import { NEXUS_CONNECTED } from "@/lib/axiom-site";
+import { resolveEntityProfile } from "@/lib/entity-profile";
+import type { Settings as AxiomSettings } from "@/types/axiom";
 import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
@@ -108,16 +110,20 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAdminOrManager, setIsAdminOrManager] = useState(false);
   const [wfPendingCount, setWfPendingCount] = useState(0);
+  // Branding settings for the sidebar header, kept raw so the logo/name
+  // re-resolve for the current entity without a re-fetch.
+  const [brandSettings, setBrandSettings] = useState<Partial<AxiomSettings> | null>(null);
 
   useEffect(() => {
     if (!userEmail) return;
     axiom
       .from("settings")
-      .select("team_members")
+      .select("team_members, biz_name, app_logo_url, relic_profile")
       .limit(1)
       .single()
       .then(({ data }) => {
         if (!data) return;
+        setBrandSettings(data as Partial<AxiomSettings>);
         const me = (data.team_members || []).find(
           (m: { email?: string }) =>
             m.email?.toLowerCase() === userEmail.toLowerCase()
@@ -127,6 +133,12 @@ export default function Sidebar() {
         }
       });
   }, [userEmail]);
+
+  // Resolve the per-entity brand for the sidebar header. The logo falls back to
+  // the bundled emblem, the name to the entity's default, until settings load.
+  const brand = resolveEntityProfile(entity, brandSettings);
+  const brandName = brand.name || (entity === "relic" ? "RELIC" : "Wallflower RELIC");
+  const brandLogoUrl = brand.appLogoUrl || "";
 
   // Poll for pending Wallflower work orders. Skip entirely when this
   // deployment isn't connected to a Nexus — there are no work orders to count,
@@ -149,18 +161,29 @@ export default function Sidebar() {
 
   const nav = (
     <>
-      {/* Logo */}
+      {/* Logo — per-entity brand, set in Settings (falls back to the emblem) */}
       <div className="px-5 py-6 border-b border-border">
         <Link href="/axiom/dashboard" className="flex items-center gap-3">
-          <Image
-            src="/wr-emblem.png"
-            alt="Wallflower RELIC"
-            width={28}
-            height={28}
-            className="h-7 w-7 shrink-0 object-contain"
-          />
+          {brandLogoUrl ? (
+            // Custom brand logo is a remote/arbitrary URL, so a plain <img>
+            // (not next/image, which needs each host allow-listed).
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={brandLogoUrl}
+              alt={brandName}
+              className="h-7 w-7 shrink-0 object-contain"
+            />
+          ) : (
+            <Image
+              src="/wr-emblem.png"
+              alt={brandName}
+              width={28}
+              height={28}
+              className="h-7 w-7 shrink-0 object-contain"
+            />
+          )}
           <span className="text-base font-heading font-bold tracking-wide text-foreground">
-            {entity === "relic" ? "RELIC" : "Wallflower RELIC"}
+            {brandName}
           </span>
         </Link>
       </div>
