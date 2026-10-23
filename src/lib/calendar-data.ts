@@ -20,6 +20,14 @@ export interface CalendarData {
   tentativeHours: Record<string, number>;
 }
 
+// Statuses that mean "no longer happening" — a rejected/lost/cancelled job
+// must not hold space on the build calendar, even if it still carries the
+// tentative dates it was penciled in with.
+const DEAD_STATUSES = new Set([
+  "rejected", "lost", "declined", "cancelled", "canceled", "expired", "archived", "dead",
+]);
+const isDead = (status?: string) => DEAD_STATUSES.has((status || "").toLowerCase());
+
 /**
  * Load everything the Build Calendar renders for one entity: confirmed
  * projects (custom_work with dates), the labor-hours map used to span a
@@ -42,7 +50,7 @@ export async function loadCalendarData(client: SupabaseClient, entity: string): 
     client.from("master_projects").select("id, name").eq("entity", entity),
   ]);
 
-  const projects = ((projectsRes.data || []) as CustomWork[]).filter((p) => p.start_date || p.due_date);
+  const projects = ((projectsRes.data || []) as CustomWork[]).filter((p) => (p.start_date || p.due_date) && !isDead(p.status));
 
   const estimateHoursById: Record<string, number> = {};
   for (const e of (estimatesRes.data || []) as { custom_work_id: string; labor_items?: { hours?: number }[] }[]) {
@@ -50,7 +58,7 @@ export async function loadCalendarData(client: SupabaseClient, entity: string): 
     if (hours > 0) estimateHoursById[e.custom_work_id] = hours;
   }
 
-  const tentatives = ((tentativesRes.data || []) as TentativeItem[]).filter((t) => t.start_date || t.due_date);
+  const tentatives = ((tentativesRes.data || []) as TentativeItem[]).filter((t) => (t.start_date || t.due_date) && !isDead(t.status));
   const tentativeHours: Record<string, number> = {};
   for (const t of tentatives) {
     const hours = (t.labor_items || []).reduce((s, it) => s + (Number(it?.hours) || 0), 0);
