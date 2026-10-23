@@ -99,6 +99,11 @@ export default function DateField({
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        // The invisible input sits on top and receives the click, so the
+        // button's openPicker never fires on desktop. Open the native picker
+        // from the input's own click (a user gesture) so the calendar reliably
+        // appears everywhere — desktop and touch.
+        onClick={openPicker}
         disabled={disabled}
         aria-hidden="true"
         tabIndex={-1}
