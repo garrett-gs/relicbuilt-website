@@ -6,9 +6,12 @@ import Image from "next/image";
 import { CheckCircle2, ClipboardList, Send } from "lucide-react";
 import DateField from "@/components/ui/DateField";
 
+// Fallbacks so this module doesn't throw during a build that lacks the public
+// env (e.g. a throwaway preview deploy) — real values are inlined at build on
+// the production deployments, which is where this page actually runs.
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL || "https://placeholder.supabase.co",
+  process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY || "placeholder-anon-key"
 );
 
 const WORK_TYPES = ["Repair", "Fabrication", "Refinish", "Install", "Custom Build", "Modification", "Other"];
