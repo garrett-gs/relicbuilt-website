@@ -2,6 +2,7 @@
   "crons": [
     { "path": "/api/cron/daily-task-digest", "schedule": "0 13 * * *" },
     { "path": "/api/cron/sync-wallflower", "schedule": "0 11 * * *" },
-    { "path": "/api/cron/proposal-nudges", "schedule": "0 16 * * *" }
+    { "path": "/api/cron/proposal-nudges", "schedule": "0 16 * * *" },
+    { "path": "/api/cron/google-calendar-sync", "schedule": "*/15 * * * *" }
   ]
 }
