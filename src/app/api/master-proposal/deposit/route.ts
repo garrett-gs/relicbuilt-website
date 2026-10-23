@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
     }
 
     const { data: settings } = await supabase.from("settings").select("deposit_percent").limit(1).single();
-    const depPct = Number(relic.find((e) => e.deposit_percent != null)?.deposit_percent ?? settings?.deposit_percent ?? 50);
+    const depPct = Number(relic.find((e) => e.deposit_percent != null)?.deposit_percent ?? settings?.deposit_percent ?? 100);
     const builds = relic.map((e) => ({ e, total: calcTotal(e) }));
     const acceptedTotal = builds.reduce((s, b) => s + b.total, 0);
     const depositAmount = Math.round(acceptedTotal * (depPct / 100) * 100) / 100;
