@@ -66,7 +66,7 @@ export default function MasterProposalPage() {
   const isRelic = entity === "relic";
   const brandName = profile.name || "RELIC";
   const shield = isRelic ? "/relic-shield-gold.png" : (profile.logoUrl || "");
-  const depPct = Number(settings?.deposit_percent ?? 50);
+  const depPct = Number(settings?.deposit_percent ?? 100);
 
   const totals = useMemo(() => {
     let acc = 0, anyAccepted = false, anyPending = false;
