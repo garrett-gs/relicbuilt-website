@@ -1,27 +1,15 @@
 "use client";
 
-import Script from "next/script";
-
-// Hone (hone.relicon.app) inside Axiom: the person's Today, tasks and lists,
-// live and in sync with the Hone app. The panel signs in to Hone itself
-// ("Connect Hone") and keeps its own sign-in in this browser; Axiom's
-// server never sees it.
+// Hone (hone.relicon.app) inside Axiom: the whole Hone app, as it looks
+// on its own, in sync with the phone. Hone handles its own sign-in (the
+// first time, a small pop-up); Axiom never sees it.
 export default function HonePage() {
   return (
-    <div className="max-w-3xl">
-      {/* @ts-expect-error: custom element defined by hone.relicon.app/embed.js */}
-      <hone-panel
-        style={{
-          "--hone-bg": "var(--background)",
-          "--hone-panel": "var(--card)",
-          "--hone-text": "var(--foreground)",
-          "--hone-muted": "var(--muted)",
-          "--hone-line": "var(--border)",
-          "--hone-accent": "var(--accent)",
-          "--hone-accent-ink": "#ffffff",
-        }}
-      />
-      <Script src="https://hone.relicon.app/embed.js" strategy="afterInteractive" />
-    </div>
+    <iframe
+      src="https://hone.relicon.app"
+      title="Hone"
+      allow="clipboard-write; microphone; storage-access"
+      className="block h-[calc(100dvh-4rem)] w-full border border-border bg-background"
+    />
   );
 }
