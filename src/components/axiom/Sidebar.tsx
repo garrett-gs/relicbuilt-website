@@ -34,6 +34,7 @@ import {
   StickyNote,
   ScanLine,
   Library,
+  ListChecks,
 } from "lucide-react";
 
 const navSections = [
@@ -88,6 +89,12 @@ const navSections = [
       { href: "/axiom/expenses", icon: Receipt, label: "Expenses" },
       { href: "/axiom/receipts", icon: Camera, label: "Receipts" },
       { href: "/receipts", icon: Camera, label: "Receipt App", external: true, sub: true },
+    ],
+  },
+  {
+    label: "Integrations",
+    items: [
+      { href: "/axiom/hone", icon: ListChecks, label: "Hone" },
     ],
   },
   {
