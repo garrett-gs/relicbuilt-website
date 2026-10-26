@@ -492,6 +492,10 @@ export interface CatalogItem {
 export interface POLineItem {
   item_number?: string;
   description: string;
+  // Free-text spec for THIS order only (e.g. "S3S, straight-line rip, 13/16
+  // thick"). Not written back to inventory — keeps one catalog product from
+  // fanning out into dozens of near-duplicate SKUs.
+  details?: string;
   quantity: number;
   unit_price: number;
   unit: string;

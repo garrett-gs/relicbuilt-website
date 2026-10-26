@@ -108,7 +108,7 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false, profile?: En
           ${lines.map((li) => `
             <tr style="border-bottom:1px solid #eee;">
               <td style="padding:8px 12px;font-family:monospace;color:#666;">${li.item_number || "—"}</td>
-              <td style="padding:8px 12px;">${li.description}</td>
+              <td style="padding:8px 12px;">${li.description}${li.details ? `<div style="font-size:11px;color:#666;font-style:italic;margin-top:2px;">${li.details}</div>` : ""}</td>
               <td style="padding:8px 12px;text-align:right;font-family:monospace;">${li.quantity}</td>
               <td style="padding:8px 12px;text-align:right;font-family:monospace;">${money(li.unit_price)}</td>
               <td style="padding:8px 12px;color:#666;">${li.unit}</td>

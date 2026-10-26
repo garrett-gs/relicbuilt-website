@@ -576,7 +576,10 @@ function OrdersTab() {
                       {po.line_items.map((li, i) => (
                         <tr key={i} className="border-t border-border/30">
                           <td className="py-1.5 pr-4 font-mono text-muted">{li.item_number || "—"}</td>
-                          <td className="py-1.5 pr-4">{li.description}</td>
+                          <td className="py-1.5 pr-4">
+                            {li.description}
+                            {li.details && <span className="block text-xs text-muted italic">{li.details}</span>}
+                          </td>
                           <td className="py-1.5 pr-4 text-right font-mono">{li.quantity}</td>
                           <td className="py-1.5 pr-4 text-right font-mono">{money(li.unit_price)}</td>
                           <td className="py-1.5 pr-4 text-muted">{li.unit}</td>
@@ -938,8 +941,9 @@ function CreatePOModal({ vendors, workOrders, onSubmit, onClose }: {
                           <input value={li.unit} onChange={(e) => updateLine(i, "unit", e.target.value)} className="bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent" />
                           <button onClick={() => removeLine(i)} className="text-muted hover:text-red-500"><Trash2 size={12} /></button>
                         </div>
-                        <div className="text-right mt-1">
-                          <span className="text-xs font-mono text-muted">{money((li.quantity || 0) * (li.unit_price || 0))}</span>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <input value={li.details || ""} onChange={(e) => updateLine(i, "details", e.target.value)} placeholder="Spec for this order (e.g. S3S, straight-line rip, 13/16 thick) — not saved to inventory" className="flex-1 bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent" />
+                          <span className="text-xs font-mono text-muted whitespace-nowrap">{money((li.quantity || 0) * (li.unit_price || 0))}</span>
                         </div>
                       </div>
                     ))}
@@ -1221,8 +1225,9 @@ function EditPOModal({ po, vendors, workOrders, onSubmit, onClose }: {
                           <input value={li.unit} onChange={(e) => updateLine(i, "unit", e.target.value)} className="bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent" />
                           <button onClick={() => removeLine(i)} className="text-muted hover:text-red-500"><Trash2 size={12} /></button>
                         </div>
-                        <div className="text-right mt-1">
-                          <span className="text-xs font-mono text-muted">{money((li.quantity || 0) * (li.unit_price || 0))}</span>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <input value={li.details || ""} onChange={(e) => updateLine(i, "details", e.target.value)} placeholder="Spec for this order (e.g. S3S, straight-line rip, 13/16 thick) — not saved to inventory" className="flex-1 bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent" />
+                          <span className="text-xs font-mono text-muted whitespace-nowrap">{money((li.quantity || 0) * (li.unit_price || 0))}</span>
                         </div>
                       </div>
                     ))}
