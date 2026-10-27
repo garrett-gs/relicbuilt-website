@@ -80,13 +80,18 @@ export async function POST(req: NextRequest) {
     // ── DECLINE ──────────────────────────────────────────────────────
     if (action === "decline") {
       const note = (reason || "").toString().trim();
-      await supabase.from("estimates").update({
+      // Decline date + reason are preserved in `notes` + the audit log. The
+      // estimates table has no proposal_declined_at / proposal_decline_reason
+      // columns — writing them silently failed the whole update.
+      const { error: declineErr } = await supabase.from("estimates").update({
         proposal_status: "declined",
-        proposal_declined_at: nowIso,
-        proposal_decline_reason: note || null,
         notes: [estimate.notes || "", `Declined by client on ${new Date().toLocaleDateString("en-US", { dateStyle: "long" })}${note ? ` — “${note}”` : ""}`].filter(Boolean).join("\n"),
         updated_at: nowIso,
       }).eq("id", estimate.id);
+      if (declineErr) {
+        console.error("[master-decision] decline update failed:", declineErr);
+        return NextResponse.json({ error: "We couldn't record your response. Please try again or contact us." }, { status: 500 });
+      }
 
       await logProposalEvent({
         supabase,
@@ -113,14 +118,21 @@ export async function POST(req: NextRequest) {
     let projectId: string | null = (estimate.custom_work_id as string | null) ?? null;
 
     if (estimate.proposal_status !== "approved") {
-      await supabase.from("estimates").update({
+      // Signer name is preserved in `notes` + the proposal_events audit log.
+      // (The estimates table has no proposal_signed_by column — writing one
+      // silently fails the whole update, which used to lose the approval while
+      // still emailing "approved". We check the error now so that can't recur.)
+      const { error: acceptErr } = await supabase.from("estimates").update({
         proposal_status: "approved",
         proposal_approved_at: nowIso,
-        proposal_signed_by: signed,
         status: "accepted",
         notes: [estimate.notes || "", `Signed by ${signed} on ${new Date().toLocaleDateString("en-US", { dateStyle: "long" })} (${master.name} proposal)`].filter(Boolean).join("\n"),
         updated_at: nowIso,
       }).eq("id", estimate.id);
+      if (acceptErr) {
+        console.error("[master-decision] accept update failed:", acceptErr);
+        return NextResponse.json({ error: "We couldn't record your approval. Please try again or contact us." }, { status: 500 });
+      }
 
       await notifyWallflowerStatus(supabase, { estimateId: estimate.id }, "accepted").catch(() => {});
       await notifyNexusApproval(supabase, estimate as Estimate, signed, total).catch(() => {});
