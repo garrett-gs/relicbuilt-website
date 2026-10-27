@@ -112,6 +112,7 @@ export default function Sidebar() {
   const { entity, setEntity, hasRelicAccess, locked, brandName, brandEmail, nexusConnected } = useEntity();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isAdminOrManager, setIsAdminOrManager] = useState(false);
+  const [isStaff, setIsStaff] = useState(false);
   const [wfPendingCount, setWfPendingCount] = useState(0);
 
   useEffect(() => {
@@ -130,6 +131,7 @@ export default function Sidebar() {
         if (me && (me.role === "admin" || me.role === "manager" || me.role === "superadmin")) {
           setIsAdminOrManager(true);
         }
+        setIsStaff(me?.role === "staff");
       });
   }, [userEmail]);
 
@@ -206,17 +208,22 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
-        {navSections.map((section) => (
+        {navSections.map((section) => {
+          const items = section.items
+            .filter((item) => !("adminOnly" in item && item.adminOnly) || isAdminOrManager)
+            .filter((item) => !("wallflowerOnly" in item && item.wallflowerOnly && entity === "relic"))
+            // Nexus-tied nav (Work Orders inbox) is hidden when this
+            // workspace isn't connected to a Nexus.
+            .filter((item) => !("wallflowerOnly" in item && item.wallflowerOnly && !nexusConnected))
+            // Staff accounts only ever see the Time Clock.
+            .filter((item) => !isStaff || item.href === "/axiom/timeclock");
+          if (items.length === 0) return null;
+          return (
           <div key={section.label} className="mb-5">
             <p className="px-3 mb-1.5 text-[10px] uppercase tracking-widest text-muted/60 font-medium">
               {section.label}
             </p>
-            {section.items
-              .filter((item) => !("adminOnly" in item && item.adminOnly) || isAdminOrManager)
-              .filter((item) => !("wallflowerOnly" in item && item.wallflowerOnly && entity === "relic"))
-              // Nexus-tied nav (Work Orders inbox) is hidden when this
-              // workspace isn't connected to a Nexus.
-              .filter((item) => !("wallflowerOnly" in item && item.wallflowerOnly && !nexusConnected))
+            {items
               .map((item) => {
               const active = pathname === item.href;
               const isSub = "sub" in item && item.sub;
@@ -263,7 +270,8 @@ export default function Sidebar() {
               );
             })}
           </div>
-        ))}
+          );
+        })}
       </nav>
 
       {/* Footer */}

@@ -1,18 +1,32 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { AuthProvider, useAuth } from "@/components/axiom/AuthProvider";
 import { EntityProvider, useEntity } from "@/components/axiom/EntityProvider";
+import { useAxiomRole } from "@/components/axiom/useAxiomRole";
 import Sidebar from "@/components/axiom/Sidebar";
 import AxiomLogin from "@/components/axiom/AxiomLogin";
 import Assistant from "@/components/axiom/Assistant";
+import ClockWidget from "@/components/axiom/ClockWidget";
 import AutoUpdateOverlay from "@/components/axiom/AutoUpdateOverlay";
 import { SITE_ENTITY } from "@/lib/axiom-site";
+
+// Staff accounts are a Time Clock only — no other Axiom surface.
+const STAFF_HOME = "/axiom/timeclock";
 
 function AxiomShell({ children }: { children: React.ReactNode }) {
   const { session, loading, signOut, userEmail } = useAuth();
   const { accessDenied, loading: accessLoading } = useEntity();
+  const { role, loading: roleLoading } = useAxiomRole();
   const pathname = usePathname();
+  const router = useRouter();
+
+  // Staff are scoped to the Time Clock: send them there from anywhere else.
+  useEffect(() => {
+    if (roleLoading || role !== "staff") return;
+    if (pathname !== STAFF_HOME) router.replace(STAFF_HOME);
+  }, [role, roleLoading, pathname, router]);
 
   // Public routes — no auth required
   if (pathname.startsWith("/axiom/portal/") || pathname === "/axiom/timeclock" || pathname === "/axiom/receipts") {
@@ -72,6 +86,7 @@ function AxiomShell({ children }: { children: React.ReactNode }) {
         {children}
       </main>
       <Assistant />
+      <ClockWidget />
       <AutoUpdateOverlay />
     </div>
   );

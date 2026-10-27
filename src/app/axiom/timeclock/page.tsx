@@ -7,6 +7,8 @@ import { Clock, X, CheckCircle2, LogIn, LogOut, ArrowLeft, Plus, Package } from 
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import DateField from "@/components/ui/DateField";
+import { useAuth } from "@/components/axiom/AuthProvider";
+import { clockOutEntry, emitClockChanged, findMemberByEmail, getActiveEntry } from "@/lib/timeclock";
 
 type Step = "select_member" | "enter_pin" | "select_project" | "confirm_clock_in" | "clocked_in" | "clocked_out" | "manual_entry" | "manual_saved";
 
@@ -47,6 +49,7 @@ function hhmmLocal(iso: string) {
 }
 
 export default function TimeClockPage() {
+  const { userEmail } = useAuth();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [projects, setProjects] = useState<CustomWork[]>([]);
   const [productOptions, setProductOptions] = useState<Product[]>([]);
@@ -103,6 +106,18 @@ export default function TimeClockPage() {
       if (data) setCatalogsById(new Map((data as ProductCatalog[]).map((c) => [c.id, c])));
     });
   }, []);
+
+  // Logged-in users skip the kiosk name picker + PIN — identity comes from the
+  // account, same as the corner widget. Falls back to the kiosk when the login
+  // doesn't map to a team member (e.g. a shared shop iPad with no session).
+  useEffect(() => {
+    if (!userEmail || members.length === 0 || selectedMember) return;
+    const me = findMemberByEmail(members, userEmail);
+    if (!me) return;
+    setSelectedMember(me);
+    getActiveEntry(me.name).then((open) => { if (open) setActiveEntry(open); });
+    setStep("select_project");
+  }, [userEmail, members, selectedMember]);
 
   // Clock tick
   useEffect(() => {
@@ -181,62 +196,28 @@ export default function TimeClockPage() {
     if (data) {
       setActiveEntry(data);
       setStep("clocked_in");
+      emitClockChanged();
     }
   }
 
   async function handleClockOut() {
     if (!activeEntry) return;
-    const clockOut = new Date().toISOString();
-    const rawHours = hoursFromEntry({ ...activeEntry, clock_out: clockOut });
-
-    // Apply break deduction if provided
-    const deductHours = Math.max(0, parseFloat(breakHours) || 0);
-    const hours = Math.max(0, Math.round((rawHours - deductHours) * 100) / 100);
-    const breakNote = deductHours > 0
-      ? ` [break: -${deductHours}h${breakReason.trim() ? ` (${breakReason.trim()})` : ""}]`
-      : "";
-
-    // Update time entry — store adjusted hours, keep original clock_in/out, record break in notes
-    await axiom.from("time_entries").update({
-      clock_out: clockOut,
-      hours,
-      tasks: selectedTasks,
-      notes: breakNote ? breakNote.trim() : null,
-    }).eq("id", activeEntry.id);
-
-    // Append to project labor log
-    if (activeEntry.custom_work_id) {
-      const { data: project } = await axiom.from("custom_work").select("labor_log, actual_cost").eq("id", activeEntry.custom_work_id).single();
-      if (project) {
-        const rate = activeEntry.hourly_rate || 60;
-        const cost = Math.round(hours * rate * 100) / 100;
-        const baseDesc = selectedTasks.length ? `${selectedMember!.name} — ${selectedTasks.join(", ")}` : selectedMember!.name;
-        const newEntry = {
-          date: new Date().toISOString().split("T")[0],
-          clock_in: hhmmLocal(activeEntry.clock_in),
-          clock_out: hhmmLocal(clockOut),
-          hours,
-          rate,
-          cost,
-          description: `${baseDesc}${breakNote}`,
-          tasks: selectedTasks,
-          source: "timeclock",
-        };
-        const updatedLog = [...(project.labor_log || []), newEntry];
-        const newActualCost = (project.actual_cost || 0) + cost;
-        await axiom.from("custom_work").update({
-          labor_log: updatedLog,
-          actual_cost: newActualCost,
-          updated_at: new Date().toISOString(),
-        }).eq("id", activeEntry.custom_work_id);
-      }
+    try {
+      const { clockOut, hours } = await clockOutEntry(activeEntry, {
+        tasks: selectedTasks,
+        memberName: selectedMember?.name || activeEntry.member_name,
+        breakHours: parseFloat(breakHours) || 0,
+        breakReason,
+      });
+      setCompletedEntry({ ...activeEntry, clock_out: clockOut, hours });
+      setActiveEntry(null);
+      setBreakHours("");
+      setBreakReason("");
+      setStep("clocked_out");
+      emitClockChanged();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Could not clock out. Try again.");
     }
-
-    setCompletedEntry({ ...activeEntry, clock_out: clockOut, hours });
-    setActiveEntry(null);
-    setBreakHours("");
-    setBreakReason("");
-    setStep("clocked_out");
   }
 
   async function handleManualSave() {
