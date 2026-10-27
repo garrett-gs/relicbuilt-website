@@ -24,10 +24,6 @@ const SHOP_BUCKET = {
   status: "in_progress",
 } as CustomWork;
 
-function money(n: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
-}
-
 function formatElapsed(clockIn: string) {
   const diff = Math.floor((Date.now() - new Date(clockIn).getTime()) / 1000);
   const h = Math.floor(diff / 3600);
@@ -92,7 +88,9 @@ export default function TimeClockPage() {
 
   useEffect(() => {
     axiom.from("settings").select("team_members").limit(1).single().then(({ data }) => {
-      if (data?.team_members) setMembers(data.team_members.filter((m: TeamMember) => m.name && m.pin));
+      // All named members load, so a signed-in user without a PIN still
+      // matches by login. The PIN is only used by the no-login kiosk picker.
+      if (data?.team_members) setMembers(data.team_members.filter((m: TeamMember) => m.name));
     });
     axiom.from("custom_work").select("*").in("status", ["new", "in_review", "quoted", "accepted", "in_progress"]).order("project_name").then(({ data }) => {
       if (data) setProjects(data);
@@ -341,11 +339,11 @@ export default function TimeClockPage() {
               <Plus size={12} /> Manual Entry
             </button>
           </div>
-          {members.length === 0 ? (
-            <p className="text-center text-muted text-sm">No team members with PINs set up yet. Go to <a href="/axiom/settings" className="text-accent underline">Settings → Team</a> to add them.</p>
+          {members.filter((m) => m.pin).length === 0 ? (
+            <p className="text-center text-muted text-sm">No team members with PINs set up yet. Signed-in users clock in with their account — PINs are only for this shared-device view. Add PINs in <a href="/axiom/settings" className="text-accent underline">Settings → Team</a>.</p>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {members.map((m) => (
+              {members.filter((m) => m.pin).map((m) => (
                 <button
                   key={m.name}
                   onClick={() => handleSelectMember(m)}
@@ -623,17 +621,9 @@ export default function TimeClockPage() {
             <p className="text-xs uppercase tracking-widest text-muted mb-1">Clocked Out</p>
             <p className="text-lg font-medium mb-1">{selectedMember?.name}</p>
             <p className="text-sm text-muted mb-4">{completedEntry.project_name}</p>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-muted text-xs mb-1">Hours</p>
-                <p className="font-mono font-bold text-xl">{completedEntry.hours?.toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="text-muted text-xs mb-1">Value</p>
-                <p className="font-mono font-bold text-xl text-accent">
-                  {money((completedEntry.hours || 0) * (completedEntry.hourly_rate || 60))}
-                </p>
-              </div>
+            <div className="text-sm">
+              <p className="text-muted text-xs mb-1">Hours</p>
+              <p className="font-mono font-bold text-3xl">{completedEntry.hours?.toFixed(2)}</p>
             </div>
             <p className="text-xs text-muted mt-4">Labor log updated on project ✓</p>
           </div>
@@ -769,14 +759,9 @@ export default function TimeClockPage() {
               const rawHrs = parseFloat(manualHours) || 0;
               const brk = Math.max(0, parseFloat(manualBreakHours) || 0);
               const netHrs = Math.max(0, Math.round((rawHrs - brk) * 100) / 100);
-              const rate = members.find((m) => m.name === manualMember)?.hourly_rate || 60;
               return (
                 <div className="bg-card border border-border p-4 text-sm space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-muted">Rate</span>
-                    <span className="font-mono">{money(rate)}/hr</span>
-                  </div>
-                  {brk > 0 && (
+                  {brk > 0 ? (
                     <>
                       <div className="flex justify-between">
                         <span className="text-muted">Hours Entered</span>
@@ -791,11 +776,12 @@ export default function TimeClockPage() {
                         <span className="font-mono font-bold">{netHrs.toFixed(2)}</span>
                       </div>
                     </>
+                  ) : (
+                    <div className="flex justify-between">
+                      <span className="text-muted">Hours</span>
+                      <span className="font-mono font-bold">{netHrs.toFixed(2)}</span>
+                    </div>
                   )}
-                  <div className="flex justify-between mt-1">
-                    <span className="text-muted">Total Cost</span>
-                    <span className="font-mono text-accent font-bold">{money(netHrs * rate)}</span>
-                  </div>
                 </div>
               );
             })()}
@@ -823,15 +809,9 @@ export default function TimeClockPage() {
             <p className="text-xs uppercase tracking-widest text-muted mb-1">Time Entry Added</p>
             <p className="text-lg font-medium mb-1">{manualSavedEntry.member}</p>
             <p className="text-sm text-muted mb-4">{manualSavedEntry.project}</p>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-muted text-xs mb-1">Hours</p>
-                <p className="font-mono font-bold text-xl">{manualSavedEntry.hours.toFixed(2)}</p>
-              </div>
-              <div>
-                <p className="text-muted text-xs mb-1">Cost</p>
-                <p className="font-mono font-bold text-xl text-accent">{money(manualSavedEntry.cost)}</p>
-              </div>
+            <div className="text-sm">
+              <p className="text-muted text-xs mb-1">Hours</p>
+              <p className="font-mono font-bold text-3xl">{manualSavedEntry.hours.toFixed(2)}</p>
             </div>
             <p className="text-xs text-muted mt-4">Labor log updated on project ✓</p>
           </div>
