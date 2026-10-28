@@ -55,15 +55,43 @@ const hhmm = (iso?: string) =>
     ? new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
     : "—";
 
-// ISO ⇄ <input type="datetime-local"> (both in the browser's local zone).
-function toLocalInput(iso?: string) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+// Split date/time fields (month, day, year, hour, minute, am/pm) — easier to
+// hit than a native picker on a shop screen. All in the browser's local zone.
+interface DTParts {
+  mo: string;
+  d: string;
+  y: string;
+  h: string;
+  mi: string;
+  ap: "AM" | "PM";
 }
-function fromLocalInput(v: string) {
-  return new Date(v).toISOString();
+function isoToParts(iso?: string): DTParts {
+  const dt = iso ? new Date(iso) : new Date();
+  let h = dt.getHours();
+  const ap: "AM" | "PM" = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return {
+    mo: String(dt.getMonth() + 1),
+    d: String(dt.getDate()),
+    y: String(dt.getFullYear()),
+    h: String(h),
+    mi: String(dt.getMinutes()).padStart(2, "0"),
+    ap,
+  };
+}
+// Returns a valid Date or null if any field is out of range / blank.
+function partsToDate(p: DTParts): Date | null {
+  const mo = Number(p.mo), d = Number(p.d), y = Number(p.y), h12 = Number(p.h), mi = Number(p.mi);
+  if (![mo, d, y, h12, mi].every(Number.isFinite)) return null;
+  if (mo < 1 || mo > 12 || d < 1 || d > 31 || y < 2000 || y > 2100) return null;
+  if (h12 < 1 || h12 > 12 || mi < 0 || mi > 59) return null;
+  let h = h12 % 12;
+  if (p.ap === "PM") h += 12;
+  const dt = new Date(y, mo - 1, d, h, mi, 0, 0);
+  // Reject rollovers like Feb 31 → Mar 3.
+  if (dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return dt;
 }
 // Local YYYY-MM-DD for a date N days ago (for the default range).
 function localDateStr(d: Date) {
@@ -612,27 +640,28 @@ function EditEntryModal({
   onClose: () => void;
   onSaved: (updated: TimeEntry) => void;
 }) {
-  const [clockIn, setClockIn] = useState(toLocalInput(entry.clock_in));
-  const [clockOut, setClockOut] = useState(toLocalInput(entry.clock_out));
+  const [clockIn, setClockIn] = useState<DTParts>(isoToParts(entry.clock_in));
+  const [clockOut, setClockOut] = useState<DTParts>(isoToParts(entry.clock_out));
   const [tasks, setTasks] = useState((entry.tasks || []).join(", "));
   const [notes, setNotes] = useState(entry.notes || "");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const previewHours = (() => {
-    if (!clockIn || !clockOut) return null;
-    const ms = new Date(clockOut).getTime() - new Date(clockIn).getTime();
-    if (!(ms > 0)) return null;
-    return Math.round((ms / 3_600_000) * 100) / 100;
-  })();
+  const inDate = partsToDate(clockIn);
+  const outDate = partsToDate(clockOut);
+  const previewHours =
+    inDate && outDate && outDate.getTime() > inDate.getTime()
+      ? Math.round(((outDate.getTime() - inDate.getTime()) / 3_600_000) * 100) / 100
+      : null;
 
   async function save() {
+    if (!inDate || !outDate) return;
     setSaving(true);
     setErr(null);
     try {
       const updated = await editTimeEntry(entry, {
-        clock_in: fromLocalInput(clockIn),
-        clock_out: fromLocalInput(clockOut),
+        clock_in: inDate.toISOString(),
+        clock_out: outDate.toISOString(),
         tasks: tasks.split(",").map((t) => t.trim()).filter(Boolean),
         notes: notes.trim(),
       });
@@ -659,25 +688,9 @@ function EditEntryModal({
           {entry.member_name} · {entry.project_name || "No project"}
         </p>
 
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-widest text-muted/60">Clock in</span>
-            <input
-              type="datetime-local"
-              value={clockIn}
-              onChange={(e) => setClockIn(e.target.value)}
-              className="bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-widest text-muted/60">Clock out</span>
-            <input
-              type="datetime-local"
-              value={clockOut}
-              onChange={(e) => setClockOut(e.target.value)}
-              className="bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent"
-            />
-          </label>
+        <div className="space-y-3 mb-3">
+          <DateTimeFields label="Clock in" value={clockIn} onChange={setClockIn} />
+          <DateTimeFields label="Clock out" value={clockOut} onChange={setClockOut} />
         </div>
 
         <label className="flex flex-col gap-1 mb-3">
@@ -727,6 +740,63 @@ function EditEntryModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Month / Day / Year  +  Hour : Minute AM/PM — six boxes instead of a native
+// datetime picker. Invalid parts bubble up via partsToDate() returning null.
+function DateTimeFields({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: DTParts;
+  onChange: (p: DTParts) => void;
+}) {
+  const box = "bg-background border border-border px-2 py-1.5 text-sm text-foreground text-center tabular-nums focus:outline-none focus:border-accent";
+  const set = (patch: Partial<DTParts>) => onChange({ ...value, ...patch });
+  const num = (v: string) => v.replace(/\D/g, "");
+  const valid = partsToDate(value) !== null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-[10px] uppercase tracking-widest text-muted/60">{label}</span>
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {/* Date */}
+        <input aria-label={`${label} month`} inputMode="numeric" maxLength={2} placeholder="MM"
+          value={value.mo} onChange={(e) => set({ mo: num(e.target.value).slice(0, 2) })}
+          className={box + " w-12"} />
+        <span className="text-muted">/</span>
+        <input aria-label={`${label} day`} inputMode="numeric" maxLength={2} placeholder="DD"
+          value={value.d} onChange={(e) => set({ d: num(e.target.value).slice(0, 2) })}
+          className={box + " w-12"} />
+        <span className="text-muted">/</span>
+        <input aria-label={`${label} year`} inputMode="numeric" maxLength={4} placeholder="YYYY"
+          value={value.y} onChange={(e) => set({ y: num(e.target.value).slice(0, 4) })}
+          className={box + " w-16"} />
+
+        <span className="w-2" />
+
+        {/* Time */}
+        <input aria-label={`${label} hour`} inputMode="numeric" maxLength={2} placeholder="HH"
+          value={value.h} onChange={(e) => set({ h: num(e.target.value).slice(0, 2) })}
+          className={box + " w-12"} />
+        <span className="text-muted">:</span>
+        <input aria-label={`${label} minute`} inputMode="numeric" maxLength={2} placeholder="MM"
+          value={value.mi} onChange={(e) => set({ mi: num(e.target.value).slice(0, 2) })}
+          className={box + " w-12"} />
+        <select aria-label={`${label} AM/PM`} value={value.ap}
+          onChange={(e) => set({ ap: e.target.value as "AM" | "PM" })}
+          className={box + " w-16"}>
+          <option value="AM">AM</option>
+          <option value="PM">PM</option>
+        </select>
+      </div>
+      {!valid && (value.mo || value.d || value.y) && (
+        <span className="text-[10px] text-red-400">Check this date/time</span>
+      )}
     </div>
   );
 }
