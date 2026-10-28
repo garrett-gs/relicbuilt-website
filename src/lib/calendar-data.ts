@@ -9,6 +9,8 @@ export type TentativeItem = {
   start_date?: string;
   due_date?: string;
   status?: string;
+  proposal_status?: string;
+  proposal_expires_at?: string;
   master_project_id?: string;
   labor_items?: { hours?: number }[];
 };
@@ -29,6 +31,30 @@ const DEAD_STATUSES = new Set([
 const isDead = (status?: string) => DEAD_STATUSES.has((status || "").toLowerCase());
 
 /**
+ * A penciled-in estimate stops holding calendar space once it's clearly not
+ * moving forward: the estimate was rejected, the client declined the proposal,
+ * or the proposal expired without being accepted. (Accepted estimates get a
+ * `custom_work_id` and are shown as the real project instead, so they never
+ * reach this filter.)
+ */
+export function isDeadTentative(t: {
+  status?: string;
+  proposal_status?: string;
+  proposal_expires_at?: string;
+  now?: number;
+}): boolean {
+  if (isDead(t.status)) return true;
+  const ps = (t.proposal_status || "").toLowerCase();
+  if (ps === "declined" || ps === "rejected") return true;
+  if (ps === "approved" || t.status === "accepted") return false; // alive even if past expiry
+  if (t.proposal_expires_at) {
+    const exp = new Date(t.proposal_expires_at).getTime();
+    if (Number.isFinite(exp) && exp < (t.now ?? Date.now())) return true;
+  }
+  return false;
+}
+
+/**
  * Load everything the Build Calendar renders for one entity: confirmed
  * projects (custom_work with dates), the labor-hours map used to span a
  * project back from its due date, and unapproved estimates with a build
@@ -43,7 +69,7 @@ export async function loadCalendarData(client: SupabaseClient, entity: string): 
       .not("custom_work_id", "is", null)
       .is("change_order_for_id", null),
     client.from("estimates")
-      .select("id, project_name, client_name, start_date, due_date, labor_items, status, master_project_id")
+      .select("id, project_name, client_name, start_date, due_date, labor_items, status, proposal_status, proposal_expires_at, master_project_id")
       .eq("entity", entity)
       .is("custom_work_id", null)
       .is("change_order_for_id", null),
@@ -58,7 +84,9 @@ export async function loadCalendarData(client: SupabaseClient, entity: string): 
     if (hours > 0) estimateHoursById[e.custom_work_id] = hours;
   }
 
-  const tentatives = ((tentativesRes.data || []) as TentativeItem[]).filter((t) => (t.start_date || t.due_date) && !isDead(t.status));
+  const tentatives = ((tentativesRes.data || []) as TentativeItem[]).filter(
+    (t) => (t.start_date || t.due_date) && !isDeadTentative(t)
+  );
   const tentativeHours: Record<string, number> = {};
   for (const t of tentatives) {
     const hours = (t.labor_items || []).reduce((s, it) => s + (Number(it?.hours) || 0), 0);
