@@ -2016,10 +2016,21 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
 
   const [wrSending, setWrSending] = useState(false);
   const [wrSent, setWrSent] = useState(!!(estimate as { sent_to_wr_at?: string }).sent_to_wr_at);
+  // Whether this estimate's customer is our own business (internal build).
+  const [isInternalCustomer, setIsInternalCustomer] = useState(false);
 
   useEffect(() => {
     setWrSent(!!(estimate as { sent_to_wr_at?: string }).sent_to_wr_at);
   }, [estimate]);
+
+  useEffect(() => {
+    if (!customerId) { setIsInternalCustomer(false); return; }
+    let active = true;
+    axiom.from("customers").select("internal").eq("id", customerId).single().then(({ data }) => {
+      if (active) setIsInternalCustomer(!!data?.internal);
+    });
+    return () => { active = false; };
+  }, [customerId]);
 
   async function sendToWR() {
     if (dirty) save();
@@ -2036,11 +2047,14 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       setWrSent(true);
       // Sending to Nexus publishes the proposal — reflect "sent" immediately in
       // the UI (the server also flips these) so it doesn't linger as a draft.
+      // Internal builds have no proposal/sign-off, so only stamp sent_to_wr_at.
       const sentPatch = { sent_to_wr_at: new Date().toISOString() } as Partial<Estimate>;
-      if (status === "draft") { setStatus("sent"); sentPatch.status = "sent"; }
-      if (proposalStatus !== "sent" && proposalStatus !== "approved") {
-        setProposalStatus("sent");
-        sentPatch.proposal_status = "sent";
+      if (!data.internal) {
+        if (status === "draft") { setStatus("sent"); sentPatch.status = "sent"; }
+        if (proposalStatus !== "sent" && proposalStatus !== "approved") {
+          setProposalStatus("sent");
+          sentPatch.proposal_status = "sent";
+        }
       }
       onUpdate(sentPatch)
         .catch((e) => setSaveError(e instanceof Error ? e.message : "Couldn't save your changes."));
@@ -2048,7 +2062,9 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
         action: "sent",
         entity: "estimate",
         entity_id: estimate.id,
-        label: `Sent estimate ${estimate.estimate_number} to WR Nexus`,
+        label: data.internal
+          ? `Sent internal build ${estimate.estimate_number} to Nexus (project spend)`
+          : `Sent estimate ${estimate.estimate_number} to WR Nexus`,
         user_name: detailUserEmail,
       });
     } catch (err) {
@@ -3305,13 +3321,16 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
           {wrSending ? (
             <><Loader2 size={14} className="animate-spin" /> Sending...</>
           ) : wrSent && dirty ? (
-            <><ExternalLink size={14} /> Update WR</>
+            <><ExternalLink size={14} /> {isInternalCustomer ? "Update Nexus (internal)" : "Update WR"}</>
           ) : wrSent ? (
-            <><RefreshCw size={14} /> Resend to WR</>
+            <><RefreshCw size={14} /> {isInternalCustomer ? "Resend (internal)" : "Resend to WR"}</>
           ) : (
-            <><ExternalLink size={14} /> Send to WR Nexus</>
+            <><ExternalLink size={14} /> {isInternalCustomer ? "Send to Nexus (internal)" : "Send to WR Nexus"}</>
           )}
         </button>
+        )}
+        {nexusConnected && isInternalCustomer && (
+          <span className="text-[11px] text-muted">Internal build — cost only, at cost, no proposal or sign-off.</span>
         )}
         <button
           onClick={() => setChatOpen(true)}

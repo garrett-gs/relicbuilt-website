@@ -709,6 +709,7 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
     address: customer.address ?? "",
     company_id: customer.company_id ?? "",
     status: customer.status ?? "active",
+    internal: customer.internal ?? false,
   });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -747,6 +748,7 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
       company_id: (form.company_id || null) as unknown as string,
       company_name: (linkedCompany?.name || null) as unknown as string,
       status: form.status as Customer["status"],
+      internal: form.internal,
     });
     setDirty(false);
     setSaved(true);
@@ -834,6 +836,20 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
             <option value="inactive">Inactive</option>
           </select>
         </div>
+        <label className="flex items-start gap-2.5 cursor-pointer bg-card border border-border rounded px-3 py-2.5">
+          <input
+            type="checkbox"
+            checked={form.internal}
+            onChange={(e) => { setForm((f) => ({ ...f, internal: e.target.checked })); markDirty(); }}
+            className="accent-accent mt-0.5"
+          />
+          <span>
+            <span className="text-sm text-foreground">Internal (our own business)</span>
+            <span className="block text-[11px] text-muted mt-0.5">
+              Builds for this customer skip the client proposal &amp; sign-off, price at cost, and go to Nexus as project spend only.
+            </span>
+          </span>
+        </label>
         <div className="grid grid-cols-2 gap-3">
           <div><label className={lbl}>Email</label><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inp} /></div>
           <div><label className={lbl}>Phone</label><input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>

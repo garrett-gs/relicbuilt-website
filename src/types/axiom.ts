@@ -240,6 +240,10 @@ export interface Customer {
   website?: string;
   industry?: string;
   status: "active" | "inactive" | "prospect";
+  // The shop's own business as a customer (e.g. Wallflower RELIC). Internal
+  // builds skip the client proposal/sign-off package, price at cost (no
+  // markup), and push to Nexus as project spend only.
+  internal?: boolean;
   notes: CustomerNote[];
   company_id?: string;
   company_name?: string;

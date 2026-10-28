@@ -29,6 +29,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Estimate not found" }, { status: 404 });
     }
 
+    // Internal build? (estimate is for our own business, e.g. Wallflower RELIC.)
+    // Internal builds skip the whole client proposal/sign-off package, price at
+    // cost (no markup), and go to Nexus as project spend only — no quote link.
+    let internal = false;
+    if (estimate.customer_id) {
+      const { data: cust } = await axiom
+        .from("customers")
+        .select("internal")
+        .eq("id", estimate.customer_id)
+        .single();
+      internal = !!cust?.internal;
+    }
+
     // If there's a linked project, grab images and build files
     let mainImage = "";
     let allImages: string[] = [];
@@ -79,7 +92,8 @@ export async function POST(req: NextRequest) {
     );
     const subtotal = materialTotal + laborTotal;
     const markupAmount = subtotal * (markupPct / 100);
-    const total = subtotal + markupAmount + (estimate.adjustment || 0);
+    // Internal builds transfer at cost — no markup, no rounding adjustment.
+    const total = internal ? subtotal : subtotal + markupAmount + (estimate.adjustment || 0);
 
     // Client-facing proposal attachments (PDFs, spec sheets) travel with the
     // build so they're available on the Nexus side too.
@@ -95,20 +109,26 @@ export async function POST(req: NextRequest) {
     // Build the customer-facing portal URL. Ensure a proposal token exists, and
     // publish the proposal (mark "sent") so the customer can review + sign it
     // from Nexus's quote — sending to Nexus IS the "make it live" step here.
-    let proposalToken: string = estimate.proposal_token || "";
+    //
+    // Internal builds have no client to send to: no proposal token, no "sent"
+    // status, no sign-off portal. The build simply records its cost.
+    let proposalToken: string = internal ? "" : estimate.proposal_token || "";
+    let buildUrl = "";
     const proposalUpdates: Record<string, unknown> = {};
-    if (!proposalToken) {
-      proposalToken = `prop_${randomUUID().replace(/-/g, "")}`;
-      proposalUpdates.proposal_token = proposalToken;
+    if (!internal) {
+      if (!proposalToken) {
+        proposalToken = `prop_${randomUUID().replace(/-/g, "")}`;
+        proposalUpdates.proposal_token = proposalToken;
+      }
+      if (estimate.proposal_status !== "sent" && estimate.proposal_status !== "approved") {
+        const nowIso = new Date().toISOString();
+        proposalUpdates.proposal_status = "sent";
+        proposalUpdates.proposal_sent_at = nowIso;
+        proposalUpdates.proposal_expires_at = new Date(Date.now() + 30 * 86400000).toISOString();
+        if (estimate.status === "draft") proposalUpdates.status = "sent";
+      }
+      buildUrl = buildPortalUrl(estimate.id, proposalToken);
     }
-    if (estimate.proposal_status !== "sent" && estimate.proposal_status !== "approved") {
-      const nowIso = new Date().toISOString();
-      proposalUpdates.proposal_status = "sent";
-      proposalUpdates.proposal_sent_at = nowIso;
-      proposalUpdates.proposal_expires_at = new Date(Date.now() + 30 * 86400000).toISOString();
-      if (estimate.status === "draft") proposalUpdates.status = "sent";
-    }
-    const buildUrl = buildPortalUrl(estimate.id, proposalToken);
 
     // Push to WR's relic_builds table
     const wr = getWRClient();
@@ -121,7 +141,8 @@ export async function POST(req: NextRequest) {
       build_type: buildType,
       line_items: lineItems,
       labor_items: laborItems,
-      markup_percent: markupPct,
+      // Internal builds transfer at cost — report zero markup.
+      markup_percent: internal ? 0 : markupPct,
       material_total: materialTotal,
       labor_total: laborTotal,
       total,
@@ -131,7 +152,8 @@ export async function POST(req: NextRequest) {
       status: estimate.status,
       // Nexus added these columns to relic_builds — write the portal URL and
       // amount here so the "WR Builds" picker copies them onto the quote item.
-      axiom_build_url: buildUrl,
+      // Internal builds have no sign-off portal, so the URL is left empty.
+      axiom_build_url: buildUrl || null,
       estimate_amount: total,
       sent_at: new Date().toISOString(),
     };
@@ -158,16 +180,19 @@ export async function POST(req: NextRequest) {
 
     // Also fire the relic-build-link webhook so Nexus keeps the quote's
     // items[] in sync with axiom_build_url (the direct relic_builds upsert
-    // above doesn't touch the quote line). Best-effort.
-    await notifyNexusBuildLink({
-      estimateId: estimate.id,
-      estimateNumber: estimate.estimate_number,
-      proposalToken,
-      relicBuildId: wrData.id,
-      estimateAmount: total,
-      status: "sent",
-      event: "updated",
-    });
+    // above doesn't touch the quote line). Best-effort. Skipped for internal
+    // builds — there's no customer quote to link.
+    if (!internal) {
+      await notifyNexusBuildLink({
+        estimateId: estimate.id,
+        estimateNumber: estimate.estimate_number,
+        proposalToken,
+        relicBuildId: wrData.id,
+        estimateAmount: total,
+        status: "sent",
+        event: "updated",
+      });
+    }
 
     // Hand Nexus this build's material cost so it lands as project spend
     // (project_spend_lines). Keyed on the relic_builds.id. Dormant until
@@ -190,14 +215,19 @@ export async function POST(req: NextRequest) {
     // in the response, but write nothing. Flip the env var on once verified.
     let quoteAppend: Record<string, unknown> | null = null;
     try {
-      const { data: wo } = await axiom
-        .from("wallflower_work_orders")
-        .select("nexus_ref")
-        .eq("estimate_id", estimate.id)
-        .not("nexus_ref", "is", null)
-        .limit(1)
-        .maybeSingle();
+      // Internal builds don't ride on a customer quote — their cost goes to
+      // Nexus project spend (the build-cost push above) only.
+      const { data: wo } = internal
+        ? { data: null }
+        : await axiom
+            .from("wallflower_work_orders")
+            .select("nexus_ref")
+            .eq("estimate_id", estimate.id)
+            .not("nexus_ref", "is", null)
+            .limit(1)
+            .maybeSingle();
       const ref = (wo?.nexus_ref ?? null) as { type?: string; id?: string } | null;
+      if (internal) quoteAppend = { internal: true, skipped: "no customer quote for internal builds" };
 
       if (ref?.type === "quote" && ref.id) {
         const buildItem = {
@@ -247,7 +277,7 @@ export async function POST(req: NextRequest) {
       quoteAppend = { error: e instanceof Error ? e.message : "quote append failed" };
     }
 
-    return NextResponse.json({ success: true, wr_id: wrData.id, build_url: buildUrl, quote_append: quoteAppend });
+    return NextResponse.json({ success: true, internal, wr_id: wrData.id, build_url: buildUrl, quote_append: quoteAppend });
   } catch (err) {
     console.error("send-to-wr error:", err);
     return NextResponse.json(
