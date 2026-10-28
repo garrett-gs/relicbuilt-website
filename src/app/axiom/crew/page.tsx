@@ -100,6 +100,47 @@ function localDateStr(d: Date) {
 }
 
 type Tab = "live" | "logs";
+type SortMode = "incoming" | "name" | "date" | "project";
+
+const SORT_LABELS: Record<SortMode, string> = {
+  incoming: "As they come in",
+  name: "Name",
+  date: "Date",
+  project: "Project",
+};
+
+// Group a list of entries for display. "incoming" is one flat, newest-first
+// group with no header; the others group + label and sort the groups.
+function buildGroups(
+  list: TimeEntry[],
+  mode: SortMode
+): { key: string; label: string | null; entries: TimeEntry[] }[] {
+  const byTimeDesc = (a: TimeEntry, b: TimeEntry) =>
+    new Date(b.clock_in).getTime() - new Date(a.clock_in).getTime();
+  if (mode === "incoming") {
+    return [{ key: "all", label: null, entries: [...list].sort(byTimeDesc) }];
+  }
+  const map = new Map<string, TimeEntry[]>();
+  const keyOf = (e: TimeEntry) =>
+    mode === "name"
+      ? e.member_name
+      : mode === "project"
+      ? e.project_name || "No project"
+      : localDateStr(new Date(e.clock_in));
+  for (const e of list) {
+    const k = keyOf(e);
+    if (!map.has(k)) map.set(k, []);
+    map.get(k)!.push(e);
+  }
+  const keys = Array.from(map.keys());
+  // Date newest-first (ISO strings sort lexically); name/project alphabetical.
+  keys.sort((a, b) => (mode === "date" ? b.localeCompare(a) : a.localeCompare(b)));
+  return keys.map((k) => ({
+    key: k,
+    label: mode === "date" ? formatDate(k) : k,
+    entries: map.get(k)!.sort(byTimeDesc),
+  }));
+}
 
 export default function CrewPage() {
   const { userEmail } = useAuth();
@@ -116,6 +157,7 @@ export default function CrewPage() {
   const [end, setEnd] = useState(localDateStr(today));
   const [personFilter, setPersonFilter] = useState("all");
   const [unapprovedOnly, setUnapprovedOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<SortMode>("incoming");
   const [logs, setLogs] = useState<TimeEntry[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [editing, setEditing] = useState<TimeEntry | null>(null);
@@ -221,9 +263,8 @@ export default function CrewPage() {
     .filter((e) => personFilter === "all" || e.member_name === personFilter)
     .filter((e) => !unapprovedOnly || !e.approved);
 
-  const people = Array.from(new Set(filtered.map((e) => e.member_name))).sort((a, b) =>
-    a.localeCompare(b)
-  );
+  const pending = filtered.filter((e) => !e.approved);
+  const approvedList = filtered.filter((e) => e.approved);
 
   async function handleApprove(entry: TimeEntry, approved: boolean) {
     setBusyId(entry.id);
@@ -244,9 +285,9 @@ export default function CrewPage() {
     }
   }
 
-  async function handleApproveAll(person: string) {
-    const toApprove = filtered.filter((e) => e.member_name === person && !e.approved);
-    for (const entry of toApprove) {
+  async function approveMany(entries: TimeEntry[]) {
+    for (const entry of entries) {
+      if (entry.approved) continue;
       // Sequential so a mid-batch error leaves a clean state.
       // eslint-disable-next-line no-await-in-loop
       await handleApprove(entry, true);
@@ -455,6 +496,18 @@ export default function CrewPage() {
                 ))}
               </select>
             </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-widest text-muted/60">Sort</span>
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortMode)}
+                className="bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent"
+              >
+                {(Object.keys(SORT_LABELS) as SortMode[]).map((k) => (
+                  <option key={k} value={k}>{SORT_LABELS[k]}</option>
+                ))}
+              </select>
+            </label>
             <label className="flex items-center gap-2 text-xs text-muted cursor-pointer py-1.5">
               <input
                 type="checkbox"
@@ -474,144 +527,43 @@ export default function CrewPage() {
 
           {logsLoading ? (
             <div className="text-muted text-sm py-10 text-center">Loading logs…</div>
-          ) : people.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <div className="bg-card border border-border rounded p-6 text-center text-muted text-sm">
               No clocked entries in this range.
             </div>
           ) : (
-            <div className="space-y-6">
-              {people.map((person) => {
-                const rows = filtered
-                  .filter((e) => e.member_name === person)
-                  .sort((a, b) => new Date(b.clock_in).getTime() - new Date(a.clock_in).getTime());
-                const totalHours = rows.reduce((s, e) => s + (e.hours || 0), 0);
-                const totalCost = rows.reduce((s, e) => s + (e.hours || 0) * (e.hourly_rate || 0), 0);
-                const pendingCount = rows.filter((e) => !e.approved).length;
-                const color = colorMap[person] || "#5b642e";
+            <div className="space-y-8">
+              {/* Needs approval — the actionable set, on top */}
+              {pending.length > 0 && (
+                <LogSection
+                  title="Needs approval"
+                  dotClass="bg-amber-400"
+                  entries={pending}
+                  sortBy={sortBy}
+                  colorMap={colorMap}
+                  busyId={busyId}
+                  showApproveAll
+                  onApproveMany={approveMany}
+                  onToggleApprove={(e) => handleApprove(e, !e.approved)}
+                  onEdit={setEditing}
+                  onDelete={handleDelete}
+                />
+              )}
 
-                // Group this person's rows by local date
-                const byDate = new Map<string, TimeEntry[]>();
-                for (const e of rows) {
-                  const key = localDateStr(new Date(e.clock_in));
-                  if (!byDate.has(key)) byDate.set(key, []);
-                  byDate.get(key)!.push(e);
-                }
-
-                return (
-                  <div key={person} className="bg-card border border-border rounded-lg overflow-hidden">
-                    {/* Person header */}
-                    <div className="flex items-center gap-3 px-4 py-3 border-b border-border bg-background/40">
-                      <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                        style={{ background: `${color}22`, color, border: `2px solid ${color}` }}
-                      >
-                        {person.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground truncate">{person}</p>
-                        <p className="text-[11px] text-muted">
-                          {totalHours.toFixed(2)} h · {money(totalCost)}
-                        </p>
-                      </div>
-                      {pendingCount > 0 && (
-                        <button
-                          onClick={() => handleApproveAll(person)}
-                          className="flex items-center gap-1.5 text-[11px] text-accent hover:text-accent/80 border border-accent/30 rounded px-2.5 py-1.5"
-                        >
-                          <CheckCircle2 size={13} />
-                          Approve all ({pendingCount})
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Days */}
-                    {Array.from(byDate.entries()).map(([date, dayRows]) => {
-                      const dayHours = dayRows.reduce((s, e) => s + (e.hours || 0), 0);
-                      return (
-                        <div key={date} className="px-4 py-3 border-b border-border/60 last:border-b-0">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-medium text-foreground">{formatDate(date)}</span>
-                            <span className="text-[11px] text-muted font-mono">{dayHours.toFixed(2)} h</span>
-                          </div>
-                          <div className="space-y-2">
-                            {dayRows.map((e) => {
-                              const cost = (e.hours || 0) * (e.hourly_rate || 0);
-                              const isBusy = busyId === e.id;
-                              return (
-                                <div
-                                  key={e.id}
-                                  className="flex items-start gap-3 rounded border border-border/60 bg-background/40 px-3 py-2"
-                                >
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <span className="font-mono text-xs text-foreground">
-                                        {hhmm(e.clock_in)} – {hhmm(e.clock_out)}
-                                      </span>
-                                      <span className="font-mono text-xs font-semibold text-accent">
-                                        {(e.hours || 0).toFixed(2)} h
-                                      </span>
-                                      <span className="text-[11px] text-muted">
-                                        {money(cost)} <span className="text-muted/50">@ {money(e.hourly_rate || 0)}/h</span>
-                                      </span>
-                                      {e.approved ? (
-                                        <span className="flex items-center gap-1 text-[10px] text-green-400">
-                                          <CheckCircle2 size={11} /> Approved
-                                        </span>
-                                      ) : (
-                                        <span className="flex items-center gap-1 text-[10px] text-amber-400/80">
-                                          <Circle size={11} /> Pending
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-xs text-muted truncate mt-0.5">
-                                      {e.project_name || "No project"}
-                                    </p>
-                                    {e.tasks && e.tasks.length > 0 && (
-                                      <p className="text-[11px] text-muted/70 truncate">{e.tasks.join(", ")}</p>
-                                    )}
-                                    {e.notes && (
-                                      <p className="text-[11px] text-muted/70 italic truncate">{e.notes}</p>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    <button
-                                      onClick={() => handleApprove(e, !e.approved)}
-                                      disabled={isBusy}
-                                      title={e.approved ? "Un-approve" : "Approve"}
-                                      className={
-                                        "p-1.5 rounded hover:bg-card disabled:opacity-40 " +
-                                        (e.approved ? "text-green-400" : "text-muted hover:text-green-400")
-                                      }
-                                    >
-                                      <CheckCircle2 size={15} />
-                                    </button>
-                                    <button
-                                      onClick={() => setEditing(e)}
-                                      disabled={isBusy}
-                                      title="Edit"
-                                      className="p-1.5 rounded text-muted hover:text-accent hover:bg-card disabled:opacity-40"
-                                    >
-                                      <Pencil size={14} />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDelete(e)}
-                                      disabled={isBusy}
-                                      title="Delete"
-                                      className="p-1.5 rounded text-muted hover:text-red-400 hover:bg-card disabled:opacity-40"
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
+              {/* Approved — tucked below the line */}
+              {approvedList.length > 0 && (
+                <LogSection
+                  title="Approved"
+                  dotClass="bg-green-500"
+                  entries={approvedList}
+                  sortBy={sortBy}
+                  colorMap={colorMap}
+                  busyId={busyId}
+                  onToggleApprove={(e) => handleApprove(e, !e.approved)}
+                  onEdit={setEditing}
+                  onDelete={handleDelete}
+                />
+              )}
             </div>
           )}
         </>
@@ -627,6 +579,178 @@ export default function CrewPage() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+// A labeled block of entries (e.g. "Needs approval" / "Approved"), grouped
+// inside per the active sort. "As they come in" renders one flat, header-less
+// list; the other sorts add group headers with sub-totals.
+function LogSection({
+  title,
+  dotClass,
+  entries,
+  sortBy,
+  colorMap,
+  busyId,
+  showApproveAll,
+  onApproveMany,
+  onToggleApprove,
+  onEdit,
+  onDelete,
+}: {
+  title: string;
+  dotClass: string;
+  entries: TimeEntry[];
+  sortBy: SortMode;
+  colorMap: Record<string, string>;
+  busyId: string | null;
+  showApproveAll?: boolean;
+  onApproveMany?: (entries: TimeEntry[]) => void;
+  onToggleApprove: (e: TimeEntry) => void;
+  onEdit: (e: TimeEntry) => void;
+  onDelete: (e: TimeEntry) => void;
+}) {
+  const groups = buildGroups(entries, sortBy);
+  const totalHours = entries.reduce((s, e) => s + (e.hours || 0), 0);
+  const totalCost = entries.reduce((s, e) => s + (e.hours || 0) * (e.hourly_rate || 0), 0);
+
+  return (
+    <div>
+      {/* Section line */}
+      <div className="flex items-center gap-2.5 border-b border-border pb-2 mb-3">
+        <span className={`w-2 h-2 rounded-full ${dotClass}`} />
+        <h2 className="text-sm font-medium uppercase tracking-widest text-foreground">
+          {title} ({entries.length})
+        </h2>
+        <span className="text-[11px] text-muted">
+          {totalHours.toFixed(2)} h · {money(totalCost)}
+        </span>
+        {showApproveAll && onApproveMany && (
+          <button
+            onClick={() => onApproveMany(entries)}
+            className="ml-auto flex items-center gap-1.5 text-[11px] text-accent hover:text-accent/80 border border-accent/30 rounded px-2.5 py-1.5"
+          >
+            <CheckCircle2 size={13} />
+            Approve all ({entries.length})
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        {groups.map((g) => {
+          const gHours = g.entries.reduce((s, e) => s + (e.hours || 0), 0);
+          const gCost = g.entries.reduce((s, e) => s + (e.hours || 0) * (e.hourly_rate || 0), 0);
+          const dotColor = sortBy === "name" ? colorMap[g.key] || "#5b642e" : null;
+          return (
+            <div key={g.key}>
+              {g.label && (
+                <div className="flex items-center gap-2 mb-2">
+                  {dotColor && (
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: dotColor }} />
+                  )}
+                  <span className="text-xs font-medium text-foreground">{g.label}</span>
+                  <span className="text-[11px] text-muted font-mono">
+                    {gHours.toFixed(2)} h · {money(gCost)}
+                  </span>
+                  {showApproveAll && onApproveMany && (
+                    <button
+                      onClick={() => onApproveMany(g.entries)}
+                      className="ml-auto text-[11px] text-accent/80 hover:text-accent"
+                    >
+                      Approve all
+                    </button>
+                  )}
+                </div>
+              )}
+              <div className="space-y-2">
+                {g.entries.map((e) => (
+                  <LogRow
+                    key={e.id}
+                    entry={e}
+                    busy={busyId === e.id}
+                    onToggleApprove={() => onToggleApprove(e)}
+                    onEdit={() => onEdit(e)}
+                    onDelete={() => onDelete(e)}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function LogRow({
+  entry: e,
+  busy,
+  onToggleApprove,
+  onEdit,
+  onDelete,
+}: {
+  entry: TimeEntry;
+  busy: boolean;
+  onToggleApprove: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const cost = (e.hours || 0) * (e.hourly_rate || 0);
+  return (
+    <div className="flex items-start gap-3 rounded border border-border/60 bg-card px-3 py-2">
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted/80">{formatDate(e.clock_in)}</span>
+          <span className="font-mono text-xs text-foreground">
+            {hhmm(e.clock_in)} – {hhmm(e.clock_out)}
+          </span>
+          <span className="font-mono text-xs font-semibold text-accent">
+            {(e.hours || 0).toFixed(2)} h
+          </span>
+          <span className="text-[11px] text-muted">
+            {money(cost)} <span className="text-muted/50">@ {money(e.hourly_rate || 0)}/h</span>
+          </span>
+        </div>
+        <p className="text-xs text-muted truncate mt-0.5">
+          <span className="text-muted/80">{e.member_name}</span>
+          {" · "}
+          {e.project_name || "No project"}
+        </p>
+        {e.tasks && e.tasks.length > 0 && (
+          <p className="text-[11px] text-muted/70 truncate">{e.tasks.join(", ")}</p>
+        )}
+        {e.notes && <p className="text-[11px] text-muted/70 italic truncate">{e.notes}</p>}
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={onToggleApprove}
+          disabled={busy}
+          title={e.approved ? "Un-approve" : "Approve"}
+          className={
+            "p-1.5 rounded hover:bg-background disabled:opacity-40 " +
+            (e.approved ? "text-green-400" : "text-muted hover:text-green-400")
+          }
+        >
+          {e.approved ? <CheckCircle2 size={15} /> : <Circle size={15} />}
+        </button>
+        <button
+          onClick={onEdit}
+          disabled={busy}
+          title="Edit"
+          className="p-1.5 rounded text-muted hover:text-accent hover:bg-background disabled:opacity-40"
+        >
+          <Pencil size={14} />
+        </button>
+        <button
+          onClick={onDelete}
+          disabled={busy}
+          title="Delete"
+          className="p-1.5 rounded text-muted hover:text-red-400 hover:bg-background disabled:opacity-40"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
     </div>
   );
 }
