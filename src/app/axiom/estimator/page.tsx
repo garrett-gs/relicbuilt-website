@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, type DragEvent } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
@@ -878,6 +878,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   // Import a line-item list (JSON/CSV, e.g. built in Claude Desktop).
   const [importingList, setImportingList] = useState(false);
   const listInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [laborItems, setLaborItems] = useState<EstimateLaborItem[]>(estimate.labor_items || []);
   const [markupPct, setMarkupPct] = useState(estimate.markup_percent || 0);
   const [adjustment, setAdjustment] = useState(estimate.adjustment || 0);
@@ -1609,6 +1610,18 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     } finally {
       setImportingList(false);
     }
+  }
+
+  // Drag-and-drop onto the Materials column: a .json/.csv/.txt goes to the list
+  // importer; a dropped PDF/image falls through to the vendor-quote reader.
+  function handleMaterialsDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer.files?.[0];
+    if (!f) return;
+    const isList = /\.(json|csv|txt)$/i.test(f.name) || /json|csv|text\/plain/.test(f.type);
+    if (isList) importList(f);
+    else importQuote(f);
   }
 
   function updateLine(i: number, field: keyof EstimateLineItem, value: string | number) {
@@ -2504,9 +2517,25 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
         <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Line Items &amp; Labor</h3>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: line items */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
+        {/* Left: line items — also a drag-and-drop target for list/quote files */}
+        <div
+          className="relative"
+          onDragOver={(e) => { e.preventDefault(); if (!dragOver) setDragOver(true); }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
+          onDrop={handleMaterialsDrop}
+        >
+          {dragOver && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed border-accent bg-background/92 pointer-events-none text-center px-4">
+              <FileUp size={24} className="text-accent" />
+              <p className="text-sm font-medium text-foreground">Drop to import</p>
+              <p className="text-[11px] text-muted">
+                Lists: <span className="font-mono text-foreground">.json .csv .txt</span>
+                {"  ·  "}
+                Quotes: <span className="font-mono text-foreground">.pdf, images</span>
+              </p>
+            </div>
+          )}
+          <div className="flex items-center justify-between mb-1.5">
             <h3 className="text-xs uppercase tracking-wider text-muted">Materials & Line Items</h3>
             <div className="flex items-center gap-3">
               <button onClick={() => listInputRef.current?.click()} disabled={importingList} title="Load a JSON or CSV line-item list (e.g. built in Claude Desktop)" className="text-accent text-xs flex items-center gap-1 disabled:opacity-50">
@@ -2534,6 +2563,10 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
               onChange={(e) => { const f = e.target.files?.[0]; if (f) importList(f); e.target.value = ""; }}
             />
           </div>
+          <p className="text-[11px] text-muted/70 mb-3 flex items-center gap-1.5">
+            <FileUp size={11} className="shrink-0 text-muted/60" />
+            Drag &amp; drop to import — lists <span className="font-mono text-muted">.json .csv .txt</span>, quotes <span className="font-mono text-muted">.pdf</span> / images
+          </p>
           {quoteMsg && (
             <p className="text-xs text-muted mb-3 bg-card border border-border rounded-lg px-3 py-2">{quoteMsg}</p>
           )}
