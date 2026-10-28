@@ -170,6 +170,10 @@ export interface LaborEntry {
   edited?: boolean;
   notes?: string;
   tasks?: string[];
+  // Links this labor-log row back to the time_entry it came from, so an admin
+  // edit/delete in Crew → Time Logs can reconcile the exact row (not a fuzzy
+  // match). Absent on legacy rows and on hand-entered project labor.
+  time_entry_id?: string;
 }
 
 // ── Receipts ─────────────────────────────────────────────────
@@ -840,7 +844,13 @@ export interface TimeEntry {
   clock_out?: string;
   hours?: number;
   hourly_rate: number;
+  tasks?: string[];
   notes?: string;
+  // Admin sign-off (Crew → Time Logs). An entry is "approved" once a manager
+  // has confirmed the times are accurate; editing an approved entry clears it.
+  approved?: boolean;
+  approved_by?: string;
+  approved_at?: string;
   created_at: string;
 }
 
