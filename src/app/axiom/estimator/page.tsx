@@ -16,7 +16,8 @@ import DateField from "@/components/ui/DateField";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { generateEstimateProposalHtml, generateMasterProposalHtml, composeClientAddress, type MasterProposalBuild } from "@/lib/proposal-html";
 import { fuzzyRank } from "@/lib/fuzzy-match";
-import { Plus, Trash2, X, ChevronDown, ChevronRight, ChevronLeft, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip, Layers, List, Eye } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, ChevronRight, ChevronLeft, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip, Layers, List, Eye, FileUp } from "lucide-react";
+import { parseEstimateFile } from "@/lib/estimate-import";
 import { useRouter } from "next/navigation";
 
 const STATUS_STYLES: Record<Estimate["status"], { text: string; bg: string; border: string }> = {
@@ -874,6 +875,9 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
   const [importingQuote, setImportingQuote] = useState(false);
   const [quoteMsg, setQuoteMsg] = useState("");
   const quoteInputRef = useRef<HTMLInputElement>(null);
+  // Import a line-item list (JSON/CSV, e.g. built in Claude Desktop).
+  const [importingList, setImportingList] = useState(false);
+  const listInputRef = useRef<HTMLInputElement>(null);
   const [laborItems, setLaborItems] = useState<EstimateLaborItem[]>(estimate.labor_items || []);
   const [markupPct, setMarkupPct] = useState(estimate.markup_percent || 0);
   const [adjustment, setAdjustment] = useState(estimate.adjustment || 0);
@@ -1555,6 +1559,58 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       setImportingQuote(false);
     }
   }
+  // Import a line-item list (JSON or CSV) and append it. Materials + labor,
+  // and the file may also set project name / markup / notes — filling blanks,
+  // and confirming before overwriting anything you've already entered.
+  async function importList(file: File) {
+    setImportingList(true);
+    setQuoteMsg("");
+    try {
+      const text = await file.text();
+      const parsed = parseEstimateFile(file.name, text);
+      if (parsed.lineItems.length === 0 && parsed.laborItems.length === 0) {
+        setQuoteMsg("No line items or labor found in that file.");
+        return;
+      }
+      if (parsed.lineItems.length) setLineItems((prev) => [...prev, ...parsed.lineItems]);
+      if (parsed.laborItems.length) setLaborItems((prev) => [...prev, ...parsed.laborItems]);
+
+      // Project name — fill only if blank.
+      if (parsed.projectName && !projectName.trim()) setProjectName(parsed.projectName);
+
+      // Markup — fill if unset, confirm before changing a value you've entered.
+      if (parsed.markupPercent != null && parsed.markupPercent !== markupPct) {
+        if (!markupPct) {
+          setMarkupPct(parsed.markupPercent);
+        } else if (
+          confirm(`Replace the current ${markupPct}% markup with ${parsed.markupPercent}% from the file?`)
+        ) {
+          setMarkupPct(parsed.markupPercent);
+        }
+      }
+
+      // Notes — fill if blank, otherwise offer to append.
+      if (parsed.notes) {
+        if (!notes.trim()) setNotes(parsed.notes);
+        else if (confirm("Append the file's notes to your existing notes?")) {
+          setNotes(`${notes}\n\n${parsed.notes}`);
+        }
+      }
+
+      markDirty();
+      const bits: string[] = [];
+      if (parsed.lineItems.length)
+        bits.push(`${parsed.lineItems.length} line ${parsed.lineItems.length === 1 ? "item" : "items"}`);
+      if (parsed.laborItems.length)
+        bits.push(`${parsed.laborItems.length} labor ${parsed.laborItems.length === 1 ? "item" : "items"}`);
+      setQuoteMsg(`Imported ${bits.join(" + ")}. Review prices and units before sending.`);
+    } catch (err) {
+      setQuoteMsg(err instanceof Error ? err.message : "Could not read that file.");
+    } finally {
+      setImportingList(false);
+    }
+  }
+
   function updateLine(i: number, field: keyof EstimateLineItem, value: string | number) {
     const updated = [...lineItems];
     (updated[i] as unknown as Record<string, string | number>)[field] = value;
@@ -2453,6 +2509,9 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs uppercase tracking-wider text-muted">Materials & Line Items</h3>
             <div className="flex items-center gap-3">
+              <button onClick={() => listInputRef.current?.click()} disabled={importingList} title="Load a JSON or CSV line-item list (e.g. built in Claude Desktop)" className="text-accent text-xs flex items-center gap-1 disabled:opacity-50">
+                {importingList ? <Loader2 size={12} className="animate-spin" /> : <FileUp size={12} />} {importingList ? "Importing…" : "Import List"}
+              </button>
               <button onClick={() => quoteInputRef.current?.click()} disabled={importingQuote} className="text-accent text-xs flex items-center gap-1 disabled:opacity-50">
                 {importingQuote ? <Loader2 size={12} className="animate-spin" /> : <Paperclip size={12} />} {importingQuote ? "Reading quote…" : "Import Quote"}
               </button>
@@ -2466,6 +2525,13 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
               accept="application/pdf,image/*"
               className="hidden"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) importQuote(f); e.target.value = ""; }}
+            />
+            <input
+              ref={listInputRef}
+              type="file"
+              accept=".json,.csv,application/json,text/csv,text/plain"
+              className="hidden"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) importList(f); e.target.value = ""; }}
             />
           </div>
           {quoteMsg && (
