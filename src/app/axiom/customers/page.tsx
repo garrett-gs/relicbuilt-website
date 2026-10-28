@@ -316,7 +316,14 @@ export default function CustomersPage() {
                         {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                       </button>
                       <button className="flex-1 text-left min-w-0" onClick={() => selectCompany(co.id)}>
-                        <span className="font-medium truncate block">{co.name}</span>
+                        <span className="font-medium truncate flex items-center gap-1.5">
+                          <span className="truncate">{co.name}</span>
+                          {co.internal && (
+                            <span className="shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/25">
+                              Internal
+                            </span>
+                          )}
+                        </span>
                         <span className="text-xs text-muted">
                           {co.industry ? `${co.industry} · ` : ""}
                           {contacts.length} contact{contacts.length !== 1 ? "s" : ""}
@@ -469,7 +476,7 @@ function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact,
   onUpdate: (fields: Partial<Company>) => void;
 }) {
   const [confirmDel, setConfirmDel] = useState(false);
-  const [form, setForm] = useState({ name: company.name, industry: company.industry ?? "", address: company.address ?? "", phone: company.phone ?? "", website: company.website ?? "" });
+  const [form, setForm] = useState({ name: company.name, industry: company.industry ?? "", address: company.address ?? "", phone: company.phone ?? "", website: company.website ?? "", internal: company.internal ?? false });
   const [dirty, setDirty] = useState(false);
   const [saved, setSaved] = useState(false);
   const [rev, setRev] = useState(0);
@@ -479,7 +486,7 @@ function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact,
 
   function save() {
     if (!form.name) return;
-    onUpdate({ name: form.name, industry: form.industry || undefined, address: form.address || undefined, phone: form.phone || undefined, website: form.website || undefined });
+    onUpdate({ name: form.name, industry: form.industry || undefined, address: form.address || undefined, phone: form.phone || undefined, website: form.website || undefined, internal: form.internal });
     setDirty(false);
     setSaved(true);
   }
@@ -537,6 +544,20 @@ function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact,
             )}
           </div>
         </div>
+        <label className="flex items-start gap-2.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.internal}
+            onChange={(e) => { setForm((f) => ({ ...f, internal: e.target.checked })); markDirty(); }}
+            className="accent-accent mt-0.5"
+          />
+          <span>
+            <span className="text-sm text-foreground">Internal (our own business)</span>
+            <span className="block text-[11px] text-muted mt-0.5">
+              Builds for this business price at cost and go to Nexus as project spend only. (Set it on the estimate&apos;s customer too, since builds send by customer.)
+            </span>
+          </span>
+        </label>
       </div>
 
 

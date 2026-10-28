@@ -310,6 +310,9 @@ export interface Company {
   industry?: string;
   phone?: string;
   website?: string;
+  // The shop's own business as a company (e.g. Wallflower RELIC). Mirrors the
+  // Customer `internal` flag for the Companies list.
+  internal?: boolean;
   portal_token?: string;
   portal_enabled?: boolean;
   created_at: string;
