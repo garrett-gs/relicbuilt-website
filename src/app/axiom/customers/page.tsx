@@ -381,7 +381,14 @@ export default function CustomersPage() {
                       : "hover:bg-card text-foreground"
                   )}
                 >
-                  <p className="font-medium truncate">{c.name}</p>
+                  <p className="font-medium truncate flex items-center gap-1.5">
+                    <span className="truncate">{c.name}</span>
+                    {c.internal && (
+                      <span className="shrink-0 text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/25">
+                        Internal
+                      </span>
+                    )}
+                  </p>
                   <p className="text-xs text-muted truncate">{c.email || c.phone || "No contact info"}</p>
                 </button>
               ))}
