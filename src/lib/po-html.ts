@@ -1,5 +1,5 @@
 import { PurchaseOrder, POLineItem } from "@/types/axiom";
-import { EntityProfile } from "@/lib/entity-profile";
+import { EntityProfile, logoForPlacement } from "@/lib/entity-profile";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -52,9 +52,13 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false, profile?: En
   // Entity branding. When a profile is passed, use its logo/name/footer;
   // otherwise fall back to the historic Wallflower RELIC defaults.
   const bizName = profile?.name || "Wallflower RELIC";
+  // PO logo + size come from branding assignments (Settings → Brand Logos).
+  // Default 180px wide when unassigned (down from the old hardcoded 440px).
+  const poLogo = logoForPlacement(profile, "po");
   const logoSrc = profile
-    ? (profile.logoUrl || "")
+    ? poLogo.url
     : (forEmail ? "https://axiom.relicbuilt.com/wr-logo-black.png" : "/wr-logo-black.png");
+  const logoWidth = poLogo.width ?? 180;
   const footer = profile?.footer || "Wallflower RELIC &nbsp;&middot;&nbsp; (402) 235-8179 &nbsp;&middot;&nbsp; wallflower-relic.com";
 
   return `
@@ -62,7 +66,7 @@ export function generatePOHtml(po: PurchaseOrder, forEmail = false, profile?: En
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;border-bottom:2px solid #5b642e;padding-bottom:20px;">
         <div>
           ${logoSrc
-            ? `<img src="${logoSrc}" alt="${bizName}" style="width:440px;max-width:78%;height:auto;display:block;" />`
+            ? `<img src="${logoSrc}" alt="${bizName}" style="width:${logoWidth}px;max-width:100%;height:auto;display:block;" />`
             : `<p style="margin:0;font-size:26px;font-weight:bold;color:#111;">${bizName}</p>`}
         </div>
         <div style="text-align:right;">

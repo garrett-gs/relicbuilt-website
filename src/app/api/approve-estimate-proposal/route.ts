@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
     // "client signed" notification — who gets the email).
     const { data: settings } = await supabase
       .from("settings")
-      .select("biz_name,biz_phone,biz_email,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text,team_members,relic_profile")
+      .select("biz_name,biz_phone,biz_email,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text,team_members,relic_profile,logo_url,branding")
       .limit(1)
       .single();
 

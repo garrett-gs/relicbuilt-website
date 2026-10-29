@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BusinessEntity } from "@/types/axiom";
-import { resolveEntityProfile } from "./entity-profile";
+import { resolveEntityProfile, logoForPlacement } from "./entity-profile";
 
 // Server-side helper that emails the team when a payment lands. Used by
 // both the Stripe-redirect path (confirm-payment) and the manual
@@ -74,7 +74,11 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
     const bizName = profile.name;
     const accent = profile.accent;
     const onAccent = profile.onAccent;
-    const logoUrl = profile.logoUrl || "https://axiom.relicbuilt.com/wr-logo-black.png";
+    const emailLogo = logoForPlacement(profile, "email");
+    const logoUrl = emailLogo.url || "https://axiom.relicbuilt.com/wr-logo-black.png";
+    const logoStyle = emailLogo.width
+      ? `width:${emailLogo.width}px;max-width:100%;height:auto;display:block;`
+      : "height:36px;display:block;";
     const origin = args.origin || "https://relicbuilt.com";
     const invoiceUrl = `${origin}/axiom/invoices`;
     const dateFormatted = new Date().toLocaleDateString("en-US", {
@@ -96,7 +100,7 @@ export async function notifyPaymentTeam(args: NotifyPaymentTeamArgs): Promise<vo
     const html = `
 <div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto;color:#111;background:#fff;">
   <div style="padding:18px 28px;border-bottom:3px solid ${accent};">
-    <img src="${logoUrl}" alt="${bizName}" style="height:36px;display:block;" />
+    <img src="${logoUrl}" alt="${bizName}" style="${logoStyle}" />
   </div>
   <div style="padding:28px;">
     <p style="margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:#888;">${headerLabel}</p>

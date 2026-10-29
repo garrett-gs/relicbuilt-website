@@ -1,4 +1,4 @@
-import { BusinessEntity, RelicProfile } from "@/types/axiom";
+import { BusinessEntity, RelicProfile, BrandingConfig, LogoPlacement } from "@/types/axiom";
 
 /**
  * Resolved business identity for a given entity, used by document templates
@@ -25,6 +25,36 @@ export interface EntityProfile {
   accentDark: string; // dark bar/button bg with legible light text on it
   invoiceBarBg: string;   // invoice "Items" bar background
   invoiceBarText: string; // legible text color on invoiceBarBg
+  branding?: BrandingConfig; // logo library + per-placement assignments
+}
+
+// Placements a logo can be assigned to. Keep in sync with LogoPlacement.
+export const LOGO_PLACEMENTS: { key: LogoPlacement; label: string; defaultWidth: number }[] = [
+  { key: "po", label: "Purchase Orders", defaultWidth: 180 },
+  { key: "invoice", label: "Invoices", defaultWidth: 150 },
+  { key: "proposal", label: "Proposals", defaultWidth: 220 },
+  { key: "email", label: "Email", defaultWidth: 150 },
+];
+
+/**
+ * Resolve the logo for one placement from an entity's branding: the assigned
+ * library logo at its chosen width, falling back to the entity's single
+ * `logoUrl`. `width` is undefined when no assignment sets one, so each template
+ * can apply its own default (and height-based templates keep their look).
+ */
+export function logoForPlacement(
+  profile: EntityProfile | undefined,
+  placement: LogoPlacement
+): { url: string; width?: number } {
+  const b = profile?.branding;
+  const assign = b?.assignments?.[placement];
+  const chosen = assign?.logo_id
+    ? (b?.logos || []).find((l) => l.id === assign.logo_id)
+    : undefined;
+  return {
+    url: chosen?.url || profile?.logoUrl || "",
+    width: assign?.width,
+  };
 }
 
 // Only the settings fields the resolver needs.
@@ -42,6 +72,7 @@ interface SettingsLike {
   terms_text?: string;
   deposit_percent?: number;
   app_logo_url?: string;
+  branding?: BrandingConfig | null;
   relic_profile?: RelicProfile | null;
 }
 
@@ -58,6 +89,7 @@ export interface ProposalBizInfo {
   terms_text?: string;
   deposit_percent?: number;
   logo_url?: string;
+  logo_width?: number;
   website?: string;
   footer?: string;
   accent?: string;
@@ -125,6 +157,7 @@ export function resolveEntityProfile(
       accentDark: "#1a1a1a",                    // near-black bars, matches the logo
       invoiceBarBg: rp.accent_color || "#b8963c", // gold Items bar
       invoiceBarText: "#1a1a1a",                  // dark text, legible on gold
+      branding: rp.branding,
     };
   }
 
@@ -152,6 +185,7 @@ export function resolveEntityProfile(
     accentDark: "#454d23",
     invoiceBarBg: "#454d23",   // dark olive Items bar (unchanged)
     invoiceBarText: "#ffffff", // white text (unchanged)
+    branding: s.branding || undefined,
   };
 }
 
@@ -177,7 +211,19 @@ export function proposalBiz(
     terms_text: s.terms_text,
     deposit_percent: s.deposit_percent,
   };
-  if (entity !== "relic") return base; // Wallflower: template defaults apply
+  // The proposal logo assignment (library logo + width) applies to both
+  // entities. For Wallflower we only override the logo URL when a logo is
+  // explicitly assigned, so an unconfigured proposal keeps its historic logo.
+  const pForLogo = resolveEntityProfile(entity, settings);
+  const proposalAssign = pForLogo.branding?.assignments?.proposal;
+  const assignedLogoUrl = proposalAssign?.logo_id
+    ? (pForLogo.branding?.logos || []).find((l) => l.id === proposalAssign.logo_id)?.url
+    : undefined;
+
+  if (entity !== "relic") {
+    // Wallflower: template defaults apply, plus any proposal logo/size override.
+    return { ...base, logo_url: assignedLogoUrl, logo_width: proposalAssign?.width };
+  }
   const p = resolveEntityProfile("relic", settings);
   return {
     biz_name: p.name,
@@ -190,7 +236,8 @@ export function proposalBiz(
     // Relic's own terms take precedence; fall back to the shared settings terms.
     terms_text: (s.relic_profile?.terms) || s.terms_text,
     deposit_percent: s.deposit_percent,
-    logo_url: p.logoUrl,
+    logo_url: assignedLogoUrl || p.logoUrl,
+    logo_width: proposalAssign?.width,
     footer: p.footer,
     website: p.website,
     accent: p.accent,

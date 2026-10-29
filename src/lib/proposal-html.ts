@@ -29,6 +29,7 @@ interface BizInfo {
   // Entity branding overrides (Phase 2b). When omitted, the templates fall
   // back to the historic Wallflower RELIC logo / website / footer.
   logo_url?: string;
+  logo_width?: number; // header logo width in px (from the proposal assignment)
   website?: string;
   footer?: string;
   accent?: string;
@@ -57,6 +58,7 @@ export function generateProposalHtml(
   const accentDark = biz.accent_dark || "#454d23";
   const stripeColor = accentDark;
   const logoUrl = biz.logo_url ?? "https://axiom.relicbuilt.com/wr-logo-black.png";
+  const headerLogoW = biz.logo_width ?? 220; // was a hardcoded 440px
   const website = biz.website ?? "wallflower-relic.com";
 
   const quotedAmount = project.quoted_amount || 0;
@@ -72,7 +74,7 @@ export function generateProposalHtml(
 
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
-    ${logoUrl ? `<img src="${logoUrl}" alt="${esc(biz.biz_name || "Wallflower RELIC")}" style="width:440px;max-width:64%;height:auto;object-fit:contain;" />` : `<p style="margin:0;font-size:26px;font-weight:bold;color:#111;letter-spacing:0.04em;">${esc(biz.biz_name || "RELIC")}</p>`}
+    ${logoUrl ? `<img src="${logoUrl}" alt="${esc(biz.biz_name || "Wallflower RELIC")}" style="width:${headerLogoW}px;max-width:64%;height:auto;object-fit:contain;" />` : `<p style="margin:0;font-size:26px;font-weight:bold;color:#111;letter-spacing:0.04em;">${esc(biz.biz_name || "RELIC")}</p>`}
     <div style="text-align:right;">
       <h1 style="margin:0 0 6px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
       <p style="margin:0 0 10px;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.16em;color:${accent};">Custom Fabrication</p>
@@ -312,6 +314,7 @@ export function generateEstimateProposalHtml({
   const coverImage = estimate.proposal_cover_image_url || "";
   const projectImages: string[] = (estimate.proposal_images || []).filter((u) => u !== coverImage);
   const logoUrl = biz.logo_url ?? "https://axiom.relicbuilt.com/wr-logo-black.png";
+  const headerLogoW = biz.logo_width ?? 220; // was a hardcoded 440px
   const accent = biz.accent || "#5b642e";
   const accentDark = biz.accent_dark || "#454d23";
 
@@ -550,7 +553,7 @@ export function generateEstimateProposalHtml({
 
   <!-- Header -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
-    ${logoUrl ? `<img src="${logoUrl}" alt="${esc(biz.biz_name || "Wallflower RELIC")}" style="width:440px;max-width:64%;height:auto;object-fit:contain;" />` : `<p style="margin:0;font-size:26px;font-weight:bold;color:#111;letter-spacing:0.04em;">${esc(biz.biz_name || "RELIC")}</p>`}
+    ${logoUrl ? `<img src="${logoUrl}" alt="${esc(biz.biz_name || "Wallflower RELIC")}" style="width:${headerLogoW}px;max-width:64%;height:auto;object-fit:contain;" />` : `<p style="margin:0;font-size:26px;font-weight:bold;color:#111;letter-spacing:0.04em;">${esc(biz.biz_name || "RELIC")}</p>`}
     <div style="text-align:right;">
       <h1 style="margin:0 0 6px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">PROPOSAL</h1>
       <p style="margin:0 0 10px;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:0.16em;color:${accent};">Custom Fabrication</p>

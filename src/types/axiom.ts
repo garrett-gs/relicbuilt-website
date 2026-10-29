@@ -655,6 +655,32 @@ export interface ActivityEntry {
 
 // ── Settings ────────────────────────────────────────────────
 
+// ── Brand logo library + per-placement assignment ──────────────
+// A business can load a few logos (e.g. a horizontal wordmark for documents, a
+// square emblem for tight spots) and choose which one — and at what size —
+// prints on each document/email. Per-entity: Wallflower stores this in
+// settings.branding; Relic in relic_profile.branding. When a placement has no
+// assignment, templates fall back to the single `logo_url` then their built-in
+// default, so existing rows render exactly as before.
+export interface BrandLogo {
+  id: string;        // stable id (crypto.randomUUID)
+  url: string;       // absolute or app-root URL (same bucket as logo_url uploads)
+  label: string;     // user-facing name, e.g. "RELIC wordmark", "Shield"
+}
+
+// Where a logo can be placed. Keep in sync with LOGO_PLACEMENTS in entity-profile.
+export type LogoPlacement = "po" | "invoice" | "proposal" | "email";
+
+export interface LogoAssignment {
+  logo_id?: string;  // which library logo (empty → use the default logo_url)
+  width?: number;    // render width in px (empty → the placement's default)
+}
+
+export interface BrandingConfig {
+  logos?: BrandLogo[];
+  assignments?: Partial<Record<LogoPlacement, LogoAssignment>>;
+}
+
 // Relic entity's business identity (Phase 2). Wallflower RELIC keeps using the
 // biz_* fields on Settings; this JSONB blob holds Relic's separate branding for
 // invoices/POs/proposals and outbound email.
@@ -676,6 +702,8 @@ export interface RelicProfile {
   from_email?: string;
   accent_color?: string;
   terms?: string;
+  /** Logo library + per-document assignments for this (Relic) entity. */
+  branding?: BrandingConfig;
   /** Whether this (RELIC) workspace is connected to a Nexus rental side. */
   nexus_connected?: boolean;
 }
@@ -708,6 +736,8 @@ export interface Settings {
   inventory_locations: string[];
   delivery_addresses?: SavedAddress[];
   receipts_pin?: string;
+  /** Logo library + per-document assignments for the default (Wallflower) entity. */
+  branding?: BrandingConfig | null;
   relic_profile?: RelicProfile | null;
   created_at: string;
 }

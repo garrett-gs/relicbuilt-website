@@ -3,7 +3,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { SITE_ENTITY, NEXUS_CONNECTED } from "@/lib/axiom-site";
-import { Settings, TeamMember } from "@/types/axiom";
+import { Settings, TeamMember, BrandingConfig, LogoPlacement } from "@/types/axiom";
+import { LOGO_PLACEMENTS } from "@/lib/entity-profile";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import Button from "@/components/ui/Button";
@@ -27,6 +28,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [brandUploading, setBrandUploading] = useState(false);
 
   // "Add User (with login)" modal
   const [showAddUser, setShowAddUser] = useState(false);
@@ -179,6 +181,62 @@ export default function SettingsPage() {
     }
   }
 
+  // ── Brand logo library + per-placement assignments ──────────────
+  // Stored per entity: Wallflower in settings.branding, Relic in
+  // relic_profile.branding. Mirrors the idVal/idSet entity split above.
+  const branding: BrandingConfig = (isRelicSite ? rp.branding : settings.branding) || {};
+  const brandLogos = branding.logos || [];
+  const setBranding = (b: BrandingConfig) => {
+    if (isRelicSite) updateField("relic_profile", { ...rp, branding: b });
+    else updateField("branding", b);
+  };
+  const addBrandLogo = (url: string, label: string) =>
+    setBranding({ ...branding, logos: [...brandLogos, { id: crypto.randomUUID(), url, label }] });
+  const renameBrandLogo = (id: string, label: string) =>
+    setBranding({ ...branding, logos: brandLogos.map((l) => (l.id === id ? { ...l, label } : l)) });
+  const removeBrandLogo = (id: string) =>
+    setBranding({
+      ...branding,
+      logos: brandLogos.filter((l) => l.id !== id),
+      // Drop the assignment reference so no placement points at a deleted logo.
+      assignments: Object.fromEntries(
+        Object.entries(branding.assignments || {}).map(([k, v]) => [
+          k,
+          v?.logo_id === id ? { ...v, logo_id: undefined } : v,
+        ])
+      ),
+    });
+  const setAssign = (placement: LogoPlacement, patch: { logo_id?: string; width?: number }) =>
+    setBranding({
+      ...branding,
+      assignments: {
+        ...(branding.assignments || {}),
+        [placement]: { ...(branding.assignments?.[placement] || {}), ...patch },
+      },
+    });
+  const defaultLogoUrl = idVal("logo");
+  const placementLogoUrl = (pl: LogoPlacement) => {
+    const a = branding.assignments?.[pl];
+    const chosen = a?.logo_id ? brandLogos.find((l) => l.id === a.logo_id) : undefined;
+    return chosen?.url || defaultLogoUrl;
+  };
+  async function handleBrandLogoUpload(file: File) {
+    setBrandUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("entity", SITE_ENTITY ?? "wallflower_relic");
+      const res = await fetch("/api/upload-logo", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Upload failed.");
+      addBrandLogo(json.url, file.name.replace(/\.[^.]+$/, "").slice(0, 40));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setBrandUploading(false);
+    }
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -265,7 +323,72 @@ export default function SettingsPage() {
                 <button onClick={() => idSet("logo", "")} className="text-xs text-muted hover:text-red-500">Remove</button>
               )}
             </div>
-            <p className="text-xs text-muted mt-1">Shown on your proposals, invoices &amp; email. PNG works best; max 5&nbsp;MB.</p>
+            <p className="text-xs text-muted mt-1">Your default logo — used anywhere a document or email isn&apos;t given its own below. PNG works best; max 5&nbsp;MB.</p>
+          </div>
+
+          {/* ── Brand Logos: library + per-document/email placement ── */}
+          <div className="pt-6 mt-6 border-t border-border">
+            <h3 className="text-sm font-heading font-bold text-foreground">Brand Logos</h3>
+            <p className="text-xs text-muted mt-0.5 mb-3 max-w-md">Load a few logos (a wide wordmark for documents, a compact mark for tight spots) and choose which one — and what size — appears on each document and email.</p>
+
+            {/* Library */}
+            <div className="flex flex-wrap gap-3 mb-5">
+              {brandLogos.map((l) => (
+                <div key={l.id} className="w-40 border border-border bg-card p-2">
+                  <div className="h-16 flex items-center justify-center bg-background mb-2 overflow-hidden">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={l.url} alt={l.label} className="max-h-14 max-w-full object-contain" />
+                  </div>
+                  <input
+                    value={l.label}
+                    onChange={(e) => renameBrandLogo(l.id, e.target.value)}
+                    placeholder="Logo name"
+                    className="w-full bg-background border border-border px-2 py-1 text-xs text-foreground mb-1 focus:outline-none focus:border-accent"
+                  />
+                  <button onClick={() => removeBrandLogo(l.id)} className="text-[11px] text-muted hover:text-red-500">Remove</button>
+                </div>
+              ))}
+              <label className={cn("w-40 h-[116px] flex flex-col items-center justify-center gap-1.5 border border-dashed border-border bg-card hover:border-accent cursor-pointer text-xs text-muted transition-colors", brandUploading && "opacity-60 pointer-events-none")}>
+                <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleBrandLogoUpload(f); e.target.value = ""; }} />
+                <Plus size={18} />
+                {brandUploading ? "Uploading…" : "Add logo"}
+              </label>
+            </div>
+
+            {/* Per-placement assignment */}
+            <div className="space-y-2">
+              {LOGO_PLACEMENTS.map((p) => {
+                const a = branding.assignments?.[p.key] || {};
+                const url = placementLogoUrl(p.key);
+                const w = a.width ?? p.defaultWidth;
+                return (
+                  <div key={p.key} className="flex items-center gap-4 flex-wrap border border-border bg-card px-3 py-2.5">
+                    <div className="w-32 shrink-0 text-sm font-semibold text-foreground">{p.label}</div>
+                    <select
+                      value={a.logo_id || ""}
+                      onChange={(e) => setAssign(p.key, { logo_id: e.target.value || undefined })}
+                      className="bg-background border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
+                    >
+                      <option value="">Default logo</option>
+                      {brandLogos.map((l) => (
+                        <option key={l.id} value={l.id}>{l.label || "Untitled"}</option>
+                      ))}
+                    </select>
+                    <div className="flex items-center gap-2">
+                      <input type="range" min={60} max={440} step={2} value={w} onChange={(e) => setAssign(p.key, { width: Number(e.target.value) })} className="accent-accent" />
+                      <span className="text-xs text-muted w-12 tabular-nums">{w}px</span>
+                    </div>
+                    <div className="ml-auto h-12 w-44 flex items-center justify-start bg-background border border-border overflow-hidden px-2">
+                      {url
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={url} alt="" style={{ width: `${w}px`, maxWidth: "100%", height: "auto" }} className="object-contain" />
+                        : <span className="text-[11px] text-muted">No logo</span>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-muted mt-2">Size is the logo&apos;s width; the preview shows exactly how it prints. &ldquo;Default logo&rdquo; uses the logo above.</p>
           </div>
 
           {isAdmin && (

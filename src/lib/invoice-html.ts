@@ -1,5 +1,5 @@
 import { Invoice, InvoiceLineItem } from "@/types/axiom";
-import { EntityProfile } from "@/lib/entity-profile";
+import { EntityProfile, logoForPlacement } from "@/lib/entity-profile";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -34,7 +34,13 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
   const amountDue = balance > 0 ? balance : total;
 
   const bizName = profile?.name || "Wallflower RELIC";
-  const logoUrl = profile ? (profile.logoUrl || "") : "https://axiom.relicbuilt.com/wr-logo-black.png";
+  // Invoice logo from branding assignment; falls back to the entity logo.
+  // Sized by width when assigned, else the historic height:36px look.
+  const invoiceLogo = logoForPlacement(profile, "invoice");
+  const logoUrl = profile ? invoiceLogo.url : "https://axiom.relicbuilt.com/wr-logo-black.png";
+  const logoStyle = invoiceLogo.width
+    ? `width:${invoiceLogo.width}px;max-width:100%;height:auto;object-fit:contain;`
+    : "height:36px;object-fit:contain;";
   const website = profile ? (profile.website || "") : "wallflower-relic.com";
   const footer = profile?.footer || "Wallflower RELIC  ·  (402) 235-8179  ·  wallflower-relic.com";
   const accent = profile?.accent || "#5b642e";
@@ -56,7 +62,7 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
   <!-- Header: full logo left, INVOICE + address right -->
   <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:28px;">
     ${logoUrl
-      ? `<img src="${logoUrl}" alt="${esc(bizName)}" style="height:36px;object-fit:contain;" />`
+      ? `<img src="${logoUrl}" alt="${esc(bizName)}" style="${logoStyle}" />`
       : `<p style="margin:0;font-size:22px;font-weight:bold;color:#111;letter-spacing:0.04em;">${esc(bizName)}</p>`}
     <div style="text-align:right;">
       <h1 style="margin:0 0 10px;font-size:32px;font-weight:bold;color:#111;letter-spacing:0.04em;">INVOICE</h1>

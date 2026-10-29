@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
     // branding (not Wallflower) on the thank-you screen.
     const { data: settingsRow } = await supabase
       .from("settings")
-      .select("biz_name,biz_email,biz_phone,relic_profile")
+      .select("biz_name,biz_email,biz_phone,relic_profile,logo_url,branding")
       .limit(1)
       .single();
     const profile = resolveEntityProfile(invoice.entity, settingsRow);

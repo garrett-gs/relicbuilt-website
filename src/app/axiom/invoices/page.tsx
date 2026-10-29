@@ -371,7 +371,7 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
     axiom.from("settings").select("categories").limit(1).single().then(({ data }) => {
       if (data?.categories) setCategories(data.categories || []);
     });
-    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text,relic_profile").limit(1).single()
+    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text,relic_profile,logo_url,branding").limit(1).single()
       .then(({ data }) => setBizSettings(data || {}));
   }, []);
 
@@ -646,7 +646,7 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
   const [sendResult, setSendResult] = useState<"success" | "error" | null>(null);
 
   useEffect(() => {
-    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text,relic_profile").limit(1).single()
+    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text,relic_profile,logo_url,branding").limit(1).single()
       .then(({ data }) => setBizSettings(data || {}));
   }, []);
 

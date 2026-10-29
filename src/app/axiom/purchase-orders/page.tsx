@@ -1667,7 +1667,7 @@ function SendPOModal({ po, vendorEmail, onClose, onSent, userEmail }: {
   const [status, setStatus] = useState<"idle" | "sent" | "error">("idle");
   const [poProfile, setPoProfile] = useState<EntityProfile | undefined>(undefined);
   useEffect(() => {
-    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,relic_profile").limit(1).single()
+    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,relic_profile,logo_url,branding").limit(1).single()
       .then(({ data }) => setPoProfile(resolveEntityProfile(po.entity, data)));
   }, [po.entity]);
 
@@ -1759,7 +1759,7 @@ function PrintPOView({ po, onClose }: { po: PurchaseOrder; onClose: () => void }
   // Resolve entity branding before printing so a Relic PO prints with Relic's
   // identity rather than flashing the Wallflower default.
   useEffect(() => {
-    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,relic_profile").limit(1).single()
+    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,relic_profile,logo_url,branding").limit(1).single()
       .then(({ data }) => { setPoProfile(resolveEntityProfile(po.entity, data)); setReady(true); });
   }, [po.entity]);
   useEffect(() => {

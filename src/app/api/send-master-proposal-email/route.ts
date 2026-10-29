@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
 
     const { data: settings } = await supabase
       .from("settings")
-      .select("biz_name,biz_phone,biz_email,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text,relic_profile")
+      .select("biz_name,biz_phone,biz_email,biz_address,biz_city,biz_state,biz_zip,deposit_percent,terms_text,relic_profile,logo_url,branding")
       .limit(1)
       .single();
 
