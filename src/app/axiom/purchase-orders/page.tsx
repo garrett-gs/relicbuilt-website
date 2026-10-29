@@ -663,10 +663,10 @@ function OrdersTab() {
           <div className="fixed inset-0 bg-black/60 z-50" onClick={() => setApproveId(null)} />
           <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-background border border-border p-6 z-50">
             <h2 className="text-lg font-heading font-bold mb-4">Approve P.O.</h2>
-            <p className="text-sm text-muted mb-3">Type &quot;I approve this&quot; to confirm:</p>
+            <p className="text-sm text-muted mb-3">Type &quot;Approved&quot; to confirm:</p>
             <input value={approveText} onChange={(e) => setApproveText(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent mb-4" />
             <div className="flex gap-3">
-              <Button onClick={() => approvePO(approveId)} disabled={approveText.toLowerCase() !== "i approve this"} size="sm">Approve</Button>
+              <Button onClick={() => approvePO(approveId)} disabled={approveText.toLowerCase() !== "approved"} size="sm">Approve</Button>
               <Button variant="outline" size="sm" onClick={() => { setApproveId(null); setApproveText(""); }}>Cancel</Button>
             </div>
           </div>
