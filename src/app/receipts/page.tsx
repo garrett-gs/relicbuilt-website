@@ -7,6 +7,7 @@ import { Camera, Check, Plus, X, Loader2, Trash2, Delete, ShoppingCart, ChevronL
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
+import { SITE_ENTITY } from "@/lib/axiom-site";
 import DateField from "@/components/ui/DateField";
 
 // ── PIN Gate ─────────────────────────────────────────────────
@@ -500,7 +501,7 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
         </div>
       )}
 
-      {poItem && <AddToPOModal item={poItem} onClose={() => setPoItem(null)} onAdded={() => setPoItem(null)} />}
+      {poItem && <AddToPOModal item={poItem} entity={SITE_ENTITY ?? undefined} onClose={() => setPoItem(null)} onAdded={() => setPoItem(null)} />}
     </div>
   );
 }

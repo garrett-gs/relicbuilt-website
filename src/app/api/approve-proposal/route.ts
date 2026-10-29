@@ -169,6 +169,7 @@ export async function POST(req: NextRequest) {
     const { data: depositInvoice, error: depositError } = await supabase.from("invoices").insert({
       invoice_number: depositInvoiceNum,
       custom_work_id: project.id,
+      entity: project.entity || "wallflower_relic",
       client_name: project.client_name || "",
       client_email: project.client_email || "",
       client_phone: project.client_phone || "",
@@ -189,6 +190,7 @@ export async function POST(req: NextRequest) {
     const { data: finalInvoice, error: finalError } = await supabase.from("invoices").insert({
       invoice_number: finalInvoiceNum,
       custom_work_id: project.id,
+      entity: project.entity || "wallflower_relic",
       client_name: project.client_name || "",
       client_email: project.client_email || "",
       client_phone: project.client_phone || "",

@@ -9,6 +9,7 @@ import Link from "next/link";
 import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
+import { useEntity } from "@/components/axiom/EntityProvider";
 
 interface LineItem {
   description: string;
@@ -36,6 +37,7 @@ const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency",
 
 export default function ReceiptsPage() {
   const { userEmail } = useAuth();
+  const { entity } = useEntity();
   const [receipts, setReceipts] = useState<ReceiptRecord[]>([]);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [search, setSearch] = useState("");
@@ -443,7 +445,7 @@ export default function ReceiptsPage() {
         </div>
       )}
 
-      {poItem && <AddToPOModal item={poItem} onClose={() => setPoItem(null)} onAdded={() => setPoItem(null)} />}
+      {poItem && <AddToPOModal item={poItem} entity={entity} onClose={() => setPoItem(null)} onAdded={() => setPoItem(null)} />}
     </div>
   );
 }

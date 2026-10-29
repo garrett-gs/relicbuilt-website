@@ -29,6 +29,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Estimate not found" }, { status: 404 });
     }
 
+    // Nexus is Wallflower's system. A Relic estimate only goes there when the
+    // Relic business is switched to Nexus-connected in Settings.
+    if (estimate.entity === "relic") {
+      const { data: settingsRow } = await axiom.from("settings").select("relic_profile").limit(1).single();
+      if (!(settingsRow?.relic_profile as { nexus_connected?: boolean } | null)?.nexus_connected) {
+        return NextResponse.json({ error: "Relic estimates aren't sent to Nexus (Relic isn't Nexus-connected)" }, { status: 403 });
+      }
+    }
+
     // Internal build? (estimate is for our own business, e.g. Wallflower RELIC.)
     // Internal builds skip the whole client proposal/sign-off package, price at
     // cost (no markup), and go to Nexus as project spend only — no quote link.

@@ -108,6 +108,7 @@ export async function POST(req: NextRequest) {
       .from("invoices")
       .select("id, invoice_number, client_name, client_email, description, invoice_type, payments, subtotal, status")
       .eq("client_name", estimate.client_name || "")
+      .eq("entity", estimate.entity || "wallflower_relic") // never match the other business's invoice
       .eq("invoice_type", "deposit")
       .like("description", `%${estimate.project_name || estimate.estimate_number}%`)
       .order("created_at", { ascending: false })
@@ -153,6 +154,7 @@ export async function POST(req: NextRequest) {
       .from("invoices")
       .select("id")
       .eq("client_name", estimate.client_name || "")
+      .eq("entity", estimate.entity || "wallflower_relic") // never match the other business's invoice
       .eq("invoice_type", "final")
       .like("description", `%${estimate.project_name || estimate.estimate_number}%`)
       .order("created_at", { ascending: false })

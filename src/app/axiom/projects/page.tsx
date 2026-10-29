@@ -1632,6 +1632,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       {
         invoice_number: `INV-${y}-${n1}`,
         custom_work_id: project.id,
+        entity: project.entity || "wallflower_relic",
         client_name: clientName,
         client_email: clientEmail,
         client_phone: clientPhone,
@@ -1644,6 +1645,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       {
         invoice_number: `INV-${y}-${n2}`,
         custom_work_id: project.id,
+        entity: project.entity || "wallflower_relic",
         client_name: clientName,
         client_email: clientEmail,
         client_phone: clientPhone,
@@ -2860,6 +2862,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
       {poItem && (
         <AddToPOModal
           item={poItem}
+          entity={project.entity || "wallflower_relic"}
           onClose={() => setPoItem(null)}
           onAdded={() => setPoItem(null)}
         />

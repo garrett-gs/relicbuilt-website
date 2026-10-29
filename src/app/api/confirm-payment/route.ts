@@ -236,6 +236,8 @@ export async function POST(req: NextRequest) {
             const { data: newProject } = await supabase
               .from("custom_work")
               .insert({
+                // Same business as the estimate (a Relic deposit must not open a Wallflower project).
+                entity: estimate.entity || invoice.entity || "wallflower_relic",
                 project_name: estimate.project_name || "Untitled Project",
                 client_name: estimate.client_name || "",
                 client_email: estimate.client_email || null,

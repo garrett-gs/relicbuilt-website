@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { syncInventoryUnitCost } from "@/lib/inventory-price-sync";
-import { PurchaseOrder, Vendor } from "@/types/axiom";
+import { BusinessEntity, PurchaseOrder, Vendor } from "@/types/axiom";
 import { X, Check, Plus, ShoppingCart } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -18,11 +18,14 @@ interface Props {
   item: AddToPOItem;
   onClose: () => void;
   onAdded?: (poNumber: string) => void;
+  // Business the PO belongs to. Callers pass it because the public /receipts
+  // page has no EntityProvider.
+  entity?: BusinessEntity;
 }
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
 
-export default function AddToPOModal({ item, onClose, onAdded }: Props) {
+export default function AddToPOModal({ item, onClose, onAdded, entity = "wallflower_relic" }: Props) {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [openPOs, setOpenPOs] = useState<PurchaseOrder[]>([]);
   const [vendorSearch, setVendorSearch] = useState(item.vendor_name || "");
@@ -38,7 +41,7 @@ export default function AddToPOModal({ item, onClose, onAdded }: Props) {
     async function load() {
       const [{ data: v }, { data: p }] = await Promise.all([
         axiom.from("vendors").select("*").eq("status", "active").order("name"),
-        axiom.from("purchase_orders").select("*").eq("status", "pending").order("created_at", { ascending: false }),
+        axiom.from("purchase_orders").select("*").eq("status", "pending").eq("entity", entity).order("created_at", { ascending: false }),
       ]);
       if (v) setVendors(v);
       if (p) setOpenPOs(p);
@@ -53,7 +56,7 @@ export default function AddToPOModal({ item, onClose, onAdded }: Props) {
       }
     }
     load();
-  }, [item.vendor_name]);
+  }, [item.vendor_name, entity]);
 
   const filteredVendors = vendors.filter((v) =>
     v.name.toLowerCase().includes(vendorSearch.toLowerCase())
@@ -91,6 +94,7 @@ export default function AddToPOModal({ item, onClose, onAdded }: Props) {
       const total = qty * unitPrice;
       const { data } = await axiom.from("purchase_orders").insert({
         po_number: "PO-TEMP",
+        entity,
         vendor_id: selectedVendorId || null,
         vendor_name: vendorName || "Unknown Vendor",
         item_description: description,

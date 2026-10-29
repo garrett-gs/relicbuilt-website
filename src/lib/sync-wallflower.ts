@@ -43,8 +43,10 @@ export async function runWallflowerSync(): Promise<SyncResult> {
   ] = await Promise.all([
     wr.from("companies").select("id,name,address,industry"),
     wr.from("customers").select("id,name,email,phone,type,status,address,website,industry,company_id"),
-    axiom.from("companies").select("id,name,address,industry"),
-    axiom.from("customers").select("id,name,email"),
+    // Wallflower rows only: Nexus is Wallflower's CRM, so it must never match
+    // (and overwrite) a Relic company or customer with the same name/email.
+    axiom.from("companies").select("id,name,address,industry").eq("entity", "wallflower_relic"),
+    axiom.from("customers").select("id,name,email").eq("entity", "wallflower_relic"),
   ]);
 
   const anyErr = wrCoErr || wrCuErr || axCoErr || axCuErr;
