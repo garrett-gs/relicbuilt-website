@@ -64,9 +64,30 @@ export interface ProposalBizInfo {
   accent_dark?: string;
 }
 
-// Shared transactional sender (relicbuilt.com is the verified Resend domain).
-// A Relic-specific from_email only works once its domain is verified in Resend.
+// Last-resort sender if an entity has no domain configured. relicbuilt.com is
+// always a verified Resend domain.
 const DEFAULT_FROM_EMAIL = "notifications@relicbuilt.com";
+
+// Every entity sends from its OWN domain: the mailbox we've always used
+// (`notifications@`) on the company's own domain, so a Wallflower email comes
+// from wallflower-relic.com and a Relic email from relicbuilt.com. The domain
+// is pulled from the entity's configured email/website. This requires the
+// domain to be verified in Resend (Wallflower + Relic both are); an unverified
+// domain would bounce, so callers fall back to DEFAULT_FROM_EMAIL when the
+// source is empty. Forward-compatible with Relicon tenants on their own domain.
+function notificationsAddressFor(...sources: (string | undefined)[]): string | undefined {
+  for (const src of sources) {
+    if (!src) continue;
+    const domain = (src.includes("@") ? src.split("@")[1] : src)
+      .replace(/^https?:\/\//, "")
+      .replace(/^www\./, "")
+      .replace(/\/.*$/, "")
+      .trim()
+      .toLowerCase();
+    if (domain) return `notifications@${domain}`;
+  }
+  return undefined;
+}
 
 export function resolveEntityProfile(
   entity: BusinessEntity | undefined,
@@ -93,7 +114,12 @@ export function resolveEntityProfile(
       appLogoUrl: rp.app_logo_url || "",
       footer,
       fromName: rp.from_name || name,
-      fromEmail: rp.from_email || DEFAULT_FROM_EMAIL,
+      // Relic's own domain (relicbuilt.com): an explicit from_email wins, else
+      // notifications@ on the domain from its email/website.
+      fromEmail:
+        rp.from_email ||
+        notificationsAddressFor(rp.email, rp.website) ||
+        DEFAULT_FROM_EMAIL,
       accent: rp.accent_color || "#b8963c",   // RELIC gold
       onAccent: "#1a1a1a",                      // dark text, legible on gold
       accentDark: "#1a1a1a",                    // near-black bars, matches the logo
@@ -117,7 +143,10 @@ export function resolveEntityProfile(
     appLogoUrl: s.app_logo_url || "",
     footer: "Wallflower RELIC  ·  (402) 235-8179  ·  wallflower-relic.com",
     fromName: "Wallflower RELIC",
-    fromEmail: DEFAULT_FROM_EMAIL,
+    // Wallflower's own domain (wallflower-relic.com): notifications@ on the
+    // domain from its business email/website.
+    fromEmail:
+      notificationsAddressFor(s.biz_email, s.biz_website) || DEFAULT_FROM_EMAIL,
     accent: s.accent_color || "#5b642e",     // Wallflower default olive, now settings-driven
     onAccent: "#ffffff",   // white text on olive (unchanged)
     accentDark: "#454d23",
