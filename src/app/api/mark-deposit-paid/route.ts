@@ -73,6 +73,9 @@ export async function POST(req: NextRequest) {
       const { data: newProject, error: projErr } = await supabase
         .from("custom_work")
         .insert({
+          // Match the estimate's entity; the column default ('wallflower_relic')
+          // would otherwise strand a RELIC project under Wallflower.
+          entity: estimate.entity || "wallflower_relic",
           project_name: estimate.project_name || "Untitled Project",
           client_name: estimate.client_name || "",
           customer_id: estimate.customer_id || null,

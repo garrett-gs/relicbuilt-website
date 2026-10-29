@@ -148,6 +148,11 @@ export async function POST(req: NextRequest) {
         const { data: proj } = await supabase
           .from("custom_work")
           .insert({
+            // Carry the estimate's entity onto the project. Without this the
+            // column default ('wallflower_relic') wins, so a RELIC estimate's
+            // auto-created project lands under Wallflower and never shows in
+            // the RELIC Projects board.
+            entity: estimate.entity || "wallflower_relic",
             project_name: estimate.project_name || estimate.estimate_number,
             client_name: estimate.client_name || "",
             client_email: estimate.client_email || null,
