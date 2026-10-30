@@ -206,6 +206,11 @@ export interface EditEntryPatch {
   clock_out?: string; // ISO
   tasks?: string[];
   notes?: string;
+  // Reassign the entry to a different project (someone clocked into the wrong
+  // one). Omit to keep the current project; pass an id to move it, or null to
+  // detach ("No project"). project_name is stored alongside for display.
+  custom_work_id?: string | null;
+  project_name?: string | null;
 }
 
 /**
@@ -222,6 +227,14 @@ export async function editTimeEntry(original: TimeEntry, patch: EditEntryPatch):
   const tasks = patch.tasks ?? original.tasks ?? [];
   const notes = patch.notes ?? original.notes ?? null;
 
+  // Project reassignment: undefined = keep as-is; otherwise move to the given
+  // project (or null for none). A real change shifts the labor cost from the
+  // old project's log to the new one's.
+  const reassign = patch.custom_work_id !== undefined;
+  const custom_work_id = reassign ? patch.custom_work_id ?? null : original.custom_work_id ?? null;
+  const project_name = reassign ? patch.project_name ?? null : original.project_name ?? null;
+  const projectChanged = reassign && (patch.custom_work_id ?? null) !== (original.custom_work_id ?? null);
+
   const updated: TimeEntry = {
     ...original,
     clock_in,
@@ -229,20 +242,41 @@ export async function editTimeEntry(original: TimeEntry, patch: EditEntryPatch):
     hours,
     tasks,
     notes: notes || undefined,
+    custom_work_id: custom_work_id ?? undefined,
+    project_name: project_name ?? undefined,
+    // Moving to a real project means it's no longer a catalog-product entry.
+    product_id: projectChanged && custom_work_id ? undefined : original.product_id,
     approved: false,
     approved_by: undefined,
     approved_at: undefined,
   };
 
+  const updatePayload: Record<string, unknown> = {
+    clock_in, clock_out, hours, tasks, notes,
+    approved: false, approved_by: null, approved_at: null,
+  };
+  if (reassign) {
+    updatePayload.custom_work_id = custom_work_id;
+    updatePayload.project_name = project_name;
+    if (projectChanged && custom_work_id) updatePayload.product_id = null;
+  }
+
   const { data, error } = await axiom
     .from("time_entries")
-    .update({ clock_in, clock_out, hours, tasks, notes, approved: false, approved_by: null, approved_at: null })
+    .update(updatePayload)
     .eq("id", original.id)
     .select("id");
   if (error) throw new Error(error.message);
   if (!data || data.length === 0) throw new Error("Entry not found — it may have been deleted. Refresh.");
 
-  await reconcileLaborLog(original, laborRowFromEntry(updated, hours));
+  const laborRow = laborRowFromEntry(updated, hours);
+  if (projectChanged) {
+    // Remove the entry's cost from the old project, then add it to the new one.
+    await reconcileLaborLog(original, null);
+    await reconcileLaborLog(updated, laborRow);
+  } else {
+    await reconcileLaborLog(original, laborRow);
+  }
   return updated;
 }
 

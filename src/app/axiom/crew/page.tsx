@@ -768,8 +768,33 @@ function EditEntryModal({
   const [clockOut, setClockOut] = useState<DTParts>(isoToParts(entry.clock_out));
   const [tasks, setTasks] = useState((entry.tasks || []).join(", "));
   const [notes, setNotes] = useState(entry.notes || "");
+  const [projectId, setProjectId] = useState<string>(entry.custom_work_id || "");
+  const [projects, setProjects] = useState<{ id: string; project_name: string | null }[]>([]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Projects the entry can be moved to — the same active set the clock-in
+  // picker offers. The entry's current project is folded in even if it has
+  // since closed, so it still shows as the selected option.
+  useEffect(() => {
+    let alive = true;
+    axiom
+      .from("custom_work")
+      .select("id, project_name")
+      .in("status", ["new", "in_review", "quoted", "accepted", "in_progress"])
+      .order("project_name")
+      .then(({ data }) => {
+        if (!alive) return;
+        const list = (data as { id: string; project_name: string | null }[]) || [];
+        if (entry.custom_work_id && !list.some((p) => p.id === entry.custom_work_id)) {
+          list.unshift({ id: entry.custom_work_id, project_name: entry.project_name || "Current project" });
+        }
+        setProjects(list);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [entry.custom_work_id, entry.project_name]);
 
   const inDate = partsToDate(clockIn);
   const outDate = partsToDate(clockOut);
@@ -783,11 +808,23 @@ function EditEntryModal({
     setSaving(true);
     setErr(null);
     try {
+      // Only send the project fields when the admin actually changed it, so
+      // untouched entries (including catalog-product ones) are left alone.
+      const projectChanged = projectId !== (entry.custom_work_id || "");
+      const projectPatch = projectChanged
+        ? {
+            custom_work_id: projectId || null,
+            project_name: projectId
+              ? projects.find((p) => p.id === projectId)?.project_name ?? null
+              : null,
+          }
+        : {};
       const updated = await editTimeEntry(entry, {
         clock_in: inDate.toISOString(),
         clock_out: outDate.toISOString(),
         tasks: tasks.split(",").map((t) => t.trim()).filter(Boolean),
         notes: notes.trim(),
+        ...projectPatch,
       });
       onSaved(updated);
     } catch (e) {
@@ -811,6 +848,23 @@ function EditEntryModal({
         <p className="text-xs text-muted mb-4">
           {entry.member_name} · {entry.project_name || "No project"}
         </p>
+
+        <label className="flex flex-col gap-1 mb-3">
+          <span className="text-[10px] uppercase tracking-widest text-muted/60">Project</span>
+          <select
+            value={projectId}
+            onChange={(e) => setProjectId(e.target.value)}
+            className="bg-background border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
+          >
+            <option value="">No project</option>
+            {projects.map((p) => (
+              <option key={p.id} value={p.id}>{p.project_name || "Untitled project"}</option>
+            ))}
+          </select>
+          {projectId !== (entry.custom_work_id || "") && (
+            <span className="text-[10px] text-amber-400/80">Moves this time (and its cost) to the selected project.</span>
+          )}
+        </label>
 
         <div className="space-y-3 mb-3">
           <DateTimeFields label="Clock in" value={clockIn} onChange={setClockIn} />
