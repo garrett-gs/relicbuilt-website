@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useSyncExternalStore, ReactNode } from "react";
-import { axiom } from "@/lib/axiom-supabase";
+import { axiom, setAxiomTenant } from "@/lib/axiom-supabase";
 import { useAuth } from "./AuthProvider";
 import { TeamMember, BusinessEntity, RelicProfile } from "@/types/axiom";
 import { SITE_ENTITY, NEXUS_CONNECTED, isOwnerEmail } from "@/lib/axiom-site";
@@ -110,6 +110,9 @@ export function EntityProvider({ children }: { children: ReactNode }) {
   const entity: BusinessEntity = locked
     ? (SITE_ENTITY as BusinessEntity)
     : hasRelicAccess ? stored : "wallflower_relic";
+  // Set during render, not in an effect: child pages load their data in
+  // their own effects, which run before this provider's.
+  setAxiomTenant(entity);
 
   // On the RELIC site, a signed-in user without Relic access is denied (once
   // the check has settled) rather than shown the Wallflower side.
