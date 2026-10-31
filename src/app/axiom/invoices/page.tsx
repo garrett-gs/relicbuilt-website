@@ -13,13 +13,13 @@ import SaveButton from "@/components/ui/SaveButton";
 import { cn, formatPhone } from "@/lib/utils";
 import { resolveClientEmail } from "@/lib/resolve-email";
 import DateField from "@/components/ui/DateField";
-import { Plus, X, Trash2, Printer, DollarSign, Send, CheckCircle, Eye, Search, ArrowLeft } from "lucide-react";
+import { Plus, X, Trash2, Printer, DollarSign, Send, CheckCircle, Eye, Search, ArrowLeft, Copy, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useRef } from "react";
 
 interface Customer { id: string; name: string; email?: string; phone?: string; }
 import { generateInvoiceHtml } from "@/lib/invoice-html";
-import { resolveEntityProfile } from "@/lib/entity-profile";
+import { resolveEntityProfile, venmoLinks } from "@/lib/entity-profile";
 import { authedFetch } from "@/lib/authed-fetch";
 
 function money(n: number) {
@@ -367,14 +367,34 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
   const [sendTo, setSendTo] = useState(init.client_email || "");
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<"success" | "error" | null>(null);
+  const [copiedPay, setCopiedPay] = useState(false);
+  // Which method the Record Payment form opens on — the Venmo shortcut presets it.
+  const [paymentPreset, setPaymentPreset] = useState("Credit Card");
+
+  // Client Pay page link — same base the emailed invoice uses, so what you copy
+  // here is the exact page the client gets.
+  const payBase = (process.env.NEXT_PUBLIC_SITE_URL || (typeof window !== "undefined" ? window.location.origin : "https://relicbuilt.com")).replace(/\/+$/, "");
+  const payUrl = `${payBase}/pay/${init.id}`;
 
   useEffect(() => {
     axiom.from("settings").select("categories").limit(1).single().then(({ data }) => {
       if (data?.categories) setCategories(data.categories || []);
     });
-    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text,relic_profile,logo_url,branding").limit(1).single()
+    axiom.from("settings").select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text,venmo_handle,relic_profile,logo_url,branding").limit(1).single()
       .then(({ data }) => setBizSettings(data || {}));
   }, []);
+
+  async function copyPayLink() {
+    try { await navigator.clipboard.writeText(payUrl); } catch { /* clipboard blocked */ }
+    setCopiedPay(true);
+    setTimeout(() => setCopiedPay(false), 2000);
+  }
+
+  // Entity's Venmo handle, for prefilling the note when recording a Venmo payment.
+  const venmoHandle = (() => {
+    try { return venmoLinks(resolveEntityProfile(inv.entity, bizSettings || {}).venmoHandle)?.username; }
+    catch { return undefined; }
+  })();
 
   async function handleSend() {
     if (!sendTo || !bizSettings) return;
@@ -560,8 +580,15 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
       {/* Action bar */}
       <div className="flex flex-wrap gap-3 items-center border-t border-border pt-4">
         <SaveButton dirty={dirty} saved={saved} onClick={save} size="sm" />
-        <Button onClick={() => setShowPayment(true)} size="sm" variant="outline"><DollarSign size={14} className="mr-1" />Record Payment</Button>
+        <Button onClick={() => { setPaymentPreset("Credit Card"); setShowPayment(true); }} size="sm" variant="outline"><DollarSign size={14} className="mr-1" />Record Payment</Button>
+        {venmoHandle && (
+          <Button onClick={() => { setPaymentPreset("Venmo"); setShowPayment(true); }} size="sm" variant="outline"><DollarSign size={14} className="mr-1" />Paid via Venmo</Button>
+        )}
         <Button variant="outline" size="sm" onClick={onPreview}><Eye size={14} className="mr-1" />Preview / Print</Button>
+        <Button variant="outline" size="sm" onClick={copyPayLink}>
+          {copiedPay ? <><CheckCircle size={14} className="mr-1" />Copied</> : <><Copy size={14} className="mr-1" />Copy Pay Link</>}
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => window.open(payUrl, "_blank", "noopener")}><ExternalLink size={14} className="mr-1" />Open Pay Page</Button>
 
         {/* Send Invoice — emails the branded invoice (with a Pay Online button)
             straight from here. Inline field confirms the recipient first. */}
@@ -595,7 +622,7 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
               <h3 className="font-heading font-bold">Record Payment</h3>
               <button onClick={() => setShowPayment(false)} className="text-muted hover:text-foreground"><X size={18} /></button>
             </div>
-            <PaymentForm invoice={inv} total={total} onSubmit={addPayment} onCancel={() => setShowPayment(false)} />
+            <PaymentForm invoice={inv} total={total} onSubmit={addPayment} onCancel={() => setShowPayment(false)} initialMethod={paymentPreset} initialNote={paymentPreset === "Venmo" && venmoHandle ? `Venmo @${venmoHandle}` : ""} />
           </div>
         </>
       )}
@@ -605,13 +632,13 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
 
 // ── Payment form ───────────────────────────────────────────────────────────────
 
-function PaymentForm({ invoice, total, onSubmit, onCancel }: { invoice: Invoice; total: number; onSubmit: (p: Payment) => void; onCancel: () => void }) {
+function PaymentForm({ invoice, total, onSubmit, onCancel, initialMethod = "Credit Card", initialNote = "" }: { invoice: Invoice; total: number; onSubmit: (p: Payment) => void; onCancel: () => void; initialMethod?: string; initialNote?: string }) {
   const paid = calcPaid(invoice);
   const balance = total - paid;
   const [amount, setAmount] = useState(balance > 0 ? balance.toFixed(2) : "");
-  const [method, setMethod] = useState("Credit Card");
+  const [method, setMethod] = useState(initialMethod);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(initialNote);
   const [ref, setRef] = useState("");
   const inp = "w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent";
   const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";

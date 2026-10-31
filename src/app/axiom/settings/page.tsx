@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { SITE_ENTITY, NEXUS_CONNECTED } from "@/lib/axiom-site";
 import { Settings, TeamMember, BrandingConfig, LogoPlacement } from "@/types/axiom";
-import { LOGO_PLACEMENTS } from "@/lib/entity-profile";
+import { LOGO_PLACEMENTS, venmoLinks } from "@/lib/entity-profile";
+import qrcode from "qrcode-generator";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import Button from "@/components/ui/Button";
@@ -270,6 +271,7 @@ export default function SettingsPage() {
           <div>
             <Field label="Venmo" value={idVal("venmo")} onChange={(v) => idSet("venmo", v)} placeholder="@your-venmo" />
             <p className="text-xs text-muted mt-1">Shown as a payment option on your client invoices. Leave blank to hide it.</p>
+            <VenmoPreview handle={idVal("venmo")} accent={idVal("accent") || "#5b642e"} />
           </div>
           <div>
             <label className="block text-xs text-muted mb-1">Street Address</label>
@@ -748,6 +750,57 @@ function Field({ label, value, onChange, type = "text", placeholder }: { label: 
     <div>
       <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">{label}</label>
       <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
+    </div>
+  );
+}
+
+/**
+ * Live preview of the Venmo payment option exactly as clients see it on the Pay
+ * page — the handle normalizes the same way (strips @ / URL), and the QR encodes
+ * the resulting venmo.com/u/<handle> link. Updates as you type; shows a "hidden"
+ * state when the field is empty so it's clear the option won't appear.
+ */
+function VenmoPreview({ handle, accent }: { handle: string; accent: string }) {
+  const links = venmoLinks(handle);
+  const url = links?.profileUrl;
+  const qr = useMemo(() => {
+    if (!url) return "";
+    try {
+      const q = qrcode(0, "M");
+      q.addData(url);
+      q.make();
+      return q.createDataURL(4, 2);
+    } catch {
+      return "";
+    }
+  }, [url]);
+
+  if (!links) {
+    return (
+      <div className="mt-3 border border-dashed border-border rounded-lg px-4 py-3 text-xs text-muted">
+        Venmo option is hidden — add a handle to show it on invoices.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3">
+      <p className="text-[10px] uppercase tracking-[0.08em] text-muted font-bold mb-1.5">Preview — how clients see it</p>
+      <div className="rounded-lg overflow-hidden border border-border" style={{ maxWidth: 300 }}>
+        <div style={{ background: "#fff", color: "#111", borderTop: `3px solid ${accent}`, padding: "16px", textAlign: "center" }}>
+          <p style={{ margin: "0 0 2px", fontSize: 17, fontWeight: 800, color: "#008CFF", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="#008CFF" aria-hidden="true"><path d="M19.5 3.2c.56.93.81 1.88.81 3.09 0 3.85-3.29 8.85-5.96 12.36H8.27L5.83 4.03l5.33-.5 1.29 10.37c1.2-1.96 2.69-5.04 2.69-7.13 0-1.15-.2-1.93-.5-2.57l4.86-.97z" /></svg>
+            @{links.username}
+          </p>
+          <p style={{ margin: "0 0 12px", fontSize: 11.5, color: "#666" }}>Pay directly — no processing fee.</p>
+          {qr && <img src={qr} alt={`Venmo QR for @${links.username}`} style={{ width: 104, height: 104, display: "block", margin: "0 auto 12px", border: "1px solid #e5e0d8", padding: 6, background: "#fff" }} />}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 7, background: "#008CFF", color: "#fff", padding: "9px 0", fontSize: 13, fontWeight: 700, borderRadius: 4 }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="#fff" aria-hidden="true"><path d="M19.5 3.2c.56.93.81 1.88.81 3.09 0 3.85-3.29 8.85-5.96 12.36H8.27L5.83 4.03l5.33-.5 1.29 10.37c1.2-1.96 2.69-5.04 2.69-7.13 0-1.15-.2-1.93-.5-2.57l4.86-.97z" /></svg>
+            Pay with Venmo
+          </div>
+        </div>
+      </div>
+      <p className="text-[11px] text-muted mt-1.5 font-mono">venmo.com/u/{links.username}</p>
     </div>
   );
 }
