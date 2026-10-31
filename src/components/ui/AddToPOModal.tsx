@@ -14,18 +14,31 @@ export interface AddToPOItem {
   vendor_name?: string;
 }
 
+// Where the modal reads and writes POs when it can't use the signed-in
+// Supabase client: the PIN-gated /receipts app goes through /api/receipts/po,
+// which picks the business itself.
+export interface POSource {
+  load(): Promise<{ vendors: Vendor[]; pos: PurchaseOrder[] }>;
+  add(body: {
+    po_id: string;
+    vendor_id: string | null;
+    vendor_name: string;
+    item: { description: string; quantity: number; unit_price: number };
+  }): Promise<{ po_number?: string; error?: string }>;
+}
+
 interface Props {
   item: AddToPOItem;
   onClose: () => void;
   onAdded?: (poNumber: string) => void;
-  // Business the PO belongs to. Callers pass it because the public /receipts
-  // page has no EntityProvider.
+  // Business the PO belongs to (signed-in pages).
   entity?: BusinessEntity;
+  source?: POSource;
 }
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
 
-export default function AddToPOModal({ item, onClose, onAdded, entity = "wallflower_relic" }: Props) {
+export default function AddToPOModal({ item, onClose, onAdded, entity = "wallflower_relic", source }: Props) {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [openPOs, setOpenPOs] = useState<PurchaseOrder[]>([]);
   const [vendorSearch, setVendorSearch] = useState(item.vendor_name || "");
@@ -36,13 +49,22 @@ export default function AddToPOModal({ item, onClose, onAdded, entity = "wallflo
   const [unitPrice, setUnitPrice] = useState(item.unit_price || 0);
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     async function load() {
-      const [{ data: v }, { data: p }] = await Promise.all([
-        axiom.from("vendors").select("*").eq("status", "active").order("name"),
-        axiom.from("purchase_orders").select("*").eq("status", "pending").eq("entity", entity).order("created_at", { ascending: false }),
-      ]);
+      let v: Vendor[] | null;
+      let p: PurchaseOrder[] | null;
+      if (source) {
+        ({ vendors: v, pos: p } = await source.load());
+      } else {
+        const [vr, pr] = await Promise.all([
+          axiom.from("vendors").select("*").eq("status", "active").order("name"),
+          axiom.from("purchase_orders").select("*").eq("status", "pending").eq("entity", entity).order("created_at", { ascending: false }),
+        ]);
+        v = vr.data;
+        p = pr.data;
+      }
       if (v) setVendors(v);
       if (p) setOpenPOs(p);
 
@@ -56,6 +78,8 @@ export default function AddToPOModal({ item, onClose, onAdded, entity = "wallflo
       }
     }
     load();
+    // source is rebuilt each render by its caller; loading once per item is enough.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.vendor_name, entity]);
 
   const filteredVendors = vendors.filter((v) =>
@@ -87,7 +111,22 @@ export default function AddToPOModal({ item, onClose, onAdded, entity = "wallflo
     // Guard: never append an item that's already on the selected PO.
     if (isDuplicate) return;
     setSaving(true);
+    setError("");
     const lineItem = { description, quantity: qty, unit_price: unitPrice, unit: "each" };
+
+    if (source) {
+      const res = await source.add({
+        po_id: selectedPOId,
+        vendor_id: selectedVendorId || null,
+        vendor_name: vendorName || "Unknown Vendor",
+        item: { description, quantity: qty, unit_price: unitPrice },
+      });
+      setSaving(false);
+      if (!res.po_number) return setError(res.error || "Couldn't add it to the PO.");
+      setDone(res.po_number);
+      onAdded?.(res.po_number);
+      return;
+    }
 
     if (selectedPOId === "new") {
       // Create a new PO
@@ -261,6 +300,8 @@ export default function AddToPOModal({ item, onClose, onAdded, entity = "wallflo
                 </span>
               </div>
             )}
+
+            {error && <p className="text-xs text-red-500">{error}</p>}
 
             <div className="flex gap-2 pt-1">
               <button

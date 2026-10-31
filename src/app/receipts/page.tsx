@@ -1,51 +1,72 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { axiom } from "@/lib/axiom-supabase";
-import { PurchaseOrder, TeamMember } from "@/types/axiom";
+import { PurchaseOrder } from "@/types/axiom";
 import { Camera, Check, Plus, X, Loader2, Trash2, Delete, ShoppingCart, ChevronLeft, Package } from "lucide-react";
 import Button from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
-import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
-import { SITE_ENTITY } from "@/lib/axiom-site";
+import AddToPOModal, { AddToPOItem, POSource } from "@/components/ui/AddToPOModal";
 import DateField from "@/components/ui/DateField";
+
+// ── Session ──────────────────────────────────────────────────
+// PINs are checked by /api/receipts/session; every other call sends the
+// signed session token it returns.
+
+interface Session { name: string; token: string }
 
 // ── PIN Gate ─────────────────────────────────────────────────
 
 type GateStep = "select_member" | "enter_pin";
 
-function PinGate({ onUnlock }: { onUnlock: (memberName: string) => void }) {
-  const [members, setMembers] = useState<TeamMember[]>([]);
+function PinGate({ onUnlock }: { onUnlock: (session: Session) => void }) {
+  const [members, setMembers] = useState<string[] | null>(null);
   const [step, setStep] = useState<GateStep>("select_member");
-  const [selected, setSelected] = useState<TeamMember | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState(false);
+  const [pinMessage, setPinMessage] = useState("Incorrect PIN");
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
-    axiom.from("settings").select("team_members").limit(1).single().then(({ data }) => {
-      if (data?.team_members) setMembers(data.team_members.filter((m: TeamMember) => m.name && m.pin));
-    });
+    fetch("/api/receipts/session")
+      .then((r) => r.json())
+      .then((d: { members?: string[] }) => setMembers(d.members ?? []))
+      .catch(() => setMembers([]));
   }, []);
 
-  function selectMember(member: TeamMember) {
-    setSelected(member);
+  function selectMember(name: string) {
+    setSelected(name);
     setPin("");
     setPinError(false);
     setStep("enter_pin");
   }
 
+  async function check(entered: string) {
+    setChecking(true);
+    try {
+      const res = await fetch("/api/receipts/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: selected, pin: entered }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok && body.token) return onUnlock({ name: body.name, token: body.token });
+      setPinMessage(body.error || "Incorrect PIN");
+    } catch {
+      setPinMessage("No connection. Try again.");
+    } finally {
+      setChecking(false);
+    }
+    setPinError(true);
+    setTimeout(() => { setPin(""); setPinError(false); }, 1200);
+  }
+
   function pressDigit(digit: string) {
+    if (checking) return;
     if (pinError) { setPin(""); setPinError(false); }
     const next = pin + digit;
     setPin(next);
-    if (next.length === 4) {
-      if (next !== selected?.pin) {
-        setPinError(true);
-        setTimeout(() => { setPin(""); setPinError(false); }, 1000);
-      } else {
-        onUnlock(selected.name);
-      }
-    }
+    if (next.length === 4) void check(next);
   }
 
   function del() { setPin((p) => p.slice(0, -1)); setPinError(false); }
@@ -62,18 +83,19 @@ function PinGate({ onUnlock }: { onUnlock: (memberName: string) => void }) {
           <h1 className="text-2xl font-heading font-bold">RELIC Receipts</h1>
           <p className="text-muted text-sm mt-1">Select your name to continue</p>
         </div>
-        {members.length === 0 ? (
+        {members === null ? (
+          <Loader2 size={20} className="animate-spin text-muted" />
+        ) : members.length === 0 ? (
           <p className="text-muted text-sm">No team members with PINs found — add them in Settings.</p>
         ) : (
           <div className="flex flex-col gap-3 w-72">
-            {members.map((m) => (
+            {members.map((name) => (
               <button
-                key={m.name}
-                onClick={() => selectMember(m)}
+                key={name}
+                onClick={() => selectMember(name)}
                 className="bg-card border border-border px-5 py-4 text-left hover:border-accent hover:text-accent transition-colors"
               >
-                <p className="font-medium">{m.name}</p>
-                {m.role && <p className="text-xs text-muted mt-0.5">{m.role}</p>}
+                <p className="font-medium">{name}</p>
               </button>
             ))}
           </div>
@@ -88,7 +110,7 @@ function PinGate({ onUnlock }: { onUnlock: (memberName: string) => void }) {
         <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center mx-auto mb-4">
           <Camera size={22} className="text-accent" />
         </div>
-        <h1 className="text-2xl font-heading font-bold">{selected?.name}</h1>
+        <h1 className="text-2xl font-heading font-bold">{selected}</h1>
         <p className="text-muted text-sm mt-1">Enter your PIN</p>
       </div>
       <div className="flex flex-col items-center gap-3">
@@ -100,7 +122,8 @@ function PinGate({ onUnlock }: { onUnlock: (memberName: string) => void }) {
             )} />
           ))}
         </div>
-        {pinError && <p className="text-xs text-red-400">Incorrect PIN</p>}
+        {pinError && <p className="text-xs text-red-400">{pinMessage}</p>}
+        {checking && <Loader2 size={14} className="animate-spin text-muted" />}
       </div>
       <div className="grid grid-cols-3 gap-3 w-64">
         {pad.map((k, i) => k === "" ? (
@@ -157,12 +180,39 @@ const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency",
 type Step = "capture" | "parsing" | "review" | "saving" | "saved";
 
 export default function ReceiptsApp() {
-  const [member, setMember] = useState<string | null>(null);
-  if (!member) return <PinGate onUnlock={(name) => setMember(name)} />;
-  return <ReceiptsMain memberName={member} onSignOut={() => setMember(null)} />;
+  const [session, setSession] = useState<Session | null>(null);
+  // Stable, so ReceiptsMain's data loader doesn't re-run on every render.
+  const signOut = useCallback(() => setSession(null), []);
+  if (!session) return <PinGate onUnlock={setSession} />;
+  return <ReceiptsMain session={session} onSignOut={signOut} />;
 }
 
-function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut: () => void }) {
+function ReceiptsMain({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
+  const memberName = session.name;
+
+  // Every receipts API call carries the PIN session; an expired or revoked
+  // one sends the person back to the PIN screen.
+  const api = useCallback(
+    async (url: string, init: RequestInit = {}) => {
+      const headers = new Headers(init.headers);
+      headers.set("x-receipts-session", session.token);
+      const res = await fetch(url, { ...init, headers });
+      if (res.status === 401) onSignOut();
+      return res;
+    },
+    [session.token, onSignOut],
+  );
+  const json = (body: unknown): RequestInit => ({
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const poSource: POSource = {
+    load: async () => (await api("/api/receipts/po")).json(),
+    add: async (body) => {
+      const res = await api("/api/receipts/po", { method: "POST", ...json(body) });
+      return res.json();
+    },
+  };
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("capture");
   const [imageUrl, setImageUrl] = useState("");
@@ -179,13 +229,12 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
   const [poItem, setPoItem] = useState<AddToPOItem | null>(null);
 
   const loadData = useCallback(async () => {
-    const [{ data: poData }, { data: rec }] = await Promise.all([
-      axiom.from("purchase_orders").select("*").in("status", ["pending", "approved"]).order("created_at", { ascending: false }),
-      axiom.from("receipts").select("*").order("created_at", { ascending: false }).limit(20),
-    ]);
-    if (poData) setPurchaseOrders(poData as PurchaseOrder[]);
-    if (rec) setReceipts(rec as ReceiptRecord[]);
-  }, []);
+    const res = await api("/api/receipts");
+    if (!res.ok) return;
+    const d = (await res.json()) as { purchase_orders: PurchaseOrder[]; receipts: ReceiptRecord[] };
+    setPurchaseOrders(d.purchase_orders);
+    setReceipts(d.receipts);
+  }, [api]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -196,27 +245,20 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
     reader.readAsDataURL(file);
     setStep("parsing");
 
-    const ext = file.name.split(".").pop() || "jpg";
-    const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-    const { data: uploadData, error: uploadErr } = await axiom.storage
-      .from("receipts")
-      .upload(path, file, { contentType: file.type });
-
-    if (uploadErr) {
-      setError("Upload failed: " + uploadErr.message);
+    const fd = new FormData();
+    fd.append("file", file);
+    const up = await api("/api/receipts/upload", { method: "POST", body: fd });
+    const upBody = await up.json().catch(() => ({}));
+    if (!up.ok || !upBody.url) {
+      setError(upBody.error || "Upload failed.");
       setStep("capture");
       return;
     }
-
-    const { data: { publicUrl } } = axiom.storage.from("receipts").getPublicUrl(uploadData.path);
+    const publicUrl: string = upBody.url;
     setImageUrl(publicUrl);
 
     try {
-      const res = await fetch("/api/parse-receipt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ image_url: publicUrl }),
-      });
+      const res = await api("/api/parse-receipt", { method: "POST", ...json({ image_url: publicUrl }) });
       const parsed: ParsedReceipt = await res.json();
       if (parsed.error) throw new Error(String(parsed.error));
       setVendor(parsed.vendor || "");
@@ -252,16 +294,24 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
 
   async function save() {
     setStep("saving");
-    await axiom.from("receipts").insert({
-      image_url: imageUrl || null,
-      vendor: vendor || null,
-      receipt_date: receiptDate || null,
-      total,
-      line_items: items,
-      purchase_order_id: selectedPOId || null,
-      notes: notes || null,
-      submitted_by: memberName,
+    const res = await api("/api/receipts", {
+      method: "POST",
+      ...json({
+        image_url: imageUrl || null,
+        vendor: vendor || null,
+        receipt_date: receiptDate || null,
+        total,
+        line_items: items,
+        purchase_order_id: selectedPOId || null,
+        notes: notes || null,
+      }),
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error || "Couldn't save the receipt. Try again.");
+      setStep("review");
+      return;
+    }
     setStep("saved");
     loadData();
   }
@@ -474,8 +524,9 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
                           defaultValue=""
                           onChange={(e) => {
                             if (!e.target.value) return;
-                            axiom.from("receipts").update({ purchase_order_id: e.target.value }).eq("id", r.id).then(() => {
-                              setReceipts((prev) => prev.map((x) => x.id === r.id ? { ...x, purchase_order_id: e.target.value } : x));
+                            const poId = e.target.value;
+                            api(`/api/receipts/${r.id}`, { method: "PATCH", ...json({ purchase_order_id: poId }) }).then((res) => {
+                              if (res.ok) setReceipts((prev) => prev.map((x) => x.id === r.id ? { ...x, purchase_order_id: poId } : x));
                             });
                           }}>
                           <option value="">Link to P.O.…</option>
@@ -488,8 +539,8 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
                     <p className="text-sm font-mono">{money(r.total || 0)}</p>
                     <button onClick={async () => {
                       if (!confirm("Delete this receipt?")) return;
-                      await axiom.from("receipts").delete().eq("id", r.id);
-                      setReceipts((prev) => prev.filter((x) => x.id !== r.id));
+                      const res = await api(`/api/receipts/${r.id}`, { method: "DELETE" });
+                      if (res.ok) setReceipts((prev) => prev.filter((x) => x.id !== r.id));
                     }} className="text-muted hover:text-red-500 transition-colors">
                       <Trash2 size={14} />
                     </button>
@@ -501,7 +552,7 @@ function ReceiptsMain({ memberName, onSignOut }: { memberName: string; onSignOut
         </div>
       )}
 
-      {poItem && <AddToPOModal item={poItem} entity={SITE_ENTITY ?? undefined} onClose={() => setPoItem(null)} onAdded={() => setPoItem(null)} />}
+      {poItem && <AddToPOModal item={poItem} source={poSource} onClose={() => setPoItem(null)} onAdded={() => setPoItem(null)} />}
     </div>
   );
 }

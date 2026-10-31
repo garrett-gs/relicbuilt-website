@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { axiom } from "@/lib/axiom-supabase";
 
 /** A material line from a PO or invoice — only the fields we need to match + price. */
@@ -22,13 +23,16 @@ export interface PricedLine {
  *
  * Returns the number of inventory items whose price was updated.
  */
-export async function syncInventoryUnitCost(lines: PricedLine[]): Promise<number> {
+export async function syncInventoryUnitCost(
+  lines: PricedLine[],
+  db: SupabaseClient = axiom, // the server passes its own client
+): Promise<number> {
   const priced = (lines || []).filter(
     (l) => l && (l.unit_price ?? 0) > 0 && (l.description?.trim() || l.item_number?.trim())
   );
   if (priced.length === 0) return 0;
 
-  const { data: inv } = await axiom
+  const { data: inv } = await db
     .from("inventory_items")
     .select("id, item_number, description, unit_cost")
     .eq("active", true);
@@ -57,7 +61,7 @@ export async function syncInventoryUnitCost(lines: PricedLine[]): Promise<number
 
   let updated = 0;
   for (const [id, unit_cost] of updates) {
-    const { error } = await axiom
+    const { error } = await db
       .from("inventory_items")
       .update({ unit_cost, updated_at: new Date().toISOString() })
       .eq("id", id);

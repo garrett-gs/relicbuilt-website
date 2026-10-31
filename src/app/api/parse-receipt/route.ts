@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTeamMember } from "@/lib/api-auth";
+import { readReceiptsSession, RECEIPTS_SESSION_HEADER } from "@/lib/receipts-session";
 
 export async function POST(req: NextRequest) {
+  // The receipts app (PIN session) or a signed-in team member.
+  if (!readReceiptsSession(req.headers.get(RECEIPTS_SESSION_HEADER))) {
+    const auth = await requireTeamMember(req);
+    if (auth instanceof NextResponse) return auth;
+  }
+
   try {
     const { image_url } = await req.json();
     const apiKey = process.env.OPENAI_API_KEY;
