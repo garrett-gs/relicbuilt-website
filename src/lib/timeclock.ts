@@ -280,6 +280,84 @@ export async function editTimeEntry(original: TimeEntry, patch: EditEntryPatch):
   return updated;
 }
 
+export interface NewEntryInput {
+  member_name: string;
+  hourly_rate: number;
+  custom_work_id: string | null;
+  project_name: string | null;
+  clock_in: string;  // ISO
+  clock_out: string; // ISO
+  tasks: string[];
+  notes?: string;
+}
+
+/**
+ * Admin adds a missed entry (someone worked but never clocked in/out). Inserts
+ * a completed time_entries row with explicit times and appends it to the
+ * project's labor log + actual_cost, mirroring a normal clock-out. Starts
+ * unapproved so it still goes through sign-off.
+ */
+export async function createManualEntry(input: NewEntryInput): Promise<TimeEntry> {
+  if (new Date(input.clock_out).getTime() <= new Date(input.clock_in).getTime())
+    throw new Error("Clock-out must be after clock-in.");
+  const hours = hoursFromEntry({ clock_in: input.clock_in, clock_out: input.clock_out });
+  const rate = input.hourly_rate || 60;
+
+  const { data, error } = await axiom
+    .from("time_entries")
+    .insert({
+      member_name: input.member_name,
+      custom_work_id: input.custom_work_id,
+      project_name: input.project_name,
+      clock_in: input.clock_in,
+      clock_out: input.clock_out,
+      hours,
+      hourly_rate: rate,
+      tasks: input.tasks,
+      notes: input.notes || null,
+      approved: false,
+    })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  const entry = data as TimeEntry;
+
+  // Append to the project's labor log (no project = Shop/standalone hours).
+  if (input.custom_work_id) {
+    const { data: project } = await axiom
+      .from("custom_work")
+      .select("labor_log, actual_cost")
+      .eq("id", input.custom_work_id)
+      .single();
+    if (project) {
+      const cost = round2(hours * rate);
+      const baseDesc = input.tasks.length ? `${input.member_name} — ${input.tasks.join(", ")}` : input.member_name;
+      const logEntry = {
+        date: input.clock_in.split("T")[0],
+        clock_in: hhmmLocal(input.clock_in),
+        clock_out: hhmmLocal(input.clock_out),
+        hours,
+        rate,
+        cost,
+        description: input.notes ? `${baseDesc} [${input.notes}]` : baseDesc,
+        tasks: input.tasks,
+        source: "timeclock",
+        time_entry_id: entry.id,
+      };
+      await axiom
+        .from("custom_work")
+        .update({
+          labor_log: [...(project.labor_log || []), logEntry],
+          actual_cost: round2((project.actual_cost || 0) + cost),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", input.custom_work_id);
+    }
+  }
+
+  return entry;
+}
+
 /** Admin delete of a completed entry, backing its cost out of the project. */
 export async function deleteTimeEntry(entry: TimeEntry): Promise<void> {
   const { data, error } = await axiom.from("time_entries").delete().eq("id", entry.id).select("id");

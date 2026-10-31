@@ -8,6 +8,7 @@ import {
   deleteTimeEntry,
   editTimeEntry,
   setEntryApproval,
+  createManualEntry,
 } from "@/lib/timeclock";
 import type { TimeEntry } from "@/types/axiom";
 import {
@@ -20,6 +21,7 @@ import {
   Pencil,
   Trash2,
   X,
+  Plus,
 } from "lucide-react";
 
 interface TeamMember {
@@ -161,6 +163,7 @@ export default function CrewPage() {
   const [logs, setLogs] = useState<TimeEntry[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
   const [editing, setEditing] = useState<TimeEntry | null>(null);
+  const [adding, setAdding] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [logErr, setLogErr] = useState<string | null>(null);
 
@@ -517,6 +520,12 @@ export default function CrewPage() {
               />
               Needs approval only
             </label>
+            <button
+              onClick={() => setAdding(true)}
+              className="ml-auto inline-flex items-center gap-1.5 text-sm font-medium text-background bg-accent rounded px-3 py-1.5 hover:bg-accent/90"
+            >
+              <Plus size={15} /> Add entry
+            </button>
           </div>
 
           {logErr && (
@@ -576,6 +585,19 @@ export default function CrewPage() {
           onSaved={(updated) => {
             setLogs((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
             setEditing(null);
+          }}
+        />
+      )}
+
+      {adding && (
+        <AddEntryModal
+          members={members}
+          onClose={() => setAdding(false)}
+          onSaved={(created) => {
+            // Show it right away, newest-first, even if it falls outside the
+            // current date window.
+            setLogs((prev) => [created, ...prev]);
+            setAdding(false);
           }}
         />
       )}
@@ -915,6 +937,164 @@ function EditEntryModal({
             className="flex-1 text-sm font-medium text-background bg-accent rounded px-4 py-2 hover:bg-accent/90 disabled:opacity-40"
           >
             {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Admin adds a missed entry — someone worked but never clocked in/out. Same
+// fields as the edit modal plus a member picker; writes a completed entry and
+// its project labor cost.
+function AddEntryModal({
+  members,
+  onClose,
+  onSaved,
+}: {
+  members: TeamMember[];
+  onClose: () => void;
+  onSaved: (created: TimeEntry) => void;
+}) {
+  const todayAt = (h: number) => {
+    const d = new Date();
+    d.setHours(h, 0, 0, 0);
+    return isoToParts(d.toISOString());
+  };
+  const [memberName, setMemberName] = useState("");
+  const [projectId, setProjectId] = useState("");
+  const [projects, setProjects] = useState<{ id: string; project_name: string | null }[]>([]);
+  const [clockIn, setClockIn] = useState<DTParts>(todayAt(8));
+  const [clockOut, setClockOut] = useState<DTParts>(todayAt(16));
+  const [tasks, setTasks] = useState("");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    axiom
+      .from("custom_work")
+      .select("id, project_name")
+      .in("status", ["new", "in_review", "quoted", "accepted", "in_progress"])
+      .order("project_name")
+      .then(({ data }) => {
+        if (alive) setProjects((data as { id: string; project_name: string | null }[]) || []);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const inDate = partsToDate(clockIn);
+  const outDate = partsToDate(clockOut);
+  const previewHours =
+    inDate && outDate && outDate.getTime() > inDate.getTime()
+      ? Math.round(((outDate.getTime() - inDate.getTime()) / 3_600_000) * 100) / 100
+      : null;
+  const canSave = !!memberName && previewHours != null && !saving;
+
+  async function save() {
+    if (!inDate || !outDate || !memberName) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const member = members.find((m) => m.name === memberName);
+      const created = await createManualEntry({
+        member_name: memberName,
+        hourly_rate: member?.hourly_rate || 60,
+        custom_work_id: projectId || null,
+        project_name: projectId ? projects.find((p) => p.id === projectId)?.project_name ?? null : null,
+        clock_in: inDate.toISOString(),
+        clock_out: outDate.toISOString(),
+        tasks: tasks.split(",").map((t) => t.trim()).filter(Boolean),
+        notes: notes.trim(),
+      });
+      onSaved(created);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not save.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-md bg-card border border-border rounded-xl p-5 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-heading font-bold text-foreground">Add entry</h3>
+          <button onClick={onClose} className="text-muted hover:text-foreground">
+            <X size={18} />
+          </button>
+        </div>
+        <p className="text-xs text-muted mb-4">For time that was worked but never clocked in/out.</p>
+
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-widest text-muted/60">Crew member</span>
+            <select
+              value={memberName}
+              onChange={(e) => setMemberName(e.target.value)}
+              className="bg-background border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
+            >
+              <option value="">Select…</option>
+              {members.map((m) => (
+                <option key={m.name} value={m.name}>{m.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] uppercase tracking-widest text-muted/60">Project</span>
+            <select
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              className="bg-background border border-border px-2 py-1.5 text-sm text-foreground focus:outline-none focus:border-accent"
+            >
+              <option value="">No project</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.project_name || "Untitled project"}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="space-y-3 mb-3">
+          <DateTimeFields label="Clock in" value={clockIn} onChange={setClockIn} />
+          <DateTimeFields label="Clock out" value={clockOut} onChange={setClockOut} />
+        </div>
+
+        <label className="flex flex-col gap-1 mb-3">
+          <span className="text-[10px] uppercase tracking-widest text-muted/60">Tasks (comma-separated)</span>
+          <input value={tasks} onChange={(e) => setTasks(e.target.value)} className="bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent" />
+        </label>
+
+        <label className="flex flex-col gap-1 mb-3">
+          <span className="text-[10px] uppercase tracking-widest text-muted/60">Notes</span>
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} className="bg-background border border-border px-2 py-1.5 text-xs text-foreground focus:outline-none focus:border-accent" />
+        </label>
+
+        <div className="flex items-center justify-between text-xs text-muted mb-4">
+          <span>
+            {previewHours != null ? (
+              <>Total: <span className="font-mono font-semibold text-accent">{previewHours.toFixed(2)} h</span></>
+            ) : (
+              <span className="text-red-400">Clock-out must be after clock-in</span>
+            )}
+          </span>
+          <span className="text-amber-400/80">Added unapproved</span>
+        </div>
+
+        {err && <div className="text-xs text-red-400 mb-3">{err}</div>}
+
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 text-sm text-muted border border-border rounded px-4 py-2 hover:text-foreground">
+            Cancel
+          </button>
+          <button
+            onClick={save}
+            disabled={!canSave}
+            className="flex-1 text-sm font-medium text-background bg-accent rounded px-4 py-2 hover:bg-accent/90 disabled:opacity-40"
+          >
+            {saving ? "Saving…" : "Add entry"}
           </button>
         </div>
       </div>
