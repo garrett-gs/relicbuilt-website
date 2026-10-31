@@ -209,6 +209,21 @@ export async function POST(req: NextRequest) {
       proposal_approved_at: new Date().toISOString(),
     }).eq("id", project.id);
 
+    // Record the approval in Recent Activity — client approvals skip the admin
+    // client that normally calls logActivity. Best-effort, never blocks approval.
+    try {
+      await supabase.from("activity_log").insert({
+        action: "approved",
+        entity: "project",
+        entity_id: project.id,
+        label: `Approved proposal: ${project.project_name}`,
+        user_name: project.client_email || project.client_name || undefined,
+        meta: { project_id: project.id, biz_entity: project.entity, amount: totalAmount },
+      });
+    } catch (e) {
+      console.error("[approve-proposal] activity log failed:", e);
+    }
+
     // Load settings for biz info + team
     const { data: settings } = await supabase
       .from("settings")

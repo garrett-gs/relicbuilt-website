@@ -178,6 +178,22 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Record the approval in Recent Activity. Client approvals come through this
+    // server route (not the admin client that normally calls logActivity), so we
+    // insert directly with the service client. Best-effort — never blocks approval.
+    try {
+      await supabase.from("activity_log").insert({
+        action: "approved",
+        entity: "estimate",
+        entity_id: estimate.id,
+        label: `Approved proposal: ${estimate.project_name || estimate.estimate_number} — signed by ${signatureName.trim()}`,
+        user_name: estimate.client_email || signatureName.trim(),
+        meta: { estimate_number: estimate.estimate_number, project_id: projectId, biz_entity: estimate.entity, amount: totalAmount },
+      });
+    } catch (e) {
+      console.error("[approve] activity log failed:", e);
+    }
+
     // ── Relic: create the deposit invoice and route the client to pay it ──
     // Wallflower handles deposits in Nexus; Relic collects here via Stripe.
     let payUrl: string | null = null;
