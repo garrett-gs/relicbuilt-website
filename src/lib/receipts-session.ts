@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { axiomAdmin } from "@/lib/axiom-admin";
+import { requireWritableWorkspace } from "@/lib/relicon-billing";
 import { NextResponse } from "next/server";
 import { TeamMember } from "@/types/axiom";
 
@@ -99,6 +100,11 @@ export async function requireReceiptsSession(
   const members = await pinMembers(db);
   if (!members.some((m) => m.name === name)) {
     return NextResponse.json({ error: "Sign in with your PIN again." }, { status: 401 });
+  }
+  // Anything but a read needs a paid-up workspace (Phase 3).
+  if (req.method !== "GET") {
+    const blocked = await requireWritableWorkspace(db);
+    if (blocked) return blocked;
   }
   return { name, db };
 }

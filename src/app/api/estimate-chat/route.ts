@@ -3,7 +3,7 @@ import { requireTeamMember } from "@/lib/api-auth";
 import { axiomAdmin, siteTenantId } from "@/lib/axiom-admin";
 
 export async function POST(req: NextRequest) {
-  const auth = await requireTeamMember(req);
+  const auth = await requireTeamMember(req, { write: false });
   if (auth instanceof NextResponse) return auth;
 
   try {

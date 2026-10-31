@@ -5,7 +5,7 @@ import { readReceiptsSession, RECEIPTS_SESSION_HEADER } from "@/lib/receipts-ses
 export async function POST(req: NextRequest) {
   // The receipts app (PIN session) or a signed-in team member.
   if (!readReceiptsSession(req.headers.get(RECEIPTS_SESSION_HEADER))) {
-    const auth = await requireTeamMember(req);
+    const auth = await requireTeamMember(req, { write: false });
     if (auth instanceof NextResponse) return auth;
   }
 

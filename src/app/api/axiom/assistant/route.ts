@@ -9,6 +9,7 @@ import {
   runTool,
   buildContextBlurb,
 } from "@/lib/assistant/tools";
+import { requireWritableWorkspace } from "@/lib/relicon-billing";
 
 /**
  * Axiom Assistant — a tool-using agent for daily operations.
@@ -138,6 +139,13 @@ export async function POST(req: NextRequest) {
           type: "tool_result",
           tool_use_id: tu.id,
           content: "The user cancelled this action. Do not perform it. Acknowledge and ask what they'd like to do instead.",
+        };
+      } else if (await requireWritableWorkspace(caller.admin)) {
+        result = {
+          type: "tool_result",
+          tool_use_id: tu.id,
+          content: "Error: this workspace is read-only until the Relicon bill is paid, so nothing can be added or changed. Tell the user.",
+          is_error: true,
         };
       } else {
         const r = await runTool(tu.name, tu.input, ctx);

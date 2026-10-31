@@ -60,7 +60,7 @@ function money(n: number) {
  * event so the merchant can produce a defensible record on demand.
  */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ estimate_id: string }> }) {
-  const auth = await requireTeamMember(req);
+  const auth = await requireTeamMember(req, { write: false });
   if (auth instanceof NextResponse) return auth;
 
   try {

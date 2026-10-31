@@ -7,7 +7,7 @@ export const maxDuration = 60;
 // Parse a vendor quote (PDF or image) into material line items for an estimate.
 // Uses Claude, which reads PDFs natively via a document content block.
 export async function POST(req: NextRequest) {
-  const auth = await requireTeamMember(req);
+  const auth = await requireTeamMember(req, { write: false });
   if (auth instanceof NextResponse) return auth;
 
   try {

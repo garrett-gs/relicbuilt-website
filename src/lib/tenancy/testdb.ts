@@ -23,6 +23,11 @@ const SHIM = `
   create function auth.role() returns text language sql stable as $$
     select auth.jwt() ->> 'role'
   $$;
+  create schema storage;
+  create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
+  alter table storage.objects enable row level security;
+  grant usage on schema storage to anon, authenticated, service_role;
+  grant all on storage.objects to anon, authenticated, service_role;
   grant usage on schema auth to anon, authenticated, service_role;
   grant usage on schema public to anon, authenticated, service_role;
   alter default privileges in schema public grant all on tables to anon, authenticated, service_role;

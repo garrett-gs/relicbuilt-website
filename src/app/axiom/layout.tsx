@@ -10,6 +10,7 @@ import AxiomLogin from "@/components/axiom/AxiomLogin";
 import Assistant from "@/components/axiom/Assistant";
 import ClockWidget from "@/components/axiom/ClockWidget";
 import AutoUpdateOverlay from "@/components/axiom/AutoUpdateOverlay";
+import BillingBanner from "@/components/axiom/BillingBanner";
 import { SITE_ENTITY } from "@/lib/axiom-site";
 
 // Staff accounts are a Time Clock only — no other Axiom surface.
@@ -96,6 +97,7 @@ function AxiomShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-background">
       <Sidebar />
       <main className="flex-1 md:ml-56 px-6 pb-6 md:px-8 md:pb-8 pt-[calc(env(safe-area-inset-top)_+_1.5rem)] md:pt-8 overflow-x-hidden">
+        <BillingBanner />
         {children}
       </main>
       <Assistant />
