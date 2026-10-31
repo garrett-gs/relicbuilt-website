@@ -32,7 +32,7 @@ export default function SettingsPage() {
 
   // "Add User (with login)" modal
   const [showAddUser, setShowAddUser] = useState(false);
-  const [nu, setNu] = useState({ name: "", email: "", password: "", role: "staff", hourly_rate: 60, relic_access: false });
+  const [nu, setNu] = useState({ name: "", email: "", password: "", role: "staff", hourly_rate: 60 });
   const [nuBusy, setNuBusy] = useState(false);
   const [nuErr, setNuErr] = useState("");
   const [nuDone, setNuDone] = useState(false);
@@ -73,7 +73,6 @@ export default function SettingsPage() {
         role: nu.role as TeamMember["role"],
         hourly_rate: Number(nu.hourly_rate) || 0,
         pin: "",
-        relic_access: isSuperAdmin ? nu.relic_access : false,
       };
       const newMembers = [...(settings?.team_members || []), member];
       if (settings) {
@@ -554,21 +553,6 @@ export default function SettingsPage() {
                     />
                   </div>
                 </div>
-                {isSuperAdmin && m.role !== "superadmin" && (
-                  <label className="flex items-center gap-2 mt-3 text-sm cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={m.relic_access === true}
-                      onChange={(e) => {
-                        const members = [...(settings.team_members || [])];
-                        members[i] = { ...members[i], relic_access: e.target.checked };
-                        updateField("team_members", members);
-                      }}
-                      className="accent-accent"
-                    />
-                    <span className="text-foreground">Relic access <span className="text-[10px] text-muted">— can see the private Relic entity</span></span>
-                  </label>
-                )}
               </div>
             ))}
           </div>
@@ -579,7 +563,7 @@ export default function SettingsPage() {
             }} className="text-accent text-sm flex items-center gap-1"><Plus size={14} /> Add Team Member</button>
             {isAdmin && (
               <button onClick={() => {
-                setNu({ name: "", email: "", password: "", role: "staff", hourly_rate: 60, relic_access: false });
+                setNu({ name: "", email: "", password: "", role: "staff", hourly_rate: 60 });
                 setNuErr(""); setNuDone(false); setShowAddUser(true);
               }} className="text-accent text-sm flex items-center gap-1"><UserPlus size={14} /> Add User (with login)</button>
             )}
@@ -627,12 +611,6 @@ export default function SettingsPage() {
                       </div>
                       <Field label="Hourly Rate ($)" value={String(nu.hourly_rate)} onChange={(v) => setNu((s) => ({ ...s, hourly_rate: Number(v) || 0 }))} type="number" />
                     </div>
-                    {isSuperAdmin && (
-                      <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-                        <input type="checkbox" checked={nu.relic_access} onChange={(e) => setNu((s) => ({ ...s, relic_access: e.target.checked }))} className="accent-accent" />
-                        <span className="text-foreground">Relic access</span>
-                      </label>
-                    )}
                     {nuErr && <p className="text-xs text-red-500">{nuErr}</p>}
                     <div className="flex gap-2 pt-1">
                       <Button onClick={createUserWithLogin} disabled={nuBusy || !nu.email || nu.password.length < 8}>{nuBusy ? "Creating…" : "Create User"}</Button>

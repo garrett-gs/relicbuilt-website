@@ -97,10 +97,9 @@ export function EntityProvider({ children }: { children: ReactNode }) {
     axiom.from("settings").select("team_members, accent_color, biz_name, biz_email, nexus_connected, relic_profile").limit(1).single().then(({ data }) => {
       if (!active) return;
       setSettingsRow(data as typeof settingsRow);
-      const me = (data?.team_members || []).find(
-        (m: TeamMember) => m.email?.toLowerCase() === userEmail.toLowerCase()
-      );
-      setHasRelicAccess(owner || (!!me && (me.role === "superadmin" || me.relic_access === true)));
+      // Relic is no longer a restricted entity — any signed-in Axiom user can
+      // see and work in it. (The old per-member relic_access flag is retired.)
+      setHasRelicAccess(true);
       setAccessLoading(false);
     });
     return () => { active = false; };

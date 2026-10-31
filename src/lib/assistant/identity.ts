@@ -8,9 +8,9 @@ import { TeamMember } from "@/types/axiom";
  * every request must first prove WHO is calling and WHAT they may touch:
  *   - the caller must be a signed-in Axiom user (valid session token), and
  *   - a member of settings.team_members.
- * Relic access mirrors the client rule in EntityProvider exactly: superadmin,
- * or an explicit relic_access flag. Anyone else is pinned to Wallflower RELIC,
- * so the assistant can never read or write Relic data on their behalf.
+ * Relic is no longer a restricted entity: any signed-in team member may work
+ * in it (mirrors EntityProvider). The old per-member relic_access flag is
+ * retired.
  */
 export interface CallerContext {
   admin: SupabaseClient;      // service-role client (bypasses RLS)
@@ -56,7 +56,8 @@ export async function identifyCaller(token: string | undefined): Promise<CallerC
   if (!member) throw new AuthError("You don't have access to the assistant.", 403);
 
   const isAdmin = member.role === "superadmin" || member.role === "admin";
-  const hasRelicAccess = member.role === "superadmin" || member.relic_access === true;
+  // Relic is no longer a restricted entity — any assistant user can work in it.
+  const hasRelicAccess = true;
 
   return { admin, email, member, isAdmin, hasRelicAccess };
 }
