@@ -29,8 +29,21 @@ function AxiomShell({ children }: { children: React.ReactNode }) {
   }, [role, roleLoading, pathname, router]);
 
   // Public routes — no auth required
-  if (pathname.startsWith("/axiom/portal/") || pathname === "/axiom/timeclock" || pathname === "/axiom/receipts") {
+  if (pathname.startsWith("/axiom/portal/") || pathname === "/axiom/receipts") {
     return <>{children}</>;
+  }
+
+  // Time Clock: full-screen like a kiosk, but signed in. A shared shop device
+  // signs in once with a shop account and uses the name + PIN picker.
+  if (pathname === STAFF_HOME) {
+    if (loading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <div className="text-muted text-sm animate-pulse">Loading...</div>
+        </div>
+      );
+    }
+    return session ? <>{children}</> : <AxiomLogin />;
   }
 
   if (loading) {
