@@ -20,6 +20,78 @@
 
 begin;
 
+-- ── 0. New inventory items follow their catalog item ────────────────────────
+-- A live automation (trg_catalog_insert_sync on vendor_catalog) creates an
+-- inventory item for each new catalog item. Those items now take the catalog
+-- item's workspace (then the vendor's), not just the request's. Same function
+-- as in tenancy-phase1.sql, with that branch added.
+
+create or replace function public.tenancy_fill_tenant_id()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  r jsonb := to_jsonb(new);
+  v uuid;
+begin
+  -- A business change (entity) moves the row to that workspace.
+  if tg_op = 'UPDATE' then
+    if r ? 'entity'
+       and tg_table_name <> 'activity_log'
+       and (r ->> 'entity') is distinct from (to_jsonb(old) ->> 'entity') then
+      new.tenant_id := public.tenant_id_for_slug(r ->> 'entity');
+    end if;
+    return new;
+  end if;
+
+  if new.tenant_id is not null then
+    return new;
+  end if;
+
+  case tg_table_name
+    when 'companies', 'customers', 'custom_work', 'estimates', 'expenses', 'invoices',
+         'purchase_orders', 'master_projects', 'notes', 'parts_library' then
+      v := public.tenant_id_for_slug(r ->> 'entity');
+    when 'approval_requests', 'build_comments', 'build_files', 'custom_work_parts', 'tasks', 'time_entries' then
+      select tenant_id into v from public.custom_work where id = (r ->> 'custom_work_id')::uuid;
+    when 'inventory_transactions' then
+      select tenant_id into v from public.custom_work where id = (r ->> 'custom_work_id')::uuid;
+      if v is null then
+        select tenant_id into v from public.inventory_items where id = (r ->> 'inventory_item_id')::uuid;
+      end if;
+    when 'vendor_catalog' then
+      select tenant_id into v from public.vendors where id = (r ->> 'vendor_id')::uuid;
+    when 'inventory_items' then
+      -- Items made by the catalog automation (trg_catalog_insert_sync) follow
+      -- their catalog item, then their vendor.
+      select tenant_id into v from public.vendor_catalog where id = (r ->> 'catalog_item_id')::uuid;
+      if v is null then
+        select tenant_id into v from public.vendors where id = (r ->> 'vendor_id')::uuid;
+      end if;
+    when 'products' then
+      select tenant_id into v from public.product_catalogs where id = (r ->> 'catalog_id')::uuid;
+    when 'proposal_audit_events' then
+      select tenant_id into v from public.estimates where id = (r ->> 'estimate_id')::uuid;
+    when 'receipts' then
+      select tenant_id into v from public.purchase_orders where id = (r ->> 'purchase_order_id')::uuid;
+      if v is null then
+        select tenant_id into v from public.custom_work where id = (r ->> 'project_id')::uuid;
+      end if;
+    when 'wallflower_work_orders' then
+      v := public.tenant_id_for_slug('wallflower_relic');
+    when 'activity_log' then
+      v := public.tenancy_tenant_of_record(r ->> 'entity', (r ->> 'entity_id')::uuid);
+    else
+      v := null;
+  end case;
+
+  new.tenant_id := coalesce(v, public.current_tenant_id());
+  return new;
+end
+$$;
+
 -- ── 1. RELIC's copy of the shop materials ────────────────────────────────────
 
 do $$
@@ -39,6 +111,13 @@ declare
   relic uuid := public.tenant_id_for_slug('relic');
   t     text;
 begin
+  -- The catalog automation would add a second RELIC item for every copied
+  -- catalog item; inventory items are copied below instead, so pause it.
+  if exists (select 1 from pg_trigger where tgname = 'trg_catalog_insert_sync'
+             and tgrelid = 'public.vendor_catalog'::regclass) then
+    alter table public.vendor_catalog disable trigger trg_catalog_insert_sync;
+  end if;
+
   -- Copy each Wallflower row once (copied_from marks the copy; a re-run skips
   -- rows already copied). Every column carries over; only id, workspace and
   -- copied_from change.
@@ -55,6 +134,11 @@ begin
         and not exists (select 1 from public.%1$I c where c.copied_from = src.id and c.tenant_id = $2)
     $f$, t) using wr, relic;
   end loop;
+
+  if exists (select 1 from pg_trigger where tgname = 'trg_catalog_insert_sync'
+             and tgrelid = 'public.vendor_catalog'::regclass) then
+    alter table public.vendor_catalog enable trigger trg_catalog_insert_sync;
+  end if;
 
   -- Point RELIC's copies (and RELIC's own records) at RELIC's copies.
   update public.vendor_catalog x set vendor_id = c.id

@@ -49,6 +49,15 @@ beforeAll(async () => {
     alter table public.wallflower_work_orders enable row level security;
     create policy "Auth full access" on public.wallflower_work_orders for all to authenticated using (true) with check (true);
     create policy "Public intake insert" on public.wallflower_work_orders for insert to anon with check (true);
+    -- Live automation: every new catalog item gets an inventory item.
+    create function public.sync_catalog_to_inventory() returns trigger language plpgsql as $$
+    begin
+      insert into public.inventory_items (catalog_item_id, vendor_id, description, unit_cost)
+        values (new.id, new.vendor_id, new.description, coalesce(new.unit_price, 0));
+      return new;
+    end $$;
+    create trigger trg_catalog_insert_sync after insert on public.vendor_catalog
+      for each row execute function public.sync_catalog_to_inventory();
     alter table public.settings enable row level security;
     create policy "Auth full access" on public.settings for all to authenticated using (true) with check (true);
   `);
@@ -97,7 +106,9 @@ describe("RELIC's copy of the materials", () => {
       ) x join public.tenants on tenants.id = x.tenant_id group by t order by t`);
     expect(counts).toEqual([
       { t: "inventory_categories", wr: 1, relic: 1 },
-      { t: "inventory_items", wr: 1, relic: 1 },
+      // The fixture's own item plus the one the catalog automation made; RELIC
+      // gets one copy of each and no extra from the paused automation.
+      { t: "inventory_items", wr: 2, relic: 2 },
       { t: "shopping_lists", wr: 1, relic: 1 },
       { t: "vendor_catalog", wr: 1, relic: 1 },
       { t: "vendors", wr: 2, relic: 2 },
@@ -131,6 +142,16 @@ describe("RELIC's copy of the materials", () => {
     expect(orig.t).toBe(wr);
   });
 
+  it("a new catalog item's automatic inventory item lands in the site's workspace", async () => {
+    const relic = await tenant("relic");
+    const [vendor] = await rows<{ id: string }>(`select id from public.vendors where tenant_id = $1 limit 1`, [relic]);
+    await as(garrett, "relic", () =>
+      db.query(`insert into public.vendor_catalog (vendor_id, description) values ($1, 'Walnut 8/4')`, [vendor.id]),
+    );
+    const [item] = await rows<{ t: string }>(`select tenant_id as t from public.inventory_items where description = 'Walnut 8/4'`);
+    expect(item.t).toBe(relic);
+  });
+
   it("running the script again copies nothing twice", async () => {
     await db.exec(PHASE2A);
     const [{ n }] = await rows<{ n: number }>(`select count(*)::int as n from public.vendors`);
@@ -148,12 +169,12 @@ describe("each site sees only its workspace", () => {
 
   it("RELIC site: RELIC's projects and its own inventory", async () => {
     expect(await projects(garrett, "relic")).toEqual(["Hidden Door"]);
-    expect(await items(garrett, "relic")).toBe(1);
+    expect(await items(garrett, "relic")).toBe(3); // 2 copies + Walnut added on the RELIC site
   });
 
   it("Wallflower site: Wallflower's projects and inventory", async () => {
     expect(await projects(garrett, "wallflower_relic")).toEqual(["Bar", "Portal job"]);
-    expect(await items(garrett, "wallflower_relic")).toBe(1);
+    expect(await items(garrett, "wallflower_relic")).toBe(2);
   });
 
   it("non-members, or a request naming no workspace, see nothing", async () => {

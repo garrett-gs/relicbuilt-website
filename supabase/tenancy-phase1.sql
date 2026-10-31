@@ -288,6 +288,13 @@ begin
       end if;
     when 'vendor_catalog' then
       select tenant_id into v from public.vendors where id = (r ->> 'vendor_id')::uuid;
+    when 'inventory_items' then
+      -- Items made by the catalog automation (trg_catalog_insert_sync) follow
+      -- their catalog item, then their vendor.
+      select tenant_id into v from public.vendor_catalog where id = (r ->> 'catalog_item_id')::uuid;
+      if v is null then
+        select tenant_id into v from public.vendors where id = (r ->> 'vendor_id')::uuid;
+      end if;
     when 'products' then
       select tenant_id into v from public.product_catalogs where id = (r ->> 'catalog_id')::uuid;
     when 'proposal_audit_events' then
