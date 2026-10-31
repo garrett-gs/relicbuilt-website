@@ -5,6 +5,7 @@ import { proposalBiz, resolveEntityProfile } from "@/lib/entity-profile";
 import { renderHtmlToPdf } from "@/lib/render-pdf";
 import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 import type { Estimate } from "@/types/axiom";
+import { requireTeamMember } from "@/lib/api-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -25,6 +26,9 @@ function calcTotals(est: { line_items?: LineItem[]; labor_items?: LaborItem[]; m
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireTeamMember(req);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const { master_project_id, subject: subjectOverride, message: messageOverride } = await req.json();
     if (!master_project_id) {

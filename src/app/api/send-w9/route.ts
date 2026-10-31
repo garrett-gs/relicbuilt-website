@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireTeamMember } from "@/lib/api-auth";
 
 // Sends Wallflower RELIC's signed W-9 to a customer as a courtesy, with a
 // personalized cover, and records the send on the customer + activity log.
@@ -16,6 +17,9 @@ function escape(s: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireTeamMember(req);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const { customer_id } = await req.json();
     if (!customer_id) {

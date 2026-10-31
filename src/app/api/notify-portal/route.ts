@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireTeamMember } from "@/lib/api-auth";
 
 const EVENTS = {
   approval_sent:    { subject: (p: string) => `Action Required — ${p}`,              label: "sent you an approval request" },
@@ -11,6 +12,14 @@ const EVENTS = {
 
 type EventKey = keyof typeof EVENTS;
 
+// Events a client triggers from their portal (no sign-in). They only ever
+// email the team; everything else, and any email to a client, needs a
+// signed-in team member, so this route can't be used to mail arbitrary people.
+const CLIENT_EVENTS: EventKey[] = ["approval_response", "client_comment"];
+
+const esc = (v: unknown) =>
+  String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+
 function buildHtml(opts: {
   event: EventKey;
   project_name: string;
@@ -19,8 +28,12 @@ function buildHtml(opts: {
   portal_url: string;
   extra?: string;
 }) {
-  const { event, project_name, from_name, message, portal_url, extra } = opts;
-  const ev = EVENTS[event];
+  const ev = EVENTS[opts.event];
+  const project_name = esc(opts.project_name);
+  const from_name = esc(opts.from_name);
+  const message = opts.message ? esc(opts.message) : "";
+  const extra = opts.extra ? esc(opts.extra) : "";
+  const portal_url = esc(opts.portal_url);
   return `
     <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111">
       <div style="background:#fff;padding:20px 32px;border-bottom:3px solid #5b642e;margin-bottom:24px">
@@ -63,6 +76,21 @@ export async function POST(req: NextRequest) {
       client_name?: string;
     };
 
+    if (!EVENTS[event]) return NextResponse.json({ error: "Unknown event" }, { status: 400 });
+    if (to_client || !CLIENT_EVENTS.includes(event)) {
+      const auth = await requireTeamMember(req);
+      if (auth instanceof NextResponse) return auth;
+    }
+    // The button in the email must lead back to this site, not somewhere else.
+    let portalHref: string;
+    try {
+      const u = new URL(String(portal_url), req.url);
+      if (u.host !== new URL(req.url).host) throw new Error("foreign host");
+      portalHref = u.toString();
+    } catch {
+      return NextResponse.json({ error: "Invalid portal link" }, { status: 400 });
+    }
+
     const resendKey = process.env.RESEND_API_KEY;
     if (!resendKey) return NextResponse.json({ error: "RESEND_API_KEY not set" }, { status: 500 });
 
@@ -78,9 +106,7 @@ export async function POST(req: NextRequest) {
       settings?.team_members || [];
 
     const ev = EVENTS[event];
-    if (!ev) return NextResponse.json({ error: "Unknown event" }, { status: 400 });
-
-    const html = buildHtml({ event, project_name, from_name, message, portal_url, extra });
+    const html = buildHtml({ event, project_name, from_name, message, portal_url: portalHref, extra });
     const subject = ev.subject(project_name);
 
     const sends: Promise<Response>[] = [];
@@ -109,7 +135,7 @@ export async function POST(req: NextRequest) {
         project_name,
         from_name: bizName,
         message,
-        portal_url,
+        portal_url: portalHref,
         extra: `Hi ${client_name || "there"} — you have an update on your project.`,
       });
       sends.push(

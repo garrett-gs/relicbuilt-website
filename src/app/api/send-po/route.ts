@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTeamMember } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireTeamMember(req);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const body = await req.json();
     const { to, subject, html, from_name, from_email } = body;

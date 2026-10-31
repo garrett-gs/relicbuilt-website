@@ -18,6 +18,7 @@ import {
   Image as ImageIcon, Loader2, Upload, Paperclip, GripVertical,
   Clock, Play, Square, Package, DollarSign,
 } from "lucide-react";
+import { authedFetch } from "@/lib/authed-fetch";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "#f59e0b",
@@ -184,7 +185,7 @@ export default function WallflowerPage() {
     // route looks up the wallflower_order_id, dedupes against the last sent
     // value, and swallows errors so we never block the local update.
     if (updates.status) {
-      fetch("/api/wallflower-status", {
+      authedFetch("/api/wallflower-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: { workOrderId: id }, status: updates.status }),
@@ -238,7 +239,7 @@ export default function WallflowerPage() {
       }).eq("id", wo.id);
 
       // Tell Wallflower we've quoted it. Non-blocking.
-      fetch("/api/wallflower-status", {
+      authedFetch("/api/wallflower-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: { workOrderId: wo.id }, status: "estimated" }),

@@ -1,3 +1,5 @@
+import { authedFetch } from "@/lib/authed-fetch";
+
 export type PortalEvent =
   | "approval_sent"
   | "comment_sent"
@@ -17,7 +19,7 @@ export async function notifyPortal(opts: {
   client_name?: string;
 }) {
   try {
-    await fetch("/api/notify-portal", {
+    await authedFetch("/api/notify-portal", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(opts),

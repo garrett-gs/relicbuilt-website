@@ -4,8 +4,12 @@ import { randomUUID } from "crypto";
 import { getWRClient } from "@/lib/wr-supabase";
 import { buildPortalUrl, notifyNexusBuildLink } from "@/lib/notify-nexus-build-link";
 import { notifyNexusBuildCost } from "@/lib/notify-nexus-build-cost";
+import { requireTeamMember } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireTeamMember(req);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const body = await req.json();
     const { estimate_id } = body;

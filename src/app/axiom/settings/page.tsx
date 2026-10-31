@@ -12,6 +12,7 @@ import SaveButton from "@/components/ui/SaveButton";
 import { Plus, Trash2, MessageSquare, UserPlus, X } from "lucide-react";
 import { cn, formatPhone } from "@/lib/utils";
 import AddressAutocomplete from "@/components/ui/AddressAutocomplete";
+import { authedFetch } from "@/lib/authed-fetch";
 
 const TABS = ["General", "Team", "Categories", "Locations", "Addresses", "Terms"] as const;
 type Tab = (typeof TABS)[number];
@@ -169,7 +170,7 @@ export default function SettingsPage() {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("entity", SITE_ENTITY ?? "wallflower_relic");
-      const res = await fetch("/api/upload-logo", { method: "POST", body: fd });
+      const res = await authedFetch("/api/upload-logo", { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Upload failed.");
       idSet("logo", json.url);
@@ -225,7 +226,7 @@ export default function SettingsPage() {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("entity", SITE_ENTITY ?? "wallflower_relic");
-      const res = await fetch("/api/upload-logo", { method: "POST", body: fd });
+      const res = await authedFetch("/api/upload-logo", { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Upload failed.");
       addBrandLogo(json.url, file.name.replace(/\.[^.]+$/, "").slice(0, 40));

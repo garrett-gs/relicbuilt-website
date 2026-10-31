@@ -28,6 +28,7 @@ import { resolveEntityProfile, proposalBiz } from "@/lib/entity-profile";
 import { generateProjectRecapHtml } from "@/lib/project-recap-html";
 import { notifyPortal } from "@/lib/notify-portal";
 import { Settings } from "@/types/axiom";
+import { authedFetch } from "@/lib/authed-fetch";
 
 const STATUS_COLUMNS = [
   { key: "new", label: "New", color: "#4d9fff" },
@@ -436,7 +437,7 @@ export default function ProjectsPage() {
     // custom_work → estimate → wallflower_work_order and no-ops for projects
     // that didn't originate from a Wallflower request, so this is safe to
     // fire on every Kanban move.
-    fetch("/api/wallflower-status", {
+    authedFetch("/api/wallflower-status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2989,7 +2990,7 @@ function ProposalPreview({ project, onClose, userEmail }: {
       const html = generateProposalHtml(project, proposalBiz(project.entity, biz), {
         proposalNum, validUntil, forEmail: true, approveUrl,
       });
-      const res = await fetch("/api/send-po", {
+      const res = await authedFetch("/api/send-po", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

@@ -20,6 +20,7 @@ import { useRef } from "react";
 interface Customer { id: string; name: string; email?: string; phone?: string; }
 import { generateInvoiceHtml } from "@/lib/invoice-html";
 import { resolveEntityProfile } from "@/lib/entity-profile";
+import { authedFetch } from "@/lib/authed-fetch";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -384,7 +385,7 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
       if (dirty) await save();
       const profile = resolveEntityProfile(inv.entity, bizSettings);
       const html = generateInvoiceHtml(inv, bizSettings.terms_text || "", true, profile);
-      const res = await fetch("/api/send-po", {
+      const res = await authedFetch("/api/send-po", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ to: sendTo, subject: `Invoice ${inv.invoice_number} from ${profile.name}`, html, from_name: profile.fromName }),
@@ -685,7 +686,7 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
     try {
       const profile = resolveEntityProfile(invoice.entity, bizSettings);
       const html = generateInvoiceHtml(invoice, bizSettings.terms_text || "", true, profile);
-      const res = await fetch("/api/send-po", {
+      const res = await authedFetch("/api/send-po", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ to: sendTo, subject: `Invoice ${invoice.invoice_number} from ${profile.name}`, html, from_name: profile.fromName }),

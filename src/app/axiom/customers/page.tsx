@@ -16,6 +16,7 @@ import {
   ChevronRight, ChevronDown,
   Building2, User, UserPlus, ExternalLink, RefreshCw,
 } from "lucide-react";
+import { authedFetch } from "@/lib/authed-fetch";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -747,7 +748,7 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
   async function sendW9() {
     setW9State("sending");
     try {
-      const res = await fetch("/api/send-w9", {
+      const res = await authedFetch("/api/send-w9", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ customer_id: customer.id }),

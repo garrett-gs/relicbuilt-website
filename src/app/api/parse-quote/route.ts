@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireTeamMember } from "@/lib/api-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -6,6 +7,9 @@ export const maxDuration = 60;
 // Parse a vendor quote (PDF or image) into material line items for an estimate.
 // Uses Claude, which reads PDFs natively via a document content block.
 export async function POST(req: NextRequest) {
+  const auth = await requireTeamMember(req);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const { file_base64, media_type } = await req.json();
     if (!file_base64) return NextResponse.json({ error: "file_base64 required" }, { status: 400 });

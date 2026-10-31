@@ -19,6 +19,7 @@ import { fuzzyRank } from "@/lib/fuzzy-match";
 import { Plus, Trash2, X, ChevronDown, ChevronRight, ChevronLeft, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip, Layers, List, Eye, FileUp } from "lucide-react";
 import { parseEstimateFile } from "@/lib/estimate-import";
 import { useRouter } from "next/navigation";
+import { authedFetch, openAuditTrail } from "@/lib/authed-fetch";
 
 const STATUS_STYLES: Record<Estimate["status"], { text: string; bg: string; border: string }> = {
   draft: { text: "text-amber-300", bg: "bg-amber-400/15", border: "border-amber-400/40" },
@@ -1151,7 +1152,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
 
       // Mirror "sent" back to Wallflower if this estimate came from one.
       // No-op for non-Wallflower estimates.
-      fetch("/api/wallflower-status", {
+      authedFetch("/api/wallflower-status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: { estimateId: estimate.id }, status: "sent" }),
@@ -1165,7 +1166,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
         return;
       }
 
-      const emailRes = await fetch("/api/send-proposal-email", {
+      const emailRes = await authedFetch("/api/send-proposal-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1215,7 +1216,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     if (!confirm("Mark deposit as paid and create the project?")) return;
 
     try {
-      const res = await fetch("/api/mark-deposit-paid", {
+      const res = await authedFetch("/api/mark-deposit-paid", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ estimate_id: estimate.id }),
@@ -1534,7 +1535,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
         r.onerror = () => reject(new Error("read failed"));
         r.readAsDataURL(file);
       });
-      const res = await fetch("/api/parse-quote", {
+      const res = await authedFetch("/api/parse-quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ file_base64: base64, media_type: file.type || "application/pdf" }),
@@ -1865,7 +1866,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     setSendingMaster(true);
     try {
       if (dirty) await save();
-      const res = await fetch("/api/send-master-proposal-email", {
+      const res = await authedFetch("/api/send-master-proposal-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ master_project_id: masterProjectId, subject: emailSubject || undefined, message: emailMessage || undefined }),
@@ -2037,7 +2038,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     setWrSending(true);
     setWrSent(false);
     try {
-      const res = await fetch("/api/send-to-wr", {
+      const res = await authedFetch("/api/send-to-wr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ estimate_id: estimate.id }),
@@ -2154,7 +2155,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
     setChatLoading(true);
     setPendingEstimate(null);
     try {
-      const res = await fetch("/api/estimate-chat", {
+      const res = await authedFetch("/api/estimate-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -2202,7 +2203,7 @@ export function EstimateDetail({ estimate, onUpdate, onDelete }: {
       };
 
       // Ask Claude for a structured recap
-      const res = await fetch("/api/estimate-chat", {
+      const res = await authedFetch("/api/estimate-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3193,7 +3194,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
               <Button variant="outline" onClick={() => window.open(`/proposal/${proposalToken}`, "_blank")}>
                 <ExternalLink size={14} className="mr-1" /> Open Live Proposal
               </Button>
-              <Button variant="outline" onClick={() => window.open(`/api/audit-trail/${estimate.id}`, "_blank")}>
+              <Button variant="outline" onClick={() => openAuditTrail(estimate.id)}>
                 <FileText size={14} className="mr-1" /> Audit Trail
               </Button>
             </>
@@ -3371,7 +3372,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
             setStatus("accepted");
             setShowLoadQuote(false);
             // Mirror "accepted" back to Wallflower if relevant.
-            fetch("/api/wallflower-status", {
+            authedFetch("/api/wallflower-status", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ source: { estimateId: estimate.id }, status: "accepted" }),

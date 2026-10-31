@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { renderHtmlToPdf } from "@/lib/render-pdf";
+import { requireTeamMember } from "@/lib/api-auth";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -59,6 +60,9 @@ function money(n: number) {
  * event so the merchant can produce a defensible record on demand.
  */
 export async function GET(req: NextRequest, ctx: { params: Promise<{ estimate_id: string }> }) {
+  const auth = await requireTeamMember(req);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const { estimate_id } = await ctx.params;
     if (!estimate_id) return NextResponse.json({ error: "estimate_id required" }, { status: 400 });

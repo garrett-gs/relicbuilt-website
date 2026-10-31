@@ -5,6 +5,7 @@ import { proposalBiz, resolveEntityProfile } from "@/lib/entity-profile";
 import { renderHtmlToPdf } from "@/lib/render-pdf";
 import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 import type { Estimate, ProposalHighlight, ProposalScope } from "@/types/axiom";
+import { requireTeamMember } from "@/lib/api-auth";
 
 // Allow up to 60 seconds for the PDF generation step. Vercel Hobby has a
 // 10s default, Pro has 300s. PDF render typically takes 3-5s.
@@ -28,6 +29,9 @@ function calcTotals(est: { line_items?: LineItem[]; labor_items?: LaborItem[]; m
 }
 
 export async function POST(req: NextRequest) {
+  const auth = await requireTeamMember(req);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const { estimate_id, subject: subjectOverride, message: messageOverride } = await req.json();
     if (!estimate_id) {

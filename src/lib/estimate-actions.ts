@@ -1,6 +1,7 @@
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { Estimate } from "@/types/axiom";
+import { authedFetch } from "@/lib/authed-fetch";
 
 /**
  * Persist estimate updates and run the cross-entity side effects:
@@ -39,7 +40,7 @@ export async function persistEstimate(
   }
 
   if (updates.status) {
-    fetch("/api/wallflower-status", {
+    authedFetch("/api/wallflower-status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source: { estimateId: id }, status: updates.status }),

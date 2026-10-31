@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireTeamMember } from "@/lib/api-auth";
 
 // Uploads a business logo to the public `branding` storage bucket and returns
 // its public URL, which Settings stores on the entity's identity (logo_url).
@@ -10,6 +11,9 @@ const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED = new Set(["image/png", "image/jpeg", "image/svg+xml", "image/webp"]);
 
 export async function POST(req: NextRequest) {
+  const auth = await requireTeamMember(req);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const form = await req.formData();
     const file = form.get("file");

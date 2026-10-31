@@ -53,7 +53,7 @@ export async function identifyCaller(token: string | undefined): Promise<CallerC
     .single();
   const members = (settings?.team_members || []) as TeamMember[];
   const member = members.find((m) => m.email?.toLowerCase() === email);
-  if (!member) throw new AuthError("You don't have access to the assistant.", 403);
+  if (!member) throw new AuthError("You don't have access to Axiom.", 403);
 
   const isAdmin = member.role === "superadmin" || member.role === "admin";
   // Relic is no longer a restricted entity — any assistant user can work in it.

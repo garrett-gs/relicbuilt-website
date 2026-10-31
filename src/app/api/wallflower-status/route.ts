@@ -6,8 +6,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { notifyWallflowerStatus, type WallflowerSource } from "@/lib/wallflower-status";
+import { requireTeamMember } from "@/lib/api-auth";
 
 export async function POST(req: NextRequest) {
+  const auth = await requireTeamMember(req);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const body = await req.json();
     const source = body?.source as WallflowerSource | undefined;

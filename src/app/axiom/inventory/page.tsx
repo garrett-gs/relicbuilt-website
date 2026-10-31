@@ -28,6 +28,7 @@ import {
   Globe,
 } from "lucide-react";
 import Link from "next/link";
+import { authedFetch } from "@/lib/authed-fetch";
 
 const inp = "w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent";
 const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
@@ -1188,7 +1189,7 @@ function ScanPDFModal({
     formData.append("file", f);
 
     try {
-      const res = await fetch("/api/scan-to-inventory", { method: "POST", body: formData });
+      const res = await authedFetch("/api/scan-to-inventory", { method: "POST", body: formData });
       const data = await res.json();
 
       if (!res.ok) {

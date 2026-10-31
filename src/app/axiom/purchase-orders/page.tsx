@@ -19,6 +19,7 @@ import {
   ChevronDown, ChevronUp, Package, Send, Printer, Pencil, Warehouse,
 } from "lucide-react";
 import { generatePOHtml } from "@/lib/po-html";
+import { authedFetch } from "@/lib/authed-fetch";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -1681,7 +1682,7 @@ function SendPOModal({ po, vendorEmail, onClose, onSent, userEmail }: {
       </div>
     `;
     try {
-      const res = await fetch("/api/send-po", {
+      const res = await authedFetch("/api/send-po", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

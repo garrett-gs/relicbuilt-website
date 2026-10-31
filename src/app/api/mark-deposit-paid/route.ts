@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 import { notifyWallflowerStatus } from "@/lib/wallflower-status";
 import { notifyPaymentTeam } from "@/lib/notify-payment-team";
+import { requireTeamMember } from "@/lib/api-auth";
 
 interface EstimateLineItem { quantity?: number; unit_price?: number }
 interface EstimateLaborItem { cost?: number }
@@ -25,6 +26,9 @@ function calcTotal(est: { line_items?: EstimateLineItem[]; labor_items?: Estimat
  * goal: the projects tab only contains jobs the client has paid to start.
  */
 export async function POST(req: NextRequest) {
+  const auth = await requireTeamMember(req);
+  if (auth instanceof NextResponse) return auth;
+
   try {
     const { estimate_id } = await req.json();
     if (!estimate_id) {
