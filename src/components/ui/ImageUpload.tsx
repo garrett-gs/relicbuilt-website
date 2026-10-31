@@ -11,6 +11,9 @@ interface ImageUploadProps {
   bucket?: string;
   className?: string;
   label?: string;
+  // Upload somewhere other than straight to storage (the public client
+  // portal posts to its own server route). Resolves to the image's URL.
+  upload?: (file: File) => Promise<string>;
 }
 
 export default function ImageUpload({
@@ -20,6 +23,7 @@ export default function ImageUpload({
   bucket = "portal-images",
   className = "",
   label = "Attach image",
+  upload,
 }: ImageUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -36,6 +40,15 @@ export default function ImageUpload({
     }
     setError("");
     setUploading(true);
+    if (upload) {
+      try {
+        onUploaded(await upload(file));
+      } catch {
+        setError("Upload failed — please try again.");
+      }
+      setUploading(false);
+      return;
+    }
     const ext = file.name.split(".").pop();
     const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
     const { error: upErr } = await axiom.storage.from(bucket).upload(path, file, { upsert: false });

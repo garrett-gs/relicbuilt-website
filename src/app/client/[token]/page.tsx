@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { axiom } from "@/lib/axiom-supabase";
 import { Company, CustomWork, BuildFile, BuildComment, ApprovalRequest, ProposalHighlight } from "@/types/axiom";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
@@ -57,44 +56,29 @@ export default function ClientPortalPage() {
   const [notFound, setNotFound] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const load = useCallback(async () => {
-    const { data: co } = await axiom
-      .from("companies")
-      .select("*")
-      .eq("portal_token", token)
-      .eq("portal_enabled", true)
-      .single();
+  // Everything comes from the server by this link's token (see lib/portal-server.ts).
+  const api = `/api/portal/company/${encodeURIComponent(token)}`;
+  const uploadImage = async (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch(`${api}/upload`, { method: "POST", body: fd });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body.url) throw new Error(body.error || "Upload failed");
+    return body.url as string;
+  };
 
-    if (!co) { setNotFound(true); setLoading(false); return; }
+  const load = useCallback(async () => {
+    const res = await fetch(api, { cache: "no-store" });
+    if (!res.ok) { setNotFound(true); setLoading(false); return; }
+    const { company: co, projects: pd } = (await res.json()) as { company: Company; projects: ProjectData[] };
     setCompany(co);
 
-    const { data: projects } = await axiom
-      .from("custom_work")
-      .select("*")
-      .or(`company_id.eq.${co.id},company_name.eq.${co.name}`)
-      .order("created_at", { ascending: false });
-
-    if (!projects || projects.length === 0) {
+    if (pd.length === 0) {
       setProjectsData([]);
+      setExpandedId(null);
       setLoading(false);
-      if (projects && projects.length === 0) setExpandedId(null);
       return;
     }
-
-    const ids = projects.map((p: CustomWork) => p.id);
-
-    const [filesRes, commentsRes, approvalsRes] = await Promise.all([
-      axiom.from("build_files").select("*").in("custom_work_id", ids).order("created_at"),
-      axiom.from("build_comments").select("*").in("custom_work_id", ids).order("created_at"),
-      axiom.from("approval_requests").select("*").in("custom_work_id", ids).order("created_at", { ascending: false }),
-    ]);
-
-    const pd: ProjectData[] = projects.map((p: CustomWork) => ({
-      project: p,
-      files: (filesRes.data || []).filter((f: BuildFile) => f.custom_work_id === p.id),
-      comments: (commentsRes.data || []).filter((c: BuildComment) => c.custom_work_id === p.id),
-      approvals: (approvalsRes.data || []).filter((a: ApprovalRequest) => a.custom_work_id === p.id),
-    }));
 
     setProjectsData(pd);
     // Auto-expand first active project
@@ -103,20 +87,19 @@ export default function ClientPortalPage() {
     else if (pd.length > 0) setExpandedId(pd[0].project.id);
 
     setLoading(false);
-  }, [token]);
+  }, [api]);
 
   useEffect(() => { load(); }, [load]);
 
   async function submitComment(projectId: string, clientName: string, projectName: string) {
     const text = newComments[projectId]?.trim();
     if (!text && !commentImages[projectId]) return;
-    await axiom.from("build_comments").insert({
-      custom_work_id: projectId,
-      author: clientName || "Client",
-      body: text || " ",
-      is_change_request: false,
-      image_url: commentImages[projectId] || null,
+    const res = await fetch(`${api}/comment`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ custom_work_id: projectId, body: text || "", image_url: commentImages[projectId] || null }),
     });
+    if (!res.ok) { alert("Couldn't post your message. Please try again."); return; }
     setNewComments((prev) => ({ ...prev, [projectId]: "" }));
     setCommentImages((prev) => ({ ...prev, [projectId]: "" }));
     notifyPortal({
@@ -131,12 +114,12 @@ export default function ClientPortalPage() {
 
   async function respondToApproval(id: string, status: "approved" | "rejected", projectName: string, clientName: string) {
     const resp = approvalResponses[id];
-    await axiom.from("approval_requests").update({
-      status,
-      client_notes: resp?.notes?.trim() || null,
-      response_images: resp?.image ? [resp.image] : [],
-      responded_at: new Date().toISOString(),
-    }).eq("id", id);
+    const res = await fetch(`${api}/approval`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status, notes: resp?.notes?.trim() || "", image: resp?.image || "" }),
+    });
+    if (!res.ok) { alert("Couldn't save your response. Please try again."); return; }
     setApprovalResponses((prev) => {
       const next = { ...prev };
       delete next[id];
@@ -338,6 +321,7 @@ export default function ClientPortalPage() {
                                     className="w-full border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-accent min-h-[70px] resize-none"
                                   />
                                   <ImageUpload
+                                    upload={uploadImage}
                                     label="Attach image (optional)"
                                     preview={resp.image}
                                     onUploaded={(url) => setApprovalResponses((prev) => ({ ...prev, [a.id]: { ...prev[a.id], image: url } }))}
@@ -519,6 +503,7 @@ export default function ClientPortalPage() {
                           </button>
                         </div>
                         <ImageUpload
+                          upload={uploadImage}
                           label="Attach an image"
                           preview={commentImages[project.id]}
                           onUploaded={(url) => setCommentImages((prev) => ({ ...prev, [project.id]: url }))}

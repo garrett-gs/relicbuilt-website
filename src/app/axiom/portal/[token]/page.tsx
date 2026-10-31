@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
-import { axiom } from "@/lib/axiom-supabase";
 import { CustomWork, BuildFile, BuildComment, ApprovalRequest } from "@/types/axiom";
 import Image from "next/image";
 import Button from "@/components/ui/Button";
@@ -30,31 +29,33 @@ export default function ClientPortalPage() {
   const [newComment, setNewComment] = useState("");
   const [isChangeRequest, setIsChangeRequest] = useState(false);
 
-  const load = useCallback(async () => {
-    const { data } = await axiom.from("custom_work").select("*").eq("portal_token", token).eq("portal_enabled", true).single();
-    if (!data) { setNotFound(true); return; }
-    setProject(data);
+  // Everything comes from the server by this link's token (see lib/portal-server.ts).
+  const api = `/api/portal/project/${encodeURIComponent(token)}`;
 
-    const [f, c, a] = await Promise.all([
-      axiom.from("build_files").select("*").eq("custom_work_id", data.id).order("created_at"),
-      axiom.from("build_comments").select("*").eq("custom_work_id", data.id).order("created_at", { ascending: false }),
-      axiom.from("approval_requests").select("*").eq("custom_work_id", data.id).order("created_at", { ascending: false }),
-    ]);
-    if (f.data) setFiles(f.data);
-    if (c.data) setComments(c.data);
-    if (a.data) setApprovals(a.data);
-  }, [token]);
+  const load = useCallback(async () => {
+    const res = await fetch(api, { cache: "no-store" });
+    if (!res.ok) { setNotFound(true); return; }
+    const { projects } = (await res.json()) as {
+      projects: { project: CustomWork; files: BuildFile[]; comments: BuildComment[]; approvals: ApprovalRequest[] }[];
+    };
+    const d = projects[0];
+    if (!d) { setNotFound(true); return; }
+    setProject(d.project);
+    setFiles(d.files);
+    setComments([...d.comments].reverse()); // newest first
+    setApprovals(d.approvals);
+  }, [api]);
 
   useEffect(() => { load(); }, [load]);
 
   async function submitComment() {
     if (!newComment.trim() || !project) return;
-    await axiom.from("build_comments").insert({
-      custom_work_id: project.id,
-      author: project.client_name || "Client",
-      body: newComment.trim(),
-      is_change_request: isChangeRequest,
+    const res = await fetch(`${api}/comment`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ custom_work_id: project.id, body: newComment.trim(), is_change_request: isChangeRequest }),
     });
+    if (!res.ok) { alert("Couldn't post your message. Please try again."); return; }
     setNewComment("");
     setIsChangeRequest(false);
     notifyPortal({
@@ -68,11 +69,12 @@ export default function ClientPortalPage() {
   }
 
   async function respondToApproval(id: string, status: "approved" | "rejected", notes?: string) {
-    await axiom.from("approval_requests").update({
-      status,
-      client_notes: notes,
-      responded_at: new Date().toISOString(),
-    }).eq("id", id);
+    const res = await fetch(`${api}/approval`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, status, notes }),
+    });
+    if (!res.ok) { alert("Couldn't save your response. Please try again."); return; }
     notifyPortal({
       event: "approval_response",
       project_name: project?.project_name || "Project",

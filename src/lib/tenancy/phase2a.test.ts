@@ -43,6 +43,11 @@ beforeAll(async () => {
     create policy "Entity access" on public.custom_work for all to authenticated
       using (entity = 'wallflower_relic' or has_relic_access()) with check (true);
     create policy "Portal read projects" on public.custom_work for select to anon using (portal_enabled = true);
+    alter table public.estimates enable row level security;
+    create policy "Public read by proposal token" on public.estimates for select to anon using (proposal_token is not null);
+    alter table public.approval_requests enable row level security;
+    create policy "Portal read approvals" on public.approval_requests for select to anon using (true);
+    create policy "Portal update approvals" on public.approval_requests for update to anon using (true) with check (true);
     alter table public.inventory_items enable row level security;
     create policy "Auth full access" on public.inventory_items for all to public
       using (auth.role() = 'authenticated' or auth.role() = 'service_role') with check (true);
@@ -236,5 +241,38 @@ describe("every row needs a workspace", () => {
       `select t.slug from public.task_notes x join public.tenants t on t.id = x.tenant_id where x.title = 'From server'`,
     );
     expect(n.slug).toBe("relic");
+  });
+});
+
+describe("Phase 2b: public rules removed", () => {
+  beforeAll(async () => {
+    await db.query(`insert into public.estimates (estimate_number, entity, proposal_token) values ('E-9', 'relic', 'tok123456')`);
+    await db.query(`insert into public.approval_requests (custom_work_id, description) values ($1, 'Finish sample')`, [id.portalJob]);
+    await db.exec(sql("tenancy-phase2b.sql"));
+  });
+
+  it("the public key can't read projects, proposal estimates or approvals", async () => {
+    for (const table of ["custom_work", "estimates", "approval_requests"]) {
+      const r = await as(anon, null, () => rows(`select id from public.${table}`));
+      expect(r, table).toHaveLength(0);
+    }
+  });
+
+  it("the public key can't change approvals", async () => {
+    const r = await as(anon, null, () => db.query(`update public.approval_requests set status = 'approved'`));
+    expect(r.affectedRows).toBe(0);
+  });
+
+  it("keeps the Wallflower request form, and only it", async () => {
+    await as(anon, null, () => db.query(`insert into public.wallflower_work_orders (item_name) values ('Bench')`));
+    const left = await rows<{ t: string; p: string }>(
+      `select tablename as t, policyname as p from pg_policies where schemaname = 'public' and 'anon' = any (roles)`,
+    );
+    expect(left).toEqual([{ t: "wallflower_work_orders", p: "Public intake insert" }]);
+  });
+
+  it("signed-in access is unchanged", async () => {
+    const r = await as(garrett, "wallflower_relic", () => rows(`select id from public.approval_requests`));
+    expect(r).toHaveLength(1);
   });
 });

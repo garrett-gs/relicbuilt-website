@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { axiom } from "@/lib/axiom-supabase";
 import { CustomWork } from "@/types/axiom";
 import { CheckCircle, Loader2 } from "lucide-react";
 
@@ -26,12 +25,10 @@ export default function ApprovePage() {
 
   useEffect(() => {
     if (!token) return;
-    axiom
-      .from("custom_work")
-      .select("id,project_name,client_name,client_email,quoted_amount,proposal_status,proposal_approved_at,proposal_scope,proposal_cost_section,proposal_highlights,project_description,start_date,due_date")
-      .eq("proposal_token", token)
-      .single()
-      .then(async ({ data }) => {
+    fetch(`/api/portal/proposal/${encodeURIComponent(token)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { project: null }))
+      .catch(() => ({ project: null }))
+      .then(async ({ project: data }: { project: CustomWork | null }) => {
         setLoading(false);
         if (!data) { setNotFound(true); return; }
         setProject(data as CustomWork);
