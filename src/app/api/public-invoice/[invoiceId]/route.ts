@@ -7,7 +7,7 @@
 // leak payment history or anything sensitive.
 
 import { NextRequest, NextResponse } from "next/server";
-import { resolveEntityProfile } from "@/lib/entity-profile";
+import { resolveEntityProfile, venmoLinks } from "@/lib/entity-profile";
 import { axiomAdmin } from "@/lib/axiom-admin";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ invoiceId: string }> }) {
@@ -37,10 +37,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ invo
     // identity (Wallflower RELIC vs Relic).
     const { data: settings } = await supabase
       .from("settings")
-      .select("biz_name,biz_phone,relic_profile,logo_url,branding")
+      .select("biz_name,biz_phone,venmo_handle,relic_profile,logo_url,branding")
       .limit(1)
       .single();
     const p = resolveEntityProfile(data.entity, settings);
+    const venmo = venmoLinks(p.venmoHandle);
     const brand = {
       name: p.name,
       logoUrl: p.logoUrl,
@@ -49,6 +50,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ invo
       website: p.website || "",
       accent: p.accent,
       onAccent: p.onAccent,
+      // Only surfaced when this entity has a (valid) Venmo handle configured.
+      venmoUsername: venmo?.username || "",
+      venmoUrl: venmo?.profileUrl || "",
     };
 
     return NextResponse.json({ invoice: data, brand });

@@ -126,13 +126,13 @@ export default function SettingsPage() {
   // which deployment is editing.)
   const isRelicSite = SITE_ENTITY === "relic";
   const rp = settings.relic_profile || {};
-  type IdField = "name" | "email" | "phone" | "website" | "address" | "city" | "state" | "zip" | "accent" | "logo";
+  type IdField = "name" | "email" | "phone" | "website" | "venmo" | "address" | "city" | "state" | "zip" | "accent" | "logo";
   const BIZ_KEY: Record<IdField, keyof Settings> = {
-    name: "biz_name", email: "biz_email", phone: "biz_phone", website: "biz_website",
+    name: "biz_name", email: "biz_email", phone: "biz_phone", website: "biz_website", venmo: "venmo_handle",
     address: "biz_address", city: "biz_city", state: "biz_state", zip: "biz_zip", accent: "accent_color", logo: "logo_url",
   };
   const RP_KEY: Record<IdField, string> = {
-    name: "name", email: "email", phone: "phone", website: "website",
+    name: "name", email: "email", phone: "phone", website: "website", venmo: "venmo_handle",
     address: "address", city: "city", state: "state", zip: "zip", accent: "accent_color", logo: "logo_url",
   };
   const idVal = (f: IdField): string =>
@@ -267,6 +267,10 @@ export default function SettingsPage() {
           <Field label="Email" value={idVal("email")} onChange={(v) => idSet("email", v)} type="email" />
           <Field label="Phone" value={idVal("phone")} onChange={(v) => idSet("phone", formatPhone(v))} type="tel" placeholder="(###) ###-####" />
           <Field label="Website" value={idVal("website")} onChange={(v) => idSet("website", v)} placeholder="yourbusiness.com" />
+          <div>
+            <Field label="Venmo" value={idVal("venmo")} onChange={(v) => idSet("venmo", v)} placeholder="@your-venmo" />
+            <p className="text-xs text-muted mt-1">Shown as a payment option on your client invoices. Leave blank to hide it.</p>
+          </div>
           <div>
             <label className="block text-xs text-muted mb-1">Street Address</label>
             <AddressAutocomplete

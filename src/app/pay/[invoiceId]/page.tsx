@@ -1,7 +1,8 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import qrcode from "qrcode-generator";
 
 interface Invoice {
   id: string;
@@ -24,6 +25,8 @@ interface Brand {
   website?: string;
   accent?: string;
   onAccent?: string;
+  venmoUsername?: string; // bare handle (no @); empty → Venmo not offered
+  venmoUrl?: string;      // https://venmo.com/u/<handle>
 }
 
 function money(n: number) {
@@ -47,7 +50,7 @@ export default function PayInvoicePage() {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [alreadyPaid, setAlreadyPaid] = useState(false);
-  const [method, setMethod] = useState<"card" | "ach">("card");
+  const [method, setMethod] = useState<"card" | "ach" | "venmo">("ach");
   const [feeAgreed, setFeeAgreed] = useState(false);
   const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -99,12 +102,28 @@ export default function PayInvoicePage() {
     : 0;
   const cardFee = calcCardFee(invoiceTotal);
   const achFee = calcAchFee(invoiceTotal);
-  const fee = method === "ach" ? achFee : cardFee;
+  // Venmo is paid directly (no Stripe), so there's no processing fee to add.
+  const fee = method === "venmo" ? 0 : method === "ach" ? achFee : cardFee;
   const totalCharged = invoiceTotal + fee;
+  const venmoOffered = !!brand.venmoUsername;
+
+  // QR of the Venmo profile link — lets a desktop payer jump to the app on
+  // their phone. Generated client-side (no external image calls).
+  const venmoQr = useMemo(() => {
+    if (!brand.venmoUrl) return "";
+    try {
+      const qr = qrcode(0, "M");
+      qr.addData(brand.venmoUrl);
+      qr.make();
+      return qr.createDataURL(5, 2);
+    } catch {
+      return "";
+    }
+  }, [brand.venmoUrl]);
 
   // Switching methods invalidates the previous "I agree to pay $X" tick —
   // they're agreeing to a different amount now.
-  function pickMethod(next: "card" | "ach") {
+  function pickMethod(next: "card" | "ach" | "venmo") {
     setMethod(next);
     setFeeAgreed(false);
   }
@@ -286,28 +305,9 @@ export default function PayInvoicePage() {
               Choose Payment Method
             </p>
 
-            {/* Method Picker — two side-by-side cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 16 }}>
-              <button
-                type="button"
-                onClick={() => pickMethod("card")}
-                style={{
-                  textAlign: "left",
-                  background: method === "card" ? "#fdf6e3" : "#fff",
-                  border: method === "card" ? `2px solid ${accent}` : "1px solid #e5e0d8",
-                  padding: "14px 16px",
-                  cursor: "pointer",
-                  fontFamily: "inherit",
-                }}
-              >
-                <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 700, color: "#111" }}>Card</p>
-                <p style={{ margin: "0 0 6px", fontSize: 11, color: "#888", lineHeight: 1.5 }}>
-                  Credit or debit. Pays immediately.
-                </p>
-                <p style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: accent, fontWeight: 700 }}>
-                  +{money(cardFee)} fee
-                </p>
-              </button>
+            {/* Method Picker — ACH, Credit Card, Venmo (left to right). Venmo
+                only appears when the entity has configured a handle. */}
+            <div style={{ display: "grid", gridTemplateColumns: venmoOffered ? "1fr 1fr 1fr" : "1fr 1fr", gap: 10, marginBottom: 16 }}>
               <button
                 type="button"
                 onClick={() => pickMethod("ach")}
@@ -329,82 +329,176 @@ export default function PayInvoicePage() {
                   {achFee >= 5 && <span style={{ color: "#888", fontWeight: 400, marginLeft: 4 }}>(capped)</span>}
                 </p>
               </button>
+              <button
+                type="button"
+                onClick={() => pickMethod("card")}
+                style={{
+                  textAlign: "left",
+                  background: method === "card" ? "#fdf6e3" : "#fff",
+                  border: method === "card" ? `2px solid ${accent}` : "1px solid #e5e0d8",
+                  padding: "14px 16px",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                }}
+              >
+                <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 700, color: "#111" }}>Credit Card</p>
+                <p style={{ margin: "0 0 6px", fontSize: 11, color: "#888", lineHeight: 1.5 }}>
+                  Credit or debit. Pays immediately.
+                </p>
+                <p style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: accent, fontWeight: 700 }}>
+                  +{money(cardFee)} fee
+                </p>
+              </button>
+              {venmoOffered && (
+                <button
+                  type="button"
+                  onClick={() => pickMethod("venmo")}
+                  style={{
+                    textAlign: "left",
+                    background: method === "venmo" ? "#fdf6e3" : "#fff",
+                    border: method === "venmo" ? `2px solid ${accent}` : "1px solid #e5e0d8",
+                    padding: "14px 16px",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  <p style={{ margin: "0 0 4px", fontSize: 14, fontWeight: 700, color: "#111" }}>Venmo</p>
+                  <p style={{ margin: "0 0 6px", fontSize: 11, color: "#888", lineHeight: 1.5 }}>
+                    Pay from the Venmo app.
+                  </p>
+                  <p style={{ margin: 0, fontSize: 12, fontFamily: "monospace", color: "#2e7d32", fontWeight: 700 }}>
+                    No added fee
+                  </p>
+                </button>
+              )}
             </div>
 
-            {/* Fee Breakdown */}
-            <div style={{
-              border: "1px solid #e5e0d8",
-              padding: "14px 18px",
-              marginBottom: 16,
-              fontSize: 14,
-            }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, color: "#555" }}>
-                <span>Base amount</span>
-                <span style={{ fontFamily: "monospace" }}>{money(invoiceTotal)}</span>
+            {method === "venmo" ? (
+              /* --- Venmo: direct, out-of-band payment (no Stripe redirect) --- */
+              <div style={{ border: "1px solid #e5e0d8", padding: "22px 18px", marginBottom: 16, textAlign: "center" }}>
+                <p style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800, color: "#008CFF", letterSpacing: "-0.01em" }}>
+                  @{brand.venmoUsername}
+                </p>
+                <p style={{ margin: "0 0 16px", fontSize: 13, color: "#666", lineHeight: 1.55 }}>
+                  Pay <strong>{money(invoiceTotal)}</strong> to this Venmo — no processing fee.
+                </p>
+                {venmoQr && (
+                  <img
+                    src={venmoQr}
+                    alt={`Venmo QR for @${brand.venmoUsername}`}
+                    style={{ width: 168, height: 168, display: "block", margin: "0 auto 16px", border: "1px solid #e5e0d8", padding: 8, background: "#fff" }}
+                  />
+                )}
+                <a
+                  href={brand.venmoUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 9,
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: "#008CFF",
+                    color: "#fff",
+                    padding: "14px 0",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    textDecoration: "none",
+                    letterSpacing: "0.01em",
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff" aria-hidden="true">
+                    <path d="M19.5 3.2c.56.93.81 1.88.81 3.09 0 3.85-3.29 8.85-5.96 12.36H8.27L5.83 4.03l5.33-.5 1.29 10.37c1.2-1.96 2.69-5.04 2.69-7.13 0-1.15-.2-1.93-.5-2.57l4.86-.97z" />
+                  </svg>
+                  Pay with Venmo
+                </a>
+                <div style={{ margin: "14px 0 0", padding: "12px 14px", background: "#eef7ff", border: "1px solid #bfe0ff", fontSize: 12.5, color: "#1f5e8c", lineHeight: 1.55, textAlign: "left" }}>
+                  <strong style={{ color: "#0b3c5d" }}>Please put Invoice #{invoice.invoice_number} in the Venmo note</strong> so we can match your payment. Scan the code with your phone's camera, or tap the button if you're already on your phone.
+                </div>
+                <p style={{ fontSize: 12, color: "#aaa", textAlign: "center", marginTop: 12, marginBottom: 0, lineHeight: "1.6" }}>
+                  Once your Venmo payment lands, we&rsquo;ll mark this invoice paid.
+                </p>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, color: "#888", fontSize: 13 }}>
-                <span>
-                  {method === "ach"
-                    ? "Processing fee (0.8%, max $5 — ACH)"
-                    : "Processing fee (2.9% + $0.30 — Card)"}
-                </span>
-                <span style={{ fontFamily: "monospace" }}>{money(fee)}</span>
-              </div>
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                borderTop: "1px solid #e5e0d8",
-                paddingTop: 10,
-                fontWeight: 700,
-                color: "#111",
-                fontSize: 15,
-              }}>
-                <span>Total charged</span>
-                <span style={{ fontFamily: "monospace", color: accent }}>{money(totalCharged)}</span>
-              </div>
-            </div>
+            ) : (
+              <>
+                {/* Fee Breakdown */}
+                <div style={{
+                  border: "1px solid #e5e0d8",
+                  padding: "14px 18px",
+                  marginBottom: 16,
+                  fontSize: 14,
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, color: "#555" }}>
+                    <span>Base amount</span>
+                    <span style={{ fontFamily: "monospace" }}>{money(invoiceTotal)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, color: "#888", fontSize: 13 }}>
+                    <span>
+                      {method === "ach"
+                        ? "Processing fee (0.8%, max $5 — ACH)"
+                        : "Processing fee (2.9% + $0.30 — Card)"}
+                    </span>
+                    <span style={{ fontFamily: "monospace" }}>{money(fee)}</span>
+                  </div>
+                  <div style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    borderTop: "1px solid #e5e0d8",
+                    paddingTop: 10,
+                    fontWeight: 700,
+                    color: "#111",
+                    fontSize: 15,
+                  }}>
+                    <span>Total charged</span>
+                    <span style={{ fontFamily: "monospace", color: accent }}>{money(totalCharged)}</span>
+                  </div>
+                </div>
 
-            {/* Checkbox */}
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", marginBottom: 18 }}>
-              <input
-                type="checkbox"
-                checked={feeAgreed}
-                onChange={(e) => setFeeAgreed(e.target.checked)}
-                style={{ marginTop: 2, width: 16, height: 16, accentColor: accent, flexShrink: 0, cursor: "pointer" }}
-              />
-              <span style={{ fontSize: 13, color: "#555", lineHeight: "1.5" }}>
-                I agree to pay the {method === "ach" ? "ACH" : "card"} processing fee of{" "}
-                <strong style={{ color: "#111" }}>{money(fee)}</strong>
-              </span>
-            </label>
+                {/* Checkbox */}
+                <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", marginBottom: 18 }}>
+                  <input
+                    type="checkbox"
+                    checked={feeAgreed}
+                    onChange={(e) => setFeeAgreed(e.target.checked)}
+                    style={{ marginTop: 2, width: 16, height: 16, accentColor: accent, flexShrink: 0, cursor: "pointer" }}
+                  />
+                  <span style={{ fontSize: 13, color: "#555", lineHeight: "1.5" }}>
+                    I agree to pay the {method === "ach" ? "ACH" : "card"} processing fee of{" "}
+                    <strong style={{ color: "#111" }}>{money(fee)}</strong>
+                  </span>
+                </label>
 
-            {/* Error */}
-            {error && (
-              <p style={{ fontSize: 13, color: "#c0392b", margin: "0 0 14px", padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5" }}>
-                {error}
-              </p>
+                {/* Error */}
+                {error && (
+                  <p style={{ fontSize: 13, color: "#c0392b", margin: "0 0 14px", padding: "10px 14px", background: "#fef2f2", border: "1px solid #fca5a5" }}>
+                    {error}
+                  </p>
+                )}
+
+                {/* Pay Button */}
+                <button
+                  onClick={handlePay}
+                  disabled={!feeAgreed || redirecting}
+                  style={{
+                    display: "block",
+                    width: "100%",
+                    background: feeAgreed && !redirecting ? accent : "#d9c9a0",
+                    color: feeAgreed && !redirecting ? onAccent : "#fff",
+                    border: "none",
+                    padding: "14px 0",
+                    fontSize: 16,
+                    fontWeight: 700,
+                    cursor: feeAgreed && !redirecting ? "pointer" : "not-allowed",
+                    letterSpacing: "0.02em",
+                    transition: "background 0.15s",
+                  }}
+                >
+                  {redirecting ? "Redirecting to payment…" : `Pay ${money(totalCharged)} Now →`}
+                </button>
+              </>
             )}
-
-            {/* Pay Button */}
-            <button
-              onClick={handlePay}
-              disabled={!feeAgreed || redirecting}
-              style={{
-                display: "block",
-                width: "100%",
-                background: feeAgreed && !redirecting ? accent : "#d9c9a0",
-                color: feeAgreed && !redirecting ? onAccent : "#fff",
-                border: "none",
-                padding: "14px 0",
-                fontSize: 16,
-                fontWeight: 700,
-                cursor: feeAgreed && !redirecting ? "pointer" : "not-allowed",
-                letterSpacing: "0.02em",
-                transition: "background 0.15s",
-              }}
-            >
-              {redirecting ? "Redirecting to payment…" : `Pay ${money(totalCharged)} Now →`}
-            </button>
 
             <p style={{ fontSize: 12, color: "#aaa", textAlign: "center", marginTop: 12, marginBottom: 0, lineHeight: "1.6" }}>
               Prefer to pay by check or other method?{" "}

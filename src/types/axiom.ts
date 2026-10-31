@@ -700,6 +700,9 @@ export interface RelicProfile {
   footer?: string;
   from_name?: string;
   from_email?: string;
+  /** Venmo username (with or without the leading @) shown as a payment option
+   *  on the public Pay page. Empty → Venmo isn't offered for this entity. */
+  venmo_handle?: string;
   accent_color?: string;
   terms?: string;
   /** Logo library + per-document assignments for this (Relic) entity. */
@@ -718,6 +721,9 @@ export interface Settings {
   biz_state?: string;
   biz_zip?: string;
   biz_website?: string;
+  /** Venmo username (with or without the leading @) shown as a payment option
+   *  on the public Pay page. Empty → Venmo isn't offered for this entity. */
+  venmo_handle?: string;
   /** Whether this (default/Wallflower) workspace is connected to a Nexus
    *  rental side. Admin-toggleable; falls back to the NEXUS_CONNECTED env. */
   nexus_connected?: boolean;

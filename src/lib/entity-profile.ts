@@ -26,6 +26,26 @@ export interface EntityProfile {
   invoiceBarBg: string;   // invoice "Items" bar background
   invoiceBarText: string; // legible text color on invoiceBarBg
   branding?: BrandingConfig; // logo library + per-placement assignments
+  venmoHandle?: string;   // Venmo username (no @), offered on the public Pay page
+}
+
+/**
+ * Normalize a stored Venmo handle to a bare username (no leading @, no URL),
+ * and build the profile/pay deep-link URL for it. Returns null when there's no
+ * usable handle, so callers can hide the Venmo option entirely.
+ */
+export function venmoLinks(
+  handle: string | undefined | null
+): { username: string; profileUrl: string } | null {
+  if (!handle) return null;
+  const username = handle
+    .trim()
+    .replace(/^https?:\/\/(www\.)?(account\.)?venmo\.com\/(u\/)?/i, "")
+    .replace(/^@/, "")
+    .replace(/\/.*$/, "")
+    .trim();
+  if (!username) return null;
+  return { username, profileUrl: `https://venmo.com/u/${username}` };
 }
 
 // Placements a logo can be assigned to. Keep in sync with LogoPlacement.
@@ -67,6 +87,7 @@ interface SettingsLike {
   biz_state?: string;
   biz_zip?: string;
   biz_website?: string;
+  venmo_handle?: string;
   accent_color?: string;
   logo_url?: string;
   terms_text?: string;
@@ -158,6 +179,7 @@ export function resolveEntityProfile(
       invoiceBarBg: rp.accent_color || "#b8963c", // gold Items bar
       invoiceBarText: "#1a1a1a",                  // dark text, legible on gold
       branding: rp.branding,
+      venmoHandle: rp.venmo_handle,
     };
   }
 
@@ -186,6 +208,7 @@ export function resolveEntityProfile(
     invoiceBarBg: "#454d23",   // dark olive Items bar (unchanged)
     invoiceBarText: "#ffffff", // white text (unchanged)
     branding: s.branding || undefined,
+    venmoHandle: s.venmo_handle,
   };
 }
 
