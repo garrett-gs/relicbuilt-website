@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 import { notifyWallflowerStatus } from "@/lib/wallflower-status";
 import { notifyPaymentTeam } from "@/lib/notify-payment-team";
 import { requireTeamMember } from "@/lib/api-auth";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 interface EstimateLineItem { quantity?: number; unit_price?: number }
 interface EstimateLaborItem { cost?: number }
@@ -35,10 +35,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "estimate_id required" }, { status: 400 });
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     const { data: estimate, error: estErr } = await supabase
       .from("estimates")

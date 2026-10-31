@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
@@ -117,10 +117,7 @@ export async function POST(req: NextRequest) {
     if (!resendKey) return NextResponse.json({ error: "RESEND_API_KEY not set" }, { status: 500 });
 
     // Use service role key to bypass RLS for invoice creation
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     // Find project by token
     const { data: project, error } = await supabase

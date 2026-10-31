@@ -25,17 +25,20 @@ export interface PricedLine {
  */
 export async function syncInventoryUnitCost(
   lines: PricedLine[],
-  db: SupabaseClient = axiom, // the server passes its own client
+  db: SupabaseClient = axiom, // the server passes its own client…
+  tenantId?: string, // …and its workspace, since the service key sees them all
 ): Promise<number> {
   const priced = (lines || []).filter(
     (l) => l && (l.unit_price ?? 0) > 0 && (l.description?.trim() || l.item_number?.trim())
   );
   if (priced.length === 0) return 0;
 
-  const { data: inv } = await db
+  let invQuery = db
     .from("inventory_items")
     .select("id, item_number, description, unit_cost")
     .eq("active", true);
+  if (tenantId) invQuery = invQuery.eq("tenant_id", tenantId);
+  const { data: inv } = await invQuery;
   if (!inv || inv.length === 0) return 0;
 
   const byNumber = new Map<string, { id: string; unit_cost: number }>();

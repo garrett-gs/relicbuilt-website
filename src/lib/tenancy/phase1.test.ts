@@ -1,31 +1,10 @@
-import { PGlite } from "@electric-sql/pglite";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import type { PGlite } from "@electric-sql/pglite";
 import { beforeAll, describe, expect, it } from "vitest";
+import { as as asWho, createDb, sql, type Who } from "./testdb";
 
-// Runs supabase/tenancy-phase1.sql against an in-memory copy of the live
-// schema (supabase/schema-snapshot.sql) with a small stand-in for Supabase auth.
+// Runs supabase/tenancy-phase1.sql against an in-memory copy of the live schema.
 
-const root = join(__dirname, "..", "..", "..");
-const SNAPSHOT = readFileSync(join(root, "supabase", "schema-snapshot.sql"), "utf8");
-const PHASE1 = readFileSync(join(root, "supabase", "tenancy-phase1.sql"), "utf8");
-
-const SHIM = `
-  create role anon nologin;
-  create role authenticated nologin;
-  create role service_role nologin bypassrls;
-  create schema auth;
-  create table auth.users (id uuid primary key, email text);
-  create function auth.jwt() returns jsonb language sql stable as $$
-    select coalesce(nullif(current_setting('request.jwt.claims', true), ''), '{}')::jsonb
-  $$;
-  create function auth.uid() returns uuid language sql stable as $$
-    select nullif(auth.jwt() ->> 'sub', '')::uuid
-  $$;
-  grant usage on schema auth to anon, authenticated, service_role;
-  grant usage on schema public to anon, authenticated, service_role;
-  alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
-`;
+const PHASE1 = sql("tenancy-phase1.sql");
 
 const GARRETT = "11111111-1111-4111-8111-111111111111";
 const STRANGER = "99999999-9999-4999-8999-999999999999";
@@ -38,20 +17,9 @@ const tenantOf = async (table: string, id: string) =>
     [id],
   ))?.slug ?? null;
 
-// Act as a signed-in user (or the service key) sending a workspace header.
-async function as<T>(who: { sub?: string; email?: string; role: string }, slug: string | null, fn: () => Promise<T>) {
-  const claims = JSON.stringify({ sub: who.sub, email: who.email, role: who.role });
-  const headers = JSON.stringify(slug ? { "x-axiom-tenant": slug } : {});
-  await db.query(`select set_config('request.jwt.claims', $1, false), set_config('request.headers', $2, false)`, [claims, headers]);
-  await db.exec(`set role ${who.role}`);
-  try {
-    return await fn();
-  } finally {
-    await db.exec(`reset role; reset request.jwt.claims; reset request.headers;`);
-  }
-}
-const garrett = { sub: GARRETT, email: "Garrett@RelicBuilt.com", role: "authenticated" };
-const stranger = { sub: STRANGER, email: "x@example.com", role: "authenticated" };
+const as = <T,>(who: Who, slug: string | null, fn: () => Promise<T>) => asWho(db, who, slug, fn);
+const garrett: Who = { sub: GARRETT, email: "Garrett@RelicBuilt.com", role: "authenticated" };
+const stranger: Who = { sub: STRANGER, email: "x@example.com", role: "authenticated" };
 
 const ids = {
   wrCo: crypto.randomUUID(),
@@ -75,19 +43,7 @@ const ids = {
 };
 
 beforeAll(async () => {
-  db = new PGlite();
-  await db.exec(SHIM);
-  await db.exec(SNAPSHOT);
-  // The REST schema doesn't expose jsonb defaults; give required jsonb columns
-  // one so test rows can leave them out, as the app does.
-  await db.exec(`
-    do $$ declare c record; begin
-      for c in select table_name, column_name from information_schema.columns
-               where table_schema = 'public' and data_type = 'jsonb' and is_nullable = 'NO' and column_default is null loop
-        execute format('alter table public.%I alter column %I set default ''[]''::jsonb', c.table_name, c.column_name);
-      end loop;
-    end $$;
-  `);
+  db = await createDb();
   await db.query(`insert into auth.users (id, email) values ($1, 'garrett@relicbuilt.com'), ($2, 'x@example.com')`, [GARRETT, STRANGER]);
 
   // Data shaped like the live database, before Phase 1.

@@ -4,9 +4,9 @@
 // server-only env vars.
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { notifyWallflowerStatus, type WallflowerSource } from "@/lib/wallflower-status";
 import { requireTeamMember } from "@/lib/api-auth";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 export async function POST(req: NextRequest) {
   const auth = await requireTeamMember(req);
@@ -24,10 +24,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "source and status required" }, { status: 400 });
     }
 
-    const db = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const db = axiomAdmin();
 
     await notifyWallflowerStatus(db, source, status, { completed, actor, notes });
     return NextResponse.json({ ok: true });

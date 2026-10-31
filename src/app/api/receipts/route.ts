@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { siteTenantId } from "@/lib/axiom-admin";
 import { requireReceiptsSession } from "@/lib/receipts-session";
 
 // GET  /api/receipts → { purchase_orders (open), receipts (latest 20) }
@@ -8,9 +9,10 @@ import { requireReceiptsSession } from "@/lib/receipts-session";
 export async function GET(req: NextRequest) {
   const s = await requireReceiptsSession(req);
   if (s instanceof NextResponse) return s;
+  const tenantId = await siteTenantId(s.db);
   const [po, rec] = await Promise.all([
-    s.db.from("purchase_orders").select("*").in("status", ["pending", "approved"]).order("created_at", { ascending: false }),
-    s.db.from("receipts").select("*").order("created_at", { ascending: false }).limit(20),
+    s.db.from("purchase_orders").select("*").eq("tenant_id", tenantId).in("status", ["pending", "approved"]).order("created_at", { ascending: false }),
+    s.db.from("receipts").select("*").eq("tenant_id", tenantId).order("created_at", { ascending: false }).limit(20),
   ]);
   if (po.error || rec.error) return NextResponse.json({ error: "Couldn't load receipts." }, { status: 500 });
   return NextResponse.json({ purchase_orders: po.data, receipts: rec.data });

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { getWRClient } from "@/lib/wr-supabase";
 import { buildPortalUrl, notifyNexusBuildLink } from "@/lib/notify-nexus-build-link";
 import { notifyNexusBuildCost } from "@/lib/notify-nexus-build-cost";
 import { requireTeamMember } from "@/lib/api-auth";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 export async function POST(req: NextRequest) {
   const auth = await requireTeamMember(req);
@@ -18,10 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Fetch the estimate from RELIC Axiom
-    const axiomUrl = process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!;
-    const axiomKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-      || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!;
-    const axiom = createClient(axiomUrl, axiomKey);
+    const axiom = axiomAdmin();
 
     const { data: estimate, error: estErr } = await axiom
       .from("estimates")

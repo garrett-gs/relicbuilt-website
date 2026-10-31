@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "crypto";
 import { notifyWallflowerStatus } from "@/lib/wallflower-status";
 import { notifyNexusBuildLink } from "@/lib/notify-nexus-build-link";
 import { notifyNewIntake } from "@/lib/notify-new-intake";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 const API_KEY = process.env.WALLFLOWER_API_KEY || "wfrelic2026";
 
@@ -58,10 +58,7 @@ export async function POST(req: NextRequest) {
     const isMaintenance = billing_type === "maintenance" || pricing_requested === false;
     const billingType: "billable" | "maintenance" = isMaintenance ? "maintenance" : "billable";
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     const { data, error } = await supabase
       .from("wallflower_work_orders")

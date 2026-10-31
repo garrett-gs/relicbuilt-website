@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { requireTeamMember } from "@/lib/api-auth";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 // Uploads a business logo to the public `branding` storage bucket and returns
 // its public URL, which Settings stores on the entity's identity (logo_url).
@@ -29,10 +29,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Use a PNG, JPG, SVG, or WebP image." }, { status: 400 });
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const supabase = axiomAdmin();
 
     const ext = type === "image/svg+xml" ? "svg" : type === "image/jpeg" ? "jpg" : type === "image/webp" ? "webp" : "png";
     // Timestamped path so a new upload busts any cached copy of the old one.

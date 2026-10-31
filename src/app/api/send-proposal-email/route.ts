@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { generateEstimateProposalHtml, composeClientAddress } from "@/lib/proposal-html";
 import { proposalBiz, resolveEntityProfile } from "@/lib/entity-profile";
 import { renderHtmlToPdf } from "@/lib/render-pdf";
 import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 import type { Estimate, ProposalHighlight, ProposalScope } from "@/types/axiom";
 import { requireTeamMember } from "@/lib/api-auth";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 // Allow up to 60 seconds for the PDF generation step. Vercel Hobby has a
 // 10s default, Pro has 300s. PDF render typically takes 3-5s.
@@ -43,10 +43,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "RESEND_API_KEY not configured" }, { status: 500 });
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     const { data: estimate, error: estErr } = await supabase
       .from("estimates")

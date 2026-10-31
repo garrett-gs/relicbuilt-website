@@ -7,9 +7,9 @@
 // (one project only) + CRON_SECRET, matching the other crons.
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { resolveEntityProfile } from "@/lib/entity-profile";
 import type { BusinessEntity } from "@/types/axiom";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -78,10 +78,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "RESEND_API_KEY not configured" }, { status: 500 });
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const supabase = axiomAdmin();
 
   const { data: settings } = await supabase
     .from("settings")

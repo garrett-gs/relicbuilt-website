@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { requireTeamMember } from "@/lib/api-auth";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 const EVENTS = {
   approval_sent:    { subject: (p: string) => `Action Required — ${p}`,              label: "sent you an approval request" },
@@ -94,10 +94,7 @@ export async function POST(req: NextRequest) {
     const resendKey = process.env.RESEND_API_KEY;
     if (!resendKey) return NextResponse.json({ error: "RESEND_API_KEY not set" }, { status: 500 });
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const supabase = axiomAdmin();
 
     // Load settings to get team members
     const { data: settings } = await supabase.from("settings").select("biz_name,team_members").limit(1).single();

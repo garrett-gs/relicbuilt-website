@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { resolveEntityProfile } from "@/lib/entity-profile";
 import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 import { notifyWallflowerStatus } from "@/lib/wallflower-status";
 import { notifyNexusApproval } from "@/lib/notify-nexus-approval";
 import { notifyNexusBuildLink } from "@/lib/notify-nexus-build-link";
 import type { Estimate, BusinessEntity } from "@/types/axiom";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -44,10 +44,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Please enter your name to sign." }, { status: 400 });
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     const { data: master, error: mErr } = await supabase
       .from("master_projects")

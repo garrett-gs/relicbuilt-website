@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { requireTeamMember } from "@/lib/api-auth";
+import { axiomAdmin, siteTenantId } from "@/lib/axiom-admin";
 
 export async function POST(req: NextRequest) {
   const auth = await requireTeamMember(req);
@@ -19,15 +19,12 @@ export async function POST(req: NextRequest) {
     const base64 = Buffer.from(buffer).toString("base64");
     const mediaType = file.type === "application/pdf" ? "application/pdf" : (file.type || "image/jpeg");
 
-    // Load existing inventory for matching
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
-
+    // Load this workspace's inventory for matching.
+    const supabase = axiomAdmin();
     const { data: existingItems } = await supabase
       .from("inventory_items")
       .select("id, item_number, description, unit, unit_cost, quantity_on_hand")
+      .eq("tenant_id", await siteTenantId(supabase))
       .eq("active", true);
 
     const inventoryList = (existingItems || []).map((item) => {

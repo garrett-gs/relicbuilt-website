@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { TeamMember } from "@/types/axiom";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 /**
  * Identity + access resolution for the Axiom Assistant API.
@@ -43,7 +44,7 @@ export async function identifyCaller(token: string | undefined): Promise<CallerC
   const email = userData?.user?.email?.toLowerCase();
   if (userErr || !email) throw new AuthError("Unauthorized", 401);
 
-  const admin = createClient(url, service);
+  const admin = axiomAdmin();
 
   // The caller must be a known team member.
   const { data: settings } = await admin

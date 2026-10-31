@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { getStripe } from "@/lib/stripe";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 // Stripe's merchant fees, mirrored on the customer side:
 //   Card: 2.9% + $0.30 (uncapped)
@@ -31,10 +31,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing invoiceId" }, { status: 400 });
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     const { data: invoice, error } = await supabase
       .from("invoices")

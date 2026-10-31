@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { requireTeamMember } from "@/lib/api-auth";
+import { axiomAdmin, siteTenantId } from "@/lib/axiom-admin";
 
 export async function POST(req: NextRequest) {
   const auth = await requireTeamMember(req);
@@ -13,11 +13,9 @@ export async function POST(req: NextRequest) {
     const { messages, estimate } = await req.json();
 
     // ── Pull live context from Axiom ──────────────────────────
-    // Use service role key if available (bypasses RLS), otherwise fall back to anon
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    // This site's workspace only (the service key sees every workspace).
+    const supabase = axiomAdmin();
+    const tenantId = await siteTenantId(supabase);
 
     const [
       { data: settings },
@@ -28,11 +26,11 @@ export async function POST(req: NextRequest) {
       { data: recentReceipts },
     ] = await Promise.all([
       supabase.from("settings").select("biz_name, team_members, deposit_percent").limit(1).single(),
-      supabase.from("inventory_items").select("*").eq("active", true).order("description").limit(500),
-      supabase.from("vendor_catalog").select("*").eq("active", true).order("description").limit(500),
-      supabase.from("vendors").select("id, name").eq("status", "active"),
-      supabase.from("custom_work").select("project_name, quoted_amount, materials, labor_log, status").in("status", ["completed", "delivered"]).order("created_at", { ascending: false }).limit(15),
-      supabase.from("receipts").select("vendor, total, line_items, receipt_date").order("receipt_date", { ascending: false }).limit(30),
+      supabase.from("inventory_items").select("*").eq("tenant_id", tenantId).eq("active", true).order("description").limit(500),
+      supabase.from("vendor_catalog").select("*").eq("tenant_id", tenantId).eq("active", true).order("description").limit(500),
+      supabase.from("vendors").select("id, name").eq("tenant_id", tenantId).eq("status", "active"),
+      supabase.from("custom_work").select("project_name, quoted_amount, materials, labor_log, status").eq("tenant_id", tenantId).in("status", ["completed", "delivered"]).order("created_at", { ascending: false }).limit(15),
+      supabase.from("receipts").select("vendor, total, line_items, receipt_date").eq("tenant_id", tenantId).order("receipt_date", { ascending: false }).limit(30),
     ]);
 
     // Build vendor lookup map

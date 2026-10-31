@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { getStripe } from "@/lib/stripe";
 import { resolveEntityProfile } from "@/lib/entity-profile";
 import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 import { notifyPaymentTeam } from "@/lib/notify-payment-team";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
@@ -90,10 +90,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing sessionId or invoiceId" }, { status: 400 });
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     // Load the invoice first so we can verify the session against the Stripe
     // account that owns this invoice's entity (Wallflower vs Relic).

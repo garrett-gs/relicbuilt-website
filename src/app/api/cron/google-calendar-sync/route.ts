@@ -7,9 +7,9 @@
 // project only) + CRON_SECRET, matching the other crons.
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { googleConfigured } from "@/lib/google-calendar";
 import { syncEntityToGoogle } from "@/lib/google-calendar-sync";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -29,10 +29,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ skipped: "google service account not configured" });
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const supabase = axiomAdmin();
 
   // Business names drive the calendar display name ("Axiom-<Business>").
   const { data: settings } = await supabase

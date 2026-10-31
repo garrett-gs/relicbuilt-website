@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { loadMergedCalendarData } from "@/lib/calendar-data";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 /**
  * Public, read-only Build Calendar data for a share token. The token is the
@@ -14,10 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     const { token } = await params;
     if (!token) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     const { data: settings } = await supabase
       .from("settings")

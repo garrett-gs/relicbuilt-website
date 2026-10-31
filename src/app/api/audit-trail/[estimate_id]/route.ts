@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { renderHtmlToPdf } from "@/lib/render-pdf";
 import { requireTeamMember } from "@/lib/api-auth";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -67,10 +67,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ estimate_id
     const { estimate_id } = await ctx.params;
     if (!estimate_id) return NextResponse.json({ error: "estimate_id required" }, { status: 400 });
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     const [{ data: estimate }, { data: events }, { data: settings }] = await Promise.all([
       supabase.from("estimates").select("*").eq("id", estimate_id).single(),

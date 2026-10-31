@@ -1,5 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
 import { getWRClient } from "@/lib/wr-supabase";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 /**
  * Sync companies + customers FROM Wallflower RELIC Nexus INTO Axiom.
@@ -27,12 +27,9 @@ export type SyncResult = {
 };
 
 export async function runWallflowerSync(): Promise<SyncResult> {
-  const axiomUrl = process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!;
-  const anonKey = process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || anonKey;
-
   const wr = getWRClient();
-  const axiom = createClient(axiomUrl, serviceKey);
+  // Nexus customers belong to the Wallflower workspace, whichever site runs this.
+  const axiom = axiomAdmin("wallflower_relic");
 
   // ── Pull Nexus + existing Axiom data ──
   const [

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SITE_ENTITY } from "@/lib/axiom-site";
+import { siteTenantId } from "@/lib/axiom-admin";
 import { syncInventoryUnitCost } from "@/lib/inventory-price-sync";
 import { requireReceiptsSession } from "@/lib/receipts-session";
 import type { PurchaseOrder } from "@/types/axiom";
@@ -15,8 +16,9 @@ const entity = () => SITE_ENTITY ?? "wallflower_relic";
 export async function GET(req: NextRequest) {
   const s = await requireReceiptsSession(req);
   if (s instanceof NextResponse) return s;
+  const tenantId = await siteTenantId(s.db);
   const [v, p] = await Promise.all([
-    s.db.from("vendors").select("*").eq("status", "active").order("name"),
+    s.db.from("vendors").select("*").eq("tenant_id", tenantId).eq("status", "active").order("name"),
     s.db.from("purchase_orders").select("*").eq("status", "pending").eq("entity", entity()).order("created_at", { ascending: false }),
   ]);
   return NextResponse.json({ vendors: v.data ?? [], pos: p.data ?? [] });
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
     if (error || !data) return NextResponse.json({ error: error?.message || "Couldn't create the PO." }, { status: 500 });
     const po_number = `PO-${new Date().getFullYear()}-${String(data.id).slice(0, 4).toUpperCase()}`;
     await s.db.from("purchase_orders").update({ po_number }).eq("id", data.id);
-    await syncInventoryUnitCost([lineItem], s.db);
+    await syncInventoryUnitCost([lineItem], s.db, await siteTenantId(s.db));
     return NextResponse.json({ po_number });
   }
 
@@ -83,6 +85,6 @@ export async function POST(req: NextRequest) {
     })
     .eq("id", po.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await syncInventoryUnitCost([lineItem], s.db);
+  await syncInventoryUnitCost([lineItem], s.db, await siteTenantId(s.db));
   return NextResponse.json({ po_number: po.po_number });
 }

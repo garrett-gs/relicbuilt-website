@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { generateEstimateProposalHtml, composeClientAddress } from "@/lib/proposal-html";
 import { proposalBiz, resolveEntityProfile } from "@/lib/entity-profile";
 import { renderHtmlToPdf } from "@/lib/render-pdf";
@@ -8,6 +7,7 @@ import { notifyWallflowerStatus } from "@/lib/wallflower-status";
 import { notifyNexusApproval } from "@/lib/notify-nexus-approval";
 import { notifyNexusBuildLink } from "@/lib/notify-nexus-build-link";
 import type { Estimate, ProposalHighlight, ProposalScope } from "@/types/axiom";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -44,10 +44,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Service role bypasses RLS — needed because the client is unauthenticated
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     // Look up estimate by proposal_token
     const { data: estimate, error: estErr } = await supabase

@@ -5,8 +5,8 @@
 // skipped silently — we don't want the digest to block on missing data.
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { formatDueDate } from "@/lib/utils";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 type Task = {
   id: string;
@@ -90,10 +90,7 @@ async function runDigest() {
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return { ok: false, error: "RESEND_API_KEY not set" };
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-  );
+  const supabase = axiomAdmin();
 
   const [tasksRes, settingsRes, projectsRes] = await Promise.all([
     supabase.from("tasks").select("id,title,description,status,priority,assignee,due_date,custom_work_id").neq("status", "done"),

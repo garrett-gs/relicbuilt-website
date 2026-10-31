@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { composeClientAddress } from "@/lib/proposal-html";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 /**
  * Public endpoint the /proposal/master/[token] page calls. Returns the master
@@ -16,10 +16,7 @@ export async function GET(
     const { token } = await ctx.params;
     if (!token) return NextResponse.json({ error: "token required" }, { status: 400 });
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!,
-    );
+    const supabase = axiomAdmin();
 
     const { data: master, error: mErr } = await supabase
       .from("master_projects")

@@ -2,6 +2,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { BusinessEntity } from "@/types/axiom";
 import { normalizeText } from "@/lib/fuzzy-match";
 import { extractProductFromUrl } from "@/lib/price-extract";
+import { tenantIdForSlug } from "@/lib/axiom-admin";
 
 /**
  * Whitelisted operations the Axiom Assistant may perform. This file is the
@@ -525,6 +526,9 @@ export async function buildContextBlurb(ctx: ToolCtx): Promise<string> {
 export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<ToolResult> {
   const { admin, entity } = ctx;
   try {
+    // The service key sees every workspace: tables without a business column
+    // (tasks, inventory, work orders) are scoped to this one by tenant_id.
+    const tenantId = await tenantIdForSlug(admin, entity);
     switch (name) {
       // ---- reads ----
       case "find_customers": {
@@ -542,7 +546,7 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         return error ? { ok: false, error: error.message } : { ok: true, data };
       }
       case "list_work_orders": {
-        let q = admin.from("wallflower_work_orders").select("id,item_name,work_type,scope,status,assigned_to,deadline,quantity").limit(50);
+        let q = admin.from("wallflower_work_orders").select("id,item_name,work_type,scope,status,assigned_to,deadline,quantity").eq("tenant_id", tenantId).limit(50);
         const status = str(input, "status");
         if (status) q = q.eq("status", status);
         const { data, error } = await q.order("created_at", { ascending: false });
@@ -574,7 +578,7 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         return { ok: true, data: rows };
       }
       case "list_tasks": {
-        let q = admin.from("tasks").select("id,title,status,priority,assignee,due_date").limit(50);
+        let q = admin.from("tasks").select("id,title,status,priority,assignee,due_date").eq("tenant_id", tenantId).limit(50);
         const status = str(input, "status");
         const assignee = str(input, "assignee");
         if (status) q = q.eq("status", status);
@@ -586,6 +590,7 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         const { data, error } = await admin
           .from("inventory_items")
           .select("id,description,item_number,unit,unit_cost,quantity_on_hand,min_stock_level,location")
+          .eq("tenant_id", tenantId)
           .eq("active", true)
           .order("description")
           .limit(500);
@@ -664,6 +669,7 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         const title = str(input, "title");
         if (!title) return { ok: false, error: "title is required" };
         const { data, error } = await admin.from("tasks").insert({
+          tenant_id: tenantId,
           title, description: str(input, "description") || null, status: "todo",
           priority: str(input, "priority") || "medium", assignee: str(input, "assignee") || null,
           due_date: str(input, "due_date") || null,
@@ -677,7 +683,7 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         if (!id) return { ok: false, error: "id is required" };
         const patch: In = { updated_at: new Date().toISOString() };
         for (const k of ["status", "priority", "assignee", "due_date", "title"]) if (str(input, k)) patch[k] = str(input, k);
-        const { data, error } = await admin.from("tasks").update(patch).eq("id", id).select("id,title").single();
+        const { data, error } = await admin.from("tasks").update(patch).eq("id", id).eq("tenant_id", tenantId).select("id,title").single();
         if (error) return { ok: false, error: error.message };
         await logActivity(ctx, { action: "updated", entity: "task", entity_id: id, label: `Updated task: ${data?.title || id}` });
         return { ok: true, data };
@@ -701,7 +707,7 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         if (!id) return { ok: false, error: "id is required" };
         const patch: In = { updated_at: new Date().toISOString() };
         for (const k of ["status", "assigned_to", "deadline", "work_type", "description"]) if (str(input, k)) patch[k] = str(input, k);
-        const { data, error } = await admin.from("wallflower_work_orders").update(patch).eq("id", id).select("id,item_name,status").single();
+        const { data, error } = await admin.from("wallflower_work_orders").update(patch).eq("id", id).eq("tenant_id", tenantId).select("id,item_name,status").single();
         if (error) return { ok: false, error: error.message };
         await logActivity(ctx, { action: "updated", entity: "wallflower_work_order", entity_id: id, label: `Updated work order: ${data?.item_name || id}` });
         return { ok: true, data };
@@ -836,6 +842,7 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         const description = str(input, "description");
         if (!description) return { ok: false, error: "description is required" };
         const { data, error } = await admin.from("inventory_items").insert({
+          tenant_id: tenantId,
           description, item_number: str(input, "item_number") || null, unit: str(input, "unit") || "ea",
           unit_cost: num(input, "unit_cost") || 0, quantity_on_hand: num(input, "quantity_on_hand") || 0,
           min_stock_level: num(input, "min_stock_level") || 0, location: str(input, "location") || null,
@@ -848,12 +855,13 @@ export async function runTool(name: string, input: In, ctx: ToolCtx): Promise<To
         const id = str(input, "id");
         const delta = num(input, "delta");
         if (!id || delta === undefined) return { ok: false, error: "id and delta are required" };
-        const { data: item, error: gErr } = await admin.from("inventory_items").select("id,description,quantity_on_hand,unit_cost").eq("id", id).single();
+        const { data: item, error: gErr } = await admin.from("inventory_items").select("id,description,quantity_on_hand,unit_cost").eq("id", id).eq("tenant_id", tenantId).single();
         if (gErr || !item) return { ok: false, error: gErr?.message || "item not found" };
         const newQty = (item.quantity_on_hand || 0) + delta;
-        const { error } = await admin.from("inventory_items").update({ quantity_on_hand: newQty }).eq("id", id);
+        const { error } = await admin.from("inventory_items").update({ quantity_on_hand: newQty }).eq("id", id).eq("tenant_id", tenantId);
         if (error) return { ok: false, error: error.message };
         await admin.from("inventory_transactions").insert({
+          tenant_id: tenantId,
           inventory_item_id: id, type: delta >= 0 ? "in" : "out", quantity: Math.abs(delta),
           unit_cost: item.unit_cost || 0, date: new Date().toISOString().split("T")[0],
           notes: str(input, "note") || "Assistant adjustment", created_by: `${ctx.email} (assistant)`,

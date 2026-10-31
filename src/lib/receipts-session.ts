@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { axiomAdmin } from "@/lib/axiom-admin";
 import { NextResponse } from "next/server";
 import { TeamMember } from "@/types/axiom";
 
@@ -25,9 +26,7 @@ const b64 = (s: string) => Buffer.from(s).toString("base64url");
 const sign = (payload: string) => createHmac("sha256", signingKey()).update(payload).digest("base64url");
 
 export function receiptsDb(): SupabaseClient {
-  return createClient(process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return axiomAdmin();
 }
 
 export async function pinMembers(db: SupabaseClient): Promise<TeamMember[]> {

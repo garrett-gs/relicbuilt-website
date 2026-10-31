@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { loadMergedCalendarData, buildRange } from "@/lib/calendar-data";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 /**
  * iCal (.ics) feed for a Build Calendar share token, so the schedule can be
@@ -25,10 +25,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   const { token } = await params;
   if (!token) return new NextResponse("Not found", { status: 404 });
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-  );
+  const supabase = axiomAdmin();
 
   const { data: settings } = await supabase
     .from("settings")

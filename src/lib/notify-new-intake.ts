@@ -9,7 +9,7 @@
 // Best-effort by contract: callers wrap nothing — every failure here is caught
 // and logged, and never blocks the intake it was triggered from.
 
-import { createClient } from "@supabase/supabase-js";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 // Owner alert address — Garrett wants every new request to hit this inbox
 // directly, on top of the daily digest.
@@ -49,10 +49,7 @@ const LABEL: Record<IntakeKind, string> = {
 export async function notifyNewIntake(input: NewIntakeInput): Promise<{ emailed: boolean; task_id: string | null }> {
   const result: { emailed: boolean; task_id: string | null } = { emailed: false, task_id: null };
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     // Resolve the owner's team-member name so the assignee matches exactly what
     // the daily digest resolves back to an email (it matches on name). Falling

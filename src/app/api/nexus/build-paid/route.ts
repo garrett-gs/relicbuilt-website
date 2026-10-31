@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { getWRClient } from "@/lib/wr-supabase";
 import { notifyNexusBuildLink } from "@/lib/notify-nexus-build-link";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 // Receives a payment signal from Nexus when a custom build's invoice takes a
 // payment (deposit / balance / paid-in-full). Records it against the linked
@@ -37,10 +37,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     // Map the payment to an Axiom estimate. Prefer relic_estimate_id if sent;
     // otherwise resolve it from Nexus's relic_builds row.

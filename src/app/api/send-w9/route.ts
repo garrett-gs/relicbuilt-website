@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { requireTeamMember } from "@/lib/api-auth";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 // Sends Wallflower RELIC's signed W-9 to a customer as a courtesy, with a
 // personalized cover, and records the send on the customer + activity log.
@@ -31,10 +31,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "RESEND_API_KEY not configured" }, { status: 500 });
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     const { data: customer, error: custErr } = await supabase
       .from("customers")

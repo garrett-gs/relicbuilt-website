@@ -7,8 +7,8 @@
 // leak payment history or anything sensitive.
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { resolveEntityProfile } from "@/lib/entity-profile";
+import { axiomAdmin } from "@/lib/axiom-admin";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ invoiceId: string }> }) {
   try {
@@ -17,10 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ invo
       return NextResponse.json({ error: "Missing invoiceId" }, { status: 400 });
     }
 
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!
-    );
+    const supabase = axiomAdmin();
 
     const { data, error } = await supabase
       .from("invoices")
