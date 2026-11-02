@@ -23,6 +23,10 @@ export function mcpUserEmail(): string {
   return required("AXIOM_MCP_USER_EMAIL");
 }
 
+export function mcpTenantSlug(): string {
+  return required("AXIOM_TENANT");
+}
+
 /**
  * Returns a signed-in Supabase client for the Axiom project, ensuring the
  * session is valid before every use. Signs in on first call and re-signs (or
@@ -32,11 +36,18 @@ export async function getClient(): Promise<SupabaseClient> {
   if (!client) {
     const url = required("AXIOM_SUPABASE_URL");
     const key = required("AXIOM_SUPABASE_ANON_KEY");
+    const tenant = required("AXIOM_TENANT");
     client = createClient(url, key, {
       auth: {
         persistSession: false, // stdio process; keep the session in memory only
         autoRefreshToken: true,
       },
+      // Name the workspace this server acts in, exactly as the web app does
+      // (src/lib/axiom-supabase.ts). Phase 2 tenancy RLS resolves the acting
+      // tenant from this header via current_tenant_id(); without it every
+      // read and write is filtered to nothing. Must be a slug this user is an
+      // active member of (wallflower_relic or relic).
+      global: { headers: { "x-axiom-tenant": tenant } },
     });
   }
   await ensureSession(client);

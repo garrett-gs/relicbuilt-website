@@ -3,7 +3,14 @@
 // connection/auth with session refresh, shared helpers, and the read tools
 // get_estimate / list_estimates / get_project. No write tools yet.
 
-import "dotenv/config";
+// Load this server's own .env (axiom-mcp/.env) regardless of the launching
+// cwd, so an MCP client can start it with a bare `node dist/index.js` and no
+// secrets ever live in the client's config file.
+import { config } from "dotenv";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+config({ path: join(dirname(fileURLToPath(import.meta.url)), "..", ".env") });
+
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
