@@ -63,12 +63,23 @@ So this is **mostly a consolidation**, not a rewrite. The messy surface is:
 - **D5 — Theme model:** neutral base theme in `globals.css`; single accent injected
   at runtime from `settings.accent_color`; kill the gold/olive literals.
   **Recommend yes.**
-- **D6 — OPEN QUESTION, needs Garrett:** the **public marketing site**
-  (`src/app/page.tsx`, `src/components/layout/{Navbar,Footer}.tsx`,
-  `src/app/contact/page.tsx` — relicbuilt.com brand, social links, phone) — is
-  that part of the Axiom *product*, or Wallflower-only? Options: (a) strip it from
-  the product template (Axiom = the `/axiom` app only), (b) keep it but make it
-  config-driven too. This changes the scope of Phase F.
+- **D6 — RESOLVED (Garrett, 2026-11-01): the product is RELICON-branded; the
+  customer adds their own branding in settings.**
+  - **App chrome = fixed Relicon/Axiom branding** — login screen, sidebar
+    "Axiom by Relicon" mark, "powered by Relicon." Constant on every instance;
+    not customer-configurable. (Assets already exist: `/brand/shared/relicon-mark-on-dark.svg`,
+    `powered-by-relicon-on-dark.svg`, `/brand/axiom/relicon-axiom-login-on-dark.svg`.)
+  - **Customer branding lives in `settings`** (name, logo, accent, address, terms,
+    venmo) and renders on their outward-facing **documents** — invoices, proposals,
+    POs, emails to *their* clients — via `resolveInstanceProfile`.
+  - **The public marketing site is NOT part of the product** — strip
+    `src/app/page.tsx`, `src/components/layout/{Navbar,Footer}.tsx`,
+    `src/app/contact/page.tsx` and the relicbuilt.com/Wallflower marketing brand
+    out of the template. Axiom = the `/axiom` app only.
+  - Sub-point (recommended default, say if you disagree): the customer's
+    `accent_color` keeps tinting the **admin UI** too (that runtime injection in
+    `EntityProvider` already exists and is cheap); the Relicon marks stay fixed
+    regardless. So the shell is Relicon-branded but accented in the customer's color.
 - **D7 — OPEN QUESTION:** does the existing combined deployment get **refactored in
   place** (and then deployed twice, once per business), or do we **fork a clean
   template repo**? Recommend refactor-in-place: the end state has no combined
@@ -152,16 +163,22 @@ Gate behind `nexusConnected` / `paymentsMode` so a generic instance has it OFF:
 - Stripe (D4): `lib/stripe.ts:13-28` → single `getStripe()`; one
   `STRIPE_SECRET_KEY` + one webhook secret (`stripe-webhook/route.ts`).
 
-### Phase F — Config-drive the product chrome *(low–medium risk)*
-- `src/app/layout.tsx:9-27` BRAND block → generated from config (name, title,
-  theme color, icon set); no `IS_RELIC` split.
-- `public/manifest.json` (name, `theme_color:#5b642e`) → generated at build from
-  config, or a neutral default + per-instance override.
-- Favicon / app-icon / apple-touch set → a per-instance asset convention (drop the
-  `-wr` variants from the product; supply a neutral default).
-- `globals.css:16-18` → remove the `[data-entity="relic"]` gold override (accent is
-  runtime now); keep the neutral base tokens.
-- Resolve D6 (marketing site).
+### Phase F — Fix the product chrome as Relicon-branded *(low–medium risk)* — per D6
+The app shell is **constant Relicon/Axiom branding** (not per-instance); only the
+customer's accent tints it and their brand shows on documents.
+- `src/app/layout.tsx:9-27` BRAND block → collapse the `IS_RELIC` split into one
+  fixed **Axiom by Relicon** brand (name/title/icons); drop the WR/RELIC variants.
+- `public/manifest.json` (`name:"Axiom"`, `theme_color:#5b642e`) → fixed Relicon
+  product values (neutral Relicon theme color, not olive).
+- Favicon / app-icon / apple-touch set → one **Relicon/Axiom** icon set; delete the
+  `-wr` variants and `relic-shield-gold.png` from the product. The customer's logo
+  is a *document* asset (settings), never the app favicon.
+- Keep the existing Relicon marks in `Sidebar.tsx:165,290` and `AxiomLogin.tsx:34`.
+- `globals.css:16-18` → remove the `[data-entity="relic"]` gold override; accent is
+  runtime-injected from `settings.accent_color` (keep the neutral base tokens).
+- **Strip the marketing site** (D6): remove `src/app/page.tsx`,
+  `src/components/layout/{Navbar,Footer}.tsx`, `src/app/contact/page.tsx` and the
+  relicbuilt.com social/phone brand from the product template.
 
 ### Phase G — The shippable clean template *(the deliverable)*
 - Seed/migration for an empty `settings` row with sane defaults.
