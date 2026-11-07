@@ -212,6 +212,10 @@ export default function WallflowerPage() {
     const lastNum = latest?.estimate_number ? parseInt(latest.estimate_number.split("-").pop() || "0", 10) : 0;
     const estimate_number = `EST-${year}-${String(lastNum + 1).padStart(4, "0")}`;
 
+    // Stable proposal token so the Nexus build-portal URL is fixed from the
+    // moment the estimate exists — handed to Nexus below.
+    const proposalToken = `prop_${(crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/-/g, "")}`;
+
     const { data } = await axiom.from("estimates").insert({
       estimate_number,
       project_name: `Wallflower — ${wo.item_name}`,
@@ -228,6 +232,7 @@ export default function WallflowerPage() {
         wo.quantity > 1 ? `Quantity: ${wo.quantity}` : "",
       ].filter(Boolean).join("\n"),
       images: wo.images && wo.images.length > 0 ? wo.images : undefined,
+      proposal_token: proposalToken,
     }).select().single();
 
     if (data) {
@@ -244,6 +249,15 @@ export default function WallflowerPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source: { workOrderId: wo.id }, status: "estimated" }),
       }).catch((err) => console.error("[wallflower-status] notify failed:", err));
+
+      // Open the Nexus custom-build pricing loop for this estimate. Intake no
+      // longer does this (work orders land as work orders), so it fires here,
+      // when pricing actually begins. Non-blocking.
+      authedFetch("/api/wallflower/link-estimate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estimateId: data.id, estimateNumber: estimate_number, proposalToken, workOrderId: wo.id }),
+      }).catch((err) => console.error("[wallflower/link-estimate] notify failed:", err));
 
       await logActivity({
         action: "created",
