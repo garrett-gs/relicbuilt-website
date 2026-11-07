@@ -457,7 +457,11 @@ export interface Invoice {
   reminders_sent: number;
   last_reminder_sent?: string;
   next_reminder_date?: string;
-  invoice_type?: "standard" | "deposit" | "final";
+  // Amount due up front (the deposit). The invoice total is always the full
+  // project amount; the deposit is recorded as a payment against it and the
+  // balance stays on the same invoice. null/absent ⇒ full total due now (100%).
+  deposit_amount?: number;
+  invoice_type?: "standard" | "deposit" | "final" | "full";
   created_at: string;
   updated_at: string;
 }

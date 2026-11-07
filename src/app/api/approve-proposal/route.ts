@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
         .from("invoices")
         .select("id,subtotal,status")
         .eq("custom_work_id", project.id)
-        .eq("invoice_type", "deposit")
+        .in("invoice_type", ["standard", "deposit", "full"])
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -150,58 +150,49 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Calculate amounts
+    // Calculate amounts. The invoice is always the FULL project total; the
+    // deposit is the amount due up front (default = full total / 100%). A
+    // smaller proposal_cost_section.deposit_amount leaves a balance on the
+    // same invoice, which is auto-sent on its due date.
     const costSection = project.proposal_cost_section;
-    const depositAmount = costSection?.deposit_amount || 0;
     const totalAmount = project.quoted_amount || 0;
-    const balanceAmount = depositAmount > 0 ? totalAmount - depositAmount : 0;
+    const rawDeposit = costSection?.deposit_amount || 0;
+    const depositAmount = rawDeposit > 0 ? Math.min(rawDeposit, totalAmount) : totalAmount;
+    const balanceAmount = Math.round((totalAmount - depositAmount) * 100) / 100;
 
-    // Generate invoice numbers
     const y = new Date().getFullYear();
-    const depositInvoiceNum = `INV-${y}-${Math.floor(1000 + Math.random() * 9000)}`;
-    const finalInvoiceNum   = `INV-${y}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const invoiceNum = `INV-${y}-${Math.floor(1000 + Math.random() * 9000)}`;
+    // One invoice carries the deposit (due now) and the balance.
+    const depositInvoiceNum = invoiceNum;
+    const finalInvoiceNum = invoiceNum;
     const now = new Date().toISOString().split("T")[0];
 
-    // Create deposit invoice
-    const { data: depositInvoice, error: depositError } = await supabase.from("invoices").insert({
-      invoice_number: depositInvoiceNum,
+    // One invoice for the full project total. The deposit is recorded as a
+    // payment against it when the client pays; the balance stays on the same
+    // invoice. deposit_amount is only set when there's actually a balance.
+    const { data: depositInvoice, error: invoiceError } = await supabase.from("invoices").insert({
+      invoice_number: invoiceNum,
       custom_work_id: project.id,
       entity: project.entity || "wallflower_relic",
       client_name: project.client_name || "",
       client_email: project.client_email || "",
       client_phone: project.client_phone || "",
-      description: `Deposit — ${project.project_name}`,
-      subtotal: depositAmount > 0 ? depositAmount : totalAmount,
+      description: project.project_name,
+      subtotal: totalAmount,
+      // Only set when there's a balance; omitting the key keeps 100% invoices
+      // working even before the deposit_amount column is added.
+      ...(balanceAmount > 0 ? { deposit_amount: depositAmount } : {}),
       issued_date: now,
       tax_rate: 0,
       status: "unpaid",
-      invoice_type: "deposit",
+      invoice_type: "standard",
     }).select().single();
 
-    if (depositError) {
-      console.error("Deposit invoice creation failed:", depositError.message, depositError.details);
-      return NextResponse.json({ error: `Failed to create deposit invoice: ${depositError.message}` }, { status: 500 });
+    if (invoiceError) {
+      console.error("Invoice creation failed:", invoiceError.message, invoiceError.details);
+      return NextResponse.json({ error: `Failed to create invoice: ${invoiceError.message}` }, { status: 500 });
     }
-
-    // Create final invoice (not emailed — admin sends manually when ready)
-    const { data: finalInvoice, error: finalError } = await supabase.from("invoices").insert({
-      invoice_number: finalInvoiceNum,
-      custom_work_id: project.id,
-      entity: project.entity || "wallflower_relic",
-      client_name: project.client_name || "",
-      client_email: project.client_email || "",
-      client_phone: project.client_phone || "",
-      description: `Balance — ${project.project_name}`,
-      subtotal: depositAmount > 0 ? balanceAmount : totalAmount,
-      issued_date: now,
-      tax_rate: 0,
-      status: "unpaid",
-      invoice_type: "final",
-    }).select().single();
-
-    if (finalError) {
-      console.error("Final invoice creation failed:", finalError.message, finalError.details);
-    }
+    // Single-invoice model — there is no separate balance invoice.
 
     // Mark proposal approved
     await supabase.from("custom_work").update({
@@ -261,7 +252,7 @@ export async function POST(req: NextRequest) {
       projectName: project.project_name,
       depositAmount: depositAmount > 0 ? depositAmount : totalAmount,
       depositInvoiceNum: depositInvoice?.invoice_number || depositInvoiceNum,
-      finalInvoiceNum: finalInvoice?.invoice_number || finalInvoiceNum,
+      finalInvoiceNum,
       approvedAt: new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }),
     });
 
@@ -283,7 +274,7 @@ export async function POST(req: NextRequest) {
       project_name: project.project_name,
       client_name: project.client_name,
       deposit_invoice_id: depositInvoice?.id,
-      final_invoice_id: finalInvoice?.id,
+      final_invoice_id: null,
       deposit_amount: depositAmount > 0 ? depositAmount : totalAmount,
       deposit_status: depositInvoice?.status,
     });

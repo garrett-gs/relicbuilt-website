@@ -207,47 +207,42 @@ export async function POST(req: NextRequest) {
           ? 100
           : Number(estimate.deposit_percent ?? settings?.deposit_percent ?? 100);
         const isFull = depPct >= 100;
-        const invoiceAmount = isFull
-          ? totalAmount
-          : Math.round(totalAmount * (depPct / 100) * 100) / 100;
+        // One invoice for the FULL project total. When a deposit applies, the
+        // deposit is the amount due now (deposit_amount); the balance stays on
+        // the same invoice and is auto-sent on its due date.
+        const depositDue = isFull ? totalAmount : Math.round(totalAmount * (depPct / 100) * 100) / 100;
+        const balanceAmount = Math.round((totalAmount - depositDue) * 100) / 100;
         const invNum = `INV-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
         const { data: inv } = await supabase
           .from("invoices")
           .insert({
             entity: "relic",
             invoice_number: invNum,
-            invoice_type: isFull ? "standard" : "deposit",
+            invoice_type: "standard",
             custom_work_id: projectId,
             client_name: estimate.client_name || "",
             client_email: estimate.client_email || null,
             client_phone: estimate.client_phone || null,
-            description: isFull
-              ? (estimate.project_name || estimate.estimate_number)
-              : `Deposit (${depPct}%) — ${estimate.project_name || estimate.estimate_number}`,
-            subtotal: invoiceAmount,
+            description: estimate.project_name || estimate.estimate_number,
+            subtotal: totalAmount,
+            ...(isFull ? {} : { deposit_amount: depositDue }),
             delivery_fee: 0,
             discount: 0,
             tax_rate: 0,
-            line_items: [isFull
-              ? {
-                  item_number: "",
-                  description: `${estimate.project_name || estimate.estimate_number} — payment in full.`,
-                  quantity: 1,
-                  unit_price: invoiceAmount,
-                  unit: "ea",
-                }
-              : {
-                  item_number: "",
-                  description: `Deposit — ${depPct}% of project total (${money(totalAmount)}), due to schedule and begin work. Balance ${100 - depPct}% due on completion.`,
-                  quantity: 1,
-                  unit_price: invoiceAmount,
-                  unit: "ea",
-                }],
+            line_items: [{
+              item_number: "",
+              description: isFull
+                ? `${estimate.project_name || estimate.estimate_number} — payment in full.`
+                : `${estimate.project_name || estimate.estimate_number} — project total. ${depPct}% deposit (${money(depositDue)}) due to schedule and begin work; balance ${money(balanceAmount)} due on completion.`,
+              quantity: 1,
+              unit_price: totalAmount,
+              unit: "ea",
+            }],
             status: "unpaid",
             issued_date: new Date().toISOString().split("T")[0],
             notes: isFull
               ? "Payment due in full."
-              : `Deposit — ${depPct}% due to schedule and begin work. Balance ${100 - depPct}% due on completion.`,
+              : `${depPct}% deposit (${money(depositDue)}) due now to schedule and begin work. Balance ${money(balanceAmount)} due on completion.`,
             payments: [],
           })
           .select("id")

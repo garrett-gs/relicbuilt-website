@@ -4,6 +4,7 @@ import { notifyWallflowerStatus } from "@/lib/wallflower-status";
 import { notifyPaymentTeam } from "@/lib/notify-payment-team";
 import { requireTeamMember } from "@/lib/api-auth";
 import { axiomAdmin } from "@/lib/axiom-admin";
+import { amountDueNow, deriveStatus } from "@/lib/invoice-balance";
 
 interface EstimateLineItem { quantity?: number; unit_price?: number }
 interface EstimateLaborItem { cost?: number }
@@ -104,33 +105,38 @@ export async function POST(req: NextRequest) {
       customWorkId = newProject.id;
     }
 
-    // ── Mark the deposit invoice paid + link it to the project ───────
+    // ── Record the deposit as a payment on the project's single invoice ──
+    // One invoice holds the full total; "Mark Deposit Paid" records the
+    // amount-due-now (deposit) as a payment and lets status derive itself
+    // (partial while a balance remains, paid when nothing is left).
     const { data: depositInvoice } = await supabase
       .from("invoices")
-      .select("id, invoice_number, client_name, client_email, description, invoice_type, payments, subtotal, status")
-      .eq("client_name", estimate.client_name || "")
-      .eq("entity", estimate.entity || "wallflower_relic") // never match the other business's invoice
-      .eq("invoice_type", "deposit")
-      .like("description", `%${estimate.project_name || estimate.estimate_number}%`)
+      .select("id, invoice_number, client_name, client_email, description, invoice_type, payments, subtotal, deposit_amount, delivery_fee, discount, tax_rate, line_items, status")
+      .eq("custom_work_id", customWorkId)
+      .in("invoice_type", ["standard", "deposit", "full"])
+      .neq("status", "paid")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (depositInvoice) {
       const existingPayments = depositInvoice.payments || [];
+      const depositPay = amountDueNow(depositInvoice);
+      const newPayments = [
+        ...existingPayments,
+        {
+          amount: depositPay,
+          method: "Marked Paid",
+          date: new Date().toISOString().split("T")[0],
+          note: "Deposit confirmed in Axiom",
+          created_at: new Date().toISOString(),
+        },
+      ];
+      const newStatus = deriveStatus({ ...depositInvoice, payments: newPayments });
       await supabase.from("invoices").update({
         custom_work_id: customWorkId,
-        status: "paid",
-        payments: [
-          ...existingPayments,
-          {
-            amount: depositInvoice.subtotal,
-            method: "Marked Paid",
-            date: new Date().toISOString().split("T")[0],
-            note: "Deposit confirmed in Axiom",
-            created_at: new Date().toISOString(),
-          },
-        ],
+        status: newStatus,
+        payments: newPayments,
       }).eq("id", depositInvoice.id);
 
       // Team notification — same email Garrett gets when a client pays
@@ -142,27 +148,12 @@ export async function POST(req: NextRequest) {
         clientName: depositInvoice.client_name || estimate.client_name || null,
         clientEmail: depositInvoice.client_email || estimate.client_email || null,
         description: depositInvoice.description || null,
-        invoiceType: depositInvoice.invoice_type || "deposit",
-        amount: depositInvoice.subtotal,
+        invoiceType: depositInvoice.invoice_type || "standard",
+        amount: depositPay,
         method: "manual",
         origin: req.headers.get("origin") || `https://${req.headers.get("host") || "relicbuilt.com"}`,
         projectId: customWorkId,
       });
-    }
-
-    // Also link the balance invoice to the new project
-    const { data: balanceInvoice } = await supabase
-      .from("invoices")
-      .select("id")
-      .eq("client_name", estimate.client_name || "")
-      .eq("entity", estimate.entity || "wallflower_relic") // never match the other business's invoice
-      .eq("invoice_type", "final")
-      .like("description", `%${estimate.project_name || estimate.estimate_number}%`)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (balanceInvoice) {
-      await supabase.from("invoices").update({ custom_work_id: customWorkId }).eq("id", balanceInvoice.id);
     }
 
     // ── Update the estimate ──────────────────────────────────────────

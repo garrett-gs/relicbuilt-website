@@ -8,6 +8,7 @@ import { useAuth } from "@/components/axiom/AuthProvider";
 import { useEntity } from "@/components/axiom/EntityProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { Invoice, InvoiceLineItem, Payment, Settings } from "@/types/axiom";
+import { calcTotal, calcPaid, deriveStatus as calcStatus } from "@/lib/invoice-balance";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn, formatPhone } from "@/lib/utils";
@@ -30,30 +31,6 @@ function fmtDate(d?: string) {
   return d
     ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
     : "";
-}
-
-function invoiceSubtotal(inv: Invoice) {
-  if (inv.line_items && inv.line_items.length > 0)
-    return inv.line_items.reduce((s, li) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
-  return (inv.subtotal || 0) + (inv.delivery_fee || 0);
-}
-
-function calcTotal(inv: Invoice) {
-  const sub = invoiceSubtotal(inv);
-  const taxable = sub - (inv.discount || 0);
-  return taxable + taxable * ((inv.tax_rate || 0) / 100);
-}
-
-function calcPaid(inv: Invoice) {
-  return (inv.payments || []).reduce((s, p) => s + p.amount, 0);
-}
-
-function calcStatus(inv: Invoice): "unpaid" | "partial" | "paid" {
-  const paid = calcPaid(inv);
-  const total = calcTotal(inv);
-  if (paid >= total && total > 0) return "paid";
-  if (paid > 0) return "partial";
-  return "unpaid";
 }
 
 const statusColors = { unpaid: "#ef4444", partial: "#f59e0b", paid: "#22c55e" };
@@ -449,8 +426,7 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
 
   async function addPayment(payment: Payment) {
     const payments = [...(inv.payments || []), payment];
-    const newPaid = payments.reduce((s, p) => s + p.amount, 0);
-    const newStatus: Invoice["status"] = newPaid >= total && total > 0 ? "paid" : newPaid > 0 ? "partial" : "unpaid";
+    const newStatus: Invoice["status"] = calcStatus({ ...inv, payments });
     const updated: Invoice = { ...inv, payments, status: newStatus, updated_at: new Date().toISOString() };
     await axiom.from("invoices").update({ payments, status: newStatus, updated_at: updated.updated_at }).eq("id", inv.id);
     await logActivity({ action: "updated", entity: "invoice", entity_id: inv.id, label: `Recorded ${money(payment.amount)} payment on ${inv.invoice_number}`, user_name: userEmail });

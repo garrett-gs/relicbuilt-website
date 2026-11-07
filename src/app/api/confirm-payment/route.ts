@@ -4,6 +4,7 @@ import { resolveEntityProfile } from "@/lib/entity-profile";
 import { logProposalEvent, ipFromHeaders } from "@/lib/audit";
 import { notifyPaymentTeam } from "@/lib/notify-payment-team";
 import { axiomAdmin } from "@/lib/axiom-admin";
+import { deriveStatus, depositCovered } from "@/lib/invoice-balance";
 
 function money(n: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n || 0);
@@ -182,22 +183,21 @@ export async function POST(req: NextRequest) {
     const sessionMethod = (session.metadata?.method as string | undefined)
       || (session.payment_method_types?.[0] === "us_bank_account" ? "ach" : "card");
 
+    const newPayment = {
+      amount: totalPaid,
+      method: sessionMethod === "ach" ? "ACH" : "Card",
+      date: today,
+      note: `Paid online via Stripe${sessionMethod === "ach" ? " (ACH)" : ""}${feeCents ? ` — client also paid $${(feeCents / 100).toFixed(2)} processing fee` : ""}`,
+      ref: sessionId,
+      created_at: new Date().toISOString(),
+    };
+    const newPayments = [...existingPayments, newPayment];
+    // Derive status from payments vs the full total. A deposit payment on a
+    // full-total invoice must read as "partial" (balance remains), not "paid".
+    const newStatus = deriveStatus({ ...invoice, payments: newPayments });
     const { error: updateError } = await supabase
       .from("invoices")
-      .update({
-        status: "paid",
-        payments: [
-          ...existingPayments,
-          {
-            amount: totalPaid,
-            method: sessionMethod === "ach" ? "ACH" : "Card",
-            date: today,
-            note: `Paid online via Stripe${sessionMethod === "ach" ? " (ACH)" : ""}${feeCents ? ` — client also paid $${(feeCents / 100).toFixed(2)} processing fee` : ""}`,
-            ref: sessionId,
-            created_at: new Date().toISOString(),
-          },
-        ],
-      })
+      .update({ status: newStatus, payments: newPayments })
       .eq("id", invoiceId);
 
     if (updateError) {
@@ -211,7 +211,10 @@ export async function POST(req: NextRequest) {
     // estimate to a real custom_work record without Garrett having to
     // click anything in Axiom.
     let depositProjectId: string | null = (invoice.custom_work_id as string | null) ?? null;
-    if (invoice.invoice_type === "deposit" && invoice.estimate_id) {
+    // Deposit-paid → project exists. In the one-invoice model this fires once
+    // the deposit portion of the (full-total) invoice is covered by payments,
+    // regardless of invoice_type.
+    if (invoice.estimate_id && depositCovered({ ...invoice, payments: newPayments })) {
       try {
         const { data: estimate } = await supabase
           .from("estimates")
@@ -269,12 +272,9 @@ export async function POST(req: NextRequest) {
               updated_at: new Date().toISOString(),
             }).eq("id", estimate.id);
 
-            // Link this invoice + the balance invoice to the new project
+            // Link this invoice to the new project (single-invoice model —
+            // no separate balance invoice to link).
             await supabase.from("invoices").update({ custom_work_id: customWorkId }).eq("id", invoiceId);
-            await supabase.from("invoices")
-              .update({ custom_work_id: customWorkId })
-              .eq("estimate_id", estimate.id)
-              .eq("invoice_type", "final");
 
             // Audit trail: deposit was paid via Stripe
             await logProposalEvent({

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe";
 import { axiomAdmin } from "@/lib/axiom-admin";
+import { amountDueNow } from "@/lib/invoice-balance";
 
 // Stripe's merchant fees, mirrored on the customer side:
 //   Card: 2.9% + $0.30 (uncapped)
@@ -47,12 +48,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invoice is already paid" }, { status: 400 });
     }
 
-    // Calculate invoice total
-    const total =
-      invoice.subtotal +
-      invoice.delivery_fee -
-      invoice.discount +
-      (invoice.subtotal * invoice.tax_rate) / 100;
+    // Charge the amount due NOW: the still-unpaid deposit portion while the
+    // deposit isn't covered, otherwise the remaining balance. The invoice
+    // total is always the full project amount; the deposit is a partial
+    // payment against it and the balance stays on the same invoice.
+    const total = amountDueNow(invoice);
+    if (total <= 0) {
+      return NextResponse.json({ error: "Nothing is currently due on this invoice." }, { status: 400 });
+    }
 
     const baseCents = Math.round(total * 100);
     const feeCents = computeFeeCents(baseCents, method);

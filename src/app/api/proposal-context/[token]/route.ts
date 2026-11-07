@@ -74,7 +74,7 @@ export async function GET(
         .from("invoices")
         .select("id, invoice_number, status, invoice_type, created_at")
         .eq("estimate_id", estimate.id)
-        .in("invoice_type", ["deposit", "full"])
+        .in("invoice_type", ["standard", "deposit", "full"])
         .order("created_at", { ascending: true })
         .limit(1)
         .maybeSingle();

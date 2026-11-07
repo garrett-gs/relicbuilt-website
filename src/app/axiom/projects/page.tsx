@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
+import { amountDueNow, deriveStatus } from "@/lib/invoice-balance";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAxiomRole } from "@/components/axiom/useAxiomRole";
@@ -1303,7 +1304,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
 
   // Load deposit/final invoices for this project
   useEffect(() => {
-    axiom.from("invoices").select("*").eq("custom_work_id", project.id).in("invoice_type", ["deposit", "final"]).order("created_at").then(({ data }) => {
+    axiom.from("invoices").select("*").eq("custom_work_id", project.id).in("invoice_type", ["deposit", "final", "standard", "full"]).order("created_at").then(({ data }) => {
       if (data) setProjectInvoices(data as Invoice[]);
     });
   }, [project.id]);
@@ -1615,7 +1616,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   function removeProposalImage(i: number) { setProposalImages(proposalImages.filter((_, idx) => idx !== i)); markDirty(); }
 
   async function loadProjectInvoices() {
-    const { data } = await axiom.from("invoices").select("*").eq("custom_work_id", project.id).in("invoice_type", ["deposit", "final"]).order("created_at");
+    const { data } = await axiom.from("invoices").select("*").eq("custom_work_id", project.id).in("invoice_type", ["deposit", "final", "standard", "full"]).order("created_at");
     if (data) setProjectInvoices(data as Invoice[]);
   }
 
@@ -1623,12 +1624,16 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
     setCreatingInvoices(true);
     const y = new Date().getFullYear();
     const savedCost = project.proposal_cost_section;
-    const depositAmt = savedCost?.deposit_amount || 0;
     const totalAmt = project.quoted_amount || 0;
-    const balanceAmt = depositAmt > 0 ? totalAmt - depositAmt : 0;
+    // Deposit = amount due up front; default is the full total (100%). A
+    // smaller saved deposit leaves a balance on the same invoice.
+    const rawDeposit = savedCost?.deposit_amount || 0;
+    const depositAmt = rawDeposit > 0 ? Math.min(rawDeposit, totalAmt) : totalAmt;
+    const balanceAmt = Math.round((totalAmt - depositAmt) * 100) / 100;
     const now = new Date().toISOString().split("T")[0];
     const n1 = Math.floor(1000 + Math.random() * 9000);
-    const n2 = Math.floor(1000 + Math.random() * 9000);
+    // One invoice for the full total; the deposit is collected as a payment
+    // against it and the balance stays on the same invoice.
     await axiom.from("invoices").insert([
       {
         invoice_number: `INV-${y}-${n1}`,
@@ -1637,24 +1642,12 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         client_name: clientName,
         client_email: clientEmail,
         client_phone: clientPhone,
-        description: `Deposit — ${project.project_name}`,
-        subtotal: depositAmt > 0 ? depositAmt : totalAmt,
+        description: project.project_name,
+        subtotal: totalAmt,
+        ...(balanceAmt > 0 ? { deposit_amount: depositAmt } : {}),
         issued_date: now,
         tax_rate: 0, delivery_fee: 0, discount: 0, reminders_sent: 0, payments: [], status: "unpaid",
-        invoice_type: "deposit",
-      },
-      {
-        invoice_number: `INV-${y}-${n2}`,
-        custom_work_id: project.id,
-        entity: project.entity || "wallflower_relic",
-        client_name: clientName,
-        client_email: clientEmail,
-        client_phone: clientPhone,
-        description: `Balance — ${project.project_name}`,
-        subtotal: depositAmt > 0 ? balanceAmt : 0,
-        issued_date: now,
-        tax_rate: 0, delivery_fee: 0, discount: 0, reminders_sent: 0, payments: [], status: "unpaid",
-        invoice_type: "final",
+        invoice_type: "standard",
       },
     ]);
     await loadProjectInvoices();
@@ -1738,13 +1731,19 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   // (online Stripe payment flips it to paid on its own). Wallflower reflects
   // the Nexus payment flag (paid in Nexus) and only shows once paid.
   const isRelic = project.entity === "relic";
-  const payInvoice = isRelic ? (projectInvoices.find((i) => i.invoice_type === "deposit") || projectInvoices[0]) : undefined;
+  const payInvoice = isRelic ? (projectInvoices.find((i) => ["standard", "deposit", "full"].includes(i.invoice_type || "")) || projectInvoices[0]) : undefined;
   const nexusPaid = !isRelic && (!!project.nexus_paid_milestone || !!project.nexus_paid_at);
   const showPay = isRelic ? !!payInvoice : nexusPaid;
-  const payIsDeposit = isRelic ? payInvoice?.invoice_type === "deposit" : (project.nexus_paid_milestone || "").toLowerCase() === "deposit";
-  const payIsPaid = isRelic ? payInvoice?.status === "paid" : nexusPaid;
-  const payAmt = isRelic ? (payInvoice?.subtotal || 0) : 0;
-  const payLabel = payIsDeposit ? (payIsPaid ? "Deposit paid" : "Deposit due") : (payIsPaid ? "Paid" : "Unpaid");
+  // RELIC: status derived from payments vs the full total; a deposit payment
+  // reads as "partial" with a balance still on the same invoice.
+  const payStatus = payInvoice ? deriveStatus(payInvoice) : undefined;
+  const payHasBalance = isRelic && payStatus === "partial";
+  const payIsPaid = isRelic ? payStatus === "paid" : nexusPaid;
+  const payAmt = isRelic && payInvoice ? amountDueNow(payInvoice) : 0;
+  const nexusIsDeposit = !isRelic && (project.nexus_paid_milestone || "").toLowerCase() === "deposit";
+  const payLabel = isRelic
+    ? (payIsPaid ? "Paid in full" : payHasBalance ? "Balance due" : "Amount due")
+    : (nexusIsDeposit ? (nexusPaid ? "Deposit paid" : "Deposit due") : (nexusPaid ? "Paid" : "Unpaid"));
   const paySub = isRelic ? payInvoice?.invoice_number : "via Nexus";
 
   return (
@@ -2360,7 +2359,7 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
               <div key={inv.id} className="flex items-center justify-between border border-border px-3 py-2.5 text-sm">
                 <div>
                   <span className="font-medium text-foreground">
-                    {inv.invoice_type === "deposit" ? "Deposit Invoice" : "Final Invoice"}
+                    {inv.invoice_type === "deposit" ? "Deposit Invoice" : inv.invoice_type === "final" ? "Balance Invoice" : "Invoice"}
                   </span>
                   <span className="text-muted ml-2 text-xs">{inv.invoice_number}</span>
                 </div>

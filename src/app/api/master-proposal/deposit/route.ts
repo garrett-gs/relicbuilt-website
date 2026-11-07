@@ -48,27 +48,35 @@ export async function POST(req: NextRequest) {
 
     const { data: settings } = await supabase.from("settings").select("deposit_percent").limit(1).single();
     const depPct = Number(relic.find((e) => e.deposit_percent != null)?.deposit_percent ?? settings?.deposit_percent ?? 100);
+    const isFull = depPct >= 100;
     const builds = relic.map((e) => ({ e, total: calcTotal(e) }));
-    const acceptedTotal = builds.reduce((s, b) => s + b.total, 0);
+    const acceptedTotal = Math.round(builds.reduce((s, b) => s + b.total, 0) * 100) / 100;
+    // Amount due up front (combined deposit); the invoice itself is the full
+    // combined total and the balance stays on it.
     const depositAmount = Math.round(acceptedTotal * (depPct / 100) * 100) / 100;
+    const balanceAmount = Math.round((acceptedTotal - depositAmount) * 100) / 100;
     const projectIds = relic.map((e) => e.custom_work_id!) as string[];
     const anchorProject = projectIds[0];
     const anchorEstimateId = relic[0].id;
+    // One line per build at its FULL total; the deposit/balance split is carried
+    // by deposit_amount, not by shrinking the line items.
     const lineItems = builds.map((b) => ({
       item_number: "",
-      description: `Deposit — ${depPct}% of ${b.e.project_name || b.e.estimate_number} (${money(b.total)})`,
+      description: `${b.e.project_name || b.e.estimate_number} — project total (${money(b.total)})`,
       quantity: 1,
-      unit_price: Math.round(b.total * (depPct / 100) * 100) / 100,
+      unit_price: b.total,
       unit: "ea",
     }));
-    const notes = `Combined deposit — ${depPct}% across ${builds.length} ${builds.length === 1 ? "build" : "builds"} under ${master.name}. Balance ${100 - depPct}% due on completion.`;
+    const notes = isFull
+      ? `Combined total across ${builds.length} ${builds.length === 1 ? "build" : "builds"} under ${master.name}. Payment due in full.`
+      : `Combined — ${builds.length} ${builds.length === 1 ? "build" : "builds"} under ${master.name}. ${depPct}% deposit (${money(depositAmount)}) due now; balance ${money(balanceAmount)} due on completion.`;
 
-    // Reuse an existing unpaid deposit under this master's accepted projects.
+    // Reuse an existing unpaid invoice under this master's accepted projects.
     const { data: existing } = await supabase
       .from("invoices")
       .select("id, status")
       .in("custom_work_id", projectIds)
-      .eq("invoice_type", "deposit")
+      .in("invoice_type", ["standard", "deposit", "full"])
       .neq("status", "paid")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -76,9 +84,10 @@ export async function POST(req: NextRequest) {
 
     if (existing?.id) {
       await supabase.from("invoices").update({
-        subtotal: depositAmount,
+        subtotal: acceptedTotal,
+        ...(isFull ? {} : { deposit_amount: depositAmount }),
         line_items: lineItems,
-        description: `Deposit (${depPct}%) — ${master.name}`,
+        description: master.name,
         notes,
         updated_at: new Date().toISOString(),
       }).eq("id", existing.id);
@@ -89,14 +98,15 @@ export async function POST(req: NextRequest) {
     const { data: inv, error } = await supabase.from("invoices").insert({
       entity: "relic",
       invoice_number: invNum,
-      invoice_type: "deposit",
+      invoice_type: "standard",
       custom_work_id: anchorProject,
       estimate_id: anchorEstimateId,
       client_name: relic.find((e) => e.client_name)?.client_name || "",
       client_email: relic.find((e) => e.client_email)?.client_email || null,
       client_phone: relic.find((e) => e.client_phone)?.client_phone || null,
-      description: `Deposit (${depPct}%) — ${master.name}`,
-      subtotal: depositAmount,
+      description: master.name,
+      subtotal: acceptedTotal,
+      ...(isFull ? {} : { deposit_amount: depositAmount }),
       delivery_fee: 0,
       discount: 0,
       tax_rate: 0,
