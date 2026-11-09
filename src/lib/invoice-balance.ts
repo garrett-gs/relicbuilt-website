@@ -23,6 +23,12 @@ export interface InvoiceLike {
   // total is due now (the 100% default). The invoice total is always the full
   // project amount; the deposit is just how much of it is collected first.
   deposit_amount?: number | null;
+  // Late-fee accrual. When late_fee_apr is set (e.g. 0.18 = 18%/yr), a simple
+  // daily finance charge accrues on the outstanding balance once the invoice is
+  // past due, from late_fee_start (falls back to due_date). null/0 ⇒ no fee.
+  late_fee_apr?: number | null;
+  late_fee_start?: string | null; // ISO date (YYYY-MM-DD)
+  due_date?: string | null;
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -66,6 +72,38 @@ export function amountDueNow(inv: InvoiceLike): number {
     return round2(Math.min(dep, calcTotal(inv)) - paid);
   }
   return balance;
+}
+
+// ── Late fees ────────────────────────────────────────────────────────────
+// A simple (non-compounding) daily finance charge on the outstanding balance,
+// accruing once the invoice is past due. "18% annually" ⇒ late_fee_apr = 0.18,
+// and the daily rate is apr/365 applied to the balance for each day overdue.
+const DAY_MS = 86_400_000;
+const toDay = (iso: string) => new Date(iso.slice(0, 10) + "T00:00:00").getTime();
+
+// Whole days the invoice is past due as of `asOf` (0 before the start date).
+export function daysOverdue(inv: InvoiceLike, asOf: Date = new Date()): number {
+  const start = inv.late_fee_start || inv.due_date;
+  if (!start) return 0;
+  const days = Math.floor((toDay(asOf.toISOString()) - toDay(start)) / DAY_MS);
+  return days > 0 ? days : 0;
+}
+
+// Accrued late fee as of `asOf`. Zero unless a fee rate is set, there's an
+// outstanding balance, and the invoice is past due.
+export function lateFee(inv: InvoiceLike, asOf: Date = new Date()): number {
+  const apr = Number(inv.late_fee_apr) || 0;
+  if (apr <= 0) return 0;
+  const bal = calcBalance(inv);
+  if (bal <= 0.005) return 0;
+  const days = daysOverdue(inv, asOf);
+  if (days <= 0) return 0;
+  return round2(bal * (apr / 365) * days);
+}
+
+// What the client owes right now including any accrued late fee.
+export function amountDueWithLateFee(inv: InvoiceLike, asOf: Date = new Date()): number {
+  return round2(amountDueNow(inv) + lateFee(inv, asOf));
 }
 
 // True once the deposit portion has been collected (so a project may be

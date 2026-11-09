@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveEntityProfile } from "@/lib/entity-profile";
 import { generateInvoiceHtml } from "@/lib/invoice-html";
-import { calcBalance, deriveStatus } from "@/lib/invoice-balance";
+import { calcBalance, deriveStatus, lateFee, daysOverdue } from "@/lib/invoice-balance";
 import type { Invoice, BusinessEntity } from "@/types/axiom";
 import { axiomAdmin } from "@/lib/axiom-admin";
 
@@ -76,10 +76,17 @@ export async function GET(req: NextRequest) {
     if (balance <= 0.005) continue;
     if (!inv.client_email) continue;
 
-    // Cadence: first send on/after the due date; then every `interval` days
+    // Late fee (if any) and the total owed today. Invoices carrying a late fee
+    // are dunned DAILY (the client sees the overdue amount climb each day);
+    // everyone else follows the normal interval.
+    const fee = lateFee(inv);
+    const owed = Math.round((balance + fee) * 100) / 100;
+    const invInterval = (Number(inv.late_fee_apr) || 0) > 0 ? 1 : interval;
+
+    // Cadence: first send on/after the due date; then every `invInterval` days
     // measured from the last reminder.
     const last = inv.last_reminder_sent;
-    const dueToSend = !last ? true : daysBetween(last, today) >= interval;
+    const dueToSend = !last ? true : daysBetween(last, today) >= invInterval;
     if (!dueToSend) continue;
 
     const profile = resolveEntityProfile(inv.entity as BusinessEntity | undefined, settings);
@@ -107,7 +114,7 @@ export async function GET(req: NextRequest) {
     await supabase.from("invoices").update({
       reminders_sent: (inv.reminders_sent || 0) + 1,
       last_reminder_sent: today,
-      next_reminder_date: addDays(today, interval),
+      next_reminder_date: addDays(today, invInterval),
       updated_at: new Date().toISOString(),
     }).eq("id", inv.id);
 
@@ -121,14 +128,16 @@ export async function GET(req: NextRequest) {
         body: JSON.stringify({
           from: `${profile.fromName} <${profile.fromEmail}>`,
           to: [notifyTo],
-          subject: `Balance invoice sent — ${inv.invoice_number} (${money(balance)})`,
+          subject: `Balance invoice sent — ${inv.invoice_number} (${money(owed)})`,
           html: `<p style="font-family:Arial,sans-serif;font-size:14px;color:#333;">A balance invoice was just emailed to the client.</p>
 <ul style="font-family:Arial,sans-serif;font-size:14px;color:#333;">
   <li><strong>Invoice:</strong> ${inv.invoice_number}</li>
   <li><strong>Client:</strong> ${inv.client_name || ""} &lt;${inv.client_email}&gt;</li>
-  <li><strong>Balance due:</strong> ${money(balance)}</li>
+  <li><strong>Balance:</strong> ${money(balance)}</li>
+  ${fee > 0 ? `<li><strong>Late fee (${+((Number(inv.late_fee_apr) || 0) * 100).toFixed(2)}% APR · ${daysOverdue(inv)} days overdue):</strong> ${money(fee)}</li>
+  <li><strong>Total owed today:</strong> ${money(owed)}</li>` : ""}
   <li><strong>Due date:</strong> ${dueDate}</li>
-  <li><strong>Reminder #:</strong> ${(inv.reminders_sent || 0) + 1}</li>
+  <li><strong>Reminder #:</strong> ${(inv.reminders_sent || 0) + 1}${fee > 0 ? " (daily)" : ""}</li>
 </ul>`,
         }),
       }).catch(() => {});
@@ -137,11 +146,11 @@ export async function GET(req: NextRequest) {
       action: "sent",
       entity: "invoice",
       entity_id: inv.id,
-      label: `Balance invoice ${inv.invoice_number} sent to ${inv.client_email} (${money(balance)} due)`,
+      label: `Balance invoice ${inv.invoice_number} sent to ${inv.client_email} (${money(owed)} due${fee > 0 ? `, incl. ${money(fee)} late fee` : ""})`,
       user_name: "system (due-date reminder)",
     }).then(() => {}, () => {});
 
-    sentOut.push({ invoice: inv.invoice_number, to: inv.client_email, balance });
+    sentOut.push({ invoice: inv.invoice_number, to: inv.client_email, balance: owed });
   }
 
   return NextResponse.json({ ok: true, interval_days: interval, sent: sentOut.length, sentOut, errors });

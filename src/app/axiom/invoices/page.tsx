@@ -8,7 +8,7 @@ import { useAuth } from "@/components/axiom/AuthProvider";
 import { useEntity } from "@/components/axiom/EntityProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { Invoice, InvoiceLineItem, Payment, Settings } from "@/types/axiom";
-import { calcTotal, calcPaid, deriveStatus as calcStatus } from "@/lib/invoice-balance";
+import { calcTotal, calcPaid, deriveStatus as calcStatus, lateFee, daysOverdue, amountDueWithLateFee } from "@/lib/invoice-balance";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import { cn, formatPhone } from "@/lib/utils";
@@ -538,6 +538,10 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
         </div>
       </div>
 
+      {/* Overdue / late-fee calculator */}
+      <OverdueCalculator inv={inv} balance={balance} onChange={mark} />
+
+
       {/* Payment history */}
       {(inv.payments || []).length > 0 && (
         <div>
@@ -883,6 +887,73 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
         </div>
 
       </div>
+    </div>
+  );
+}
+
+// Overdue / late-fee calculator shown under the invoice totals. Enables a
+// simple daily finance charge (default 18% APR) on the outstanding balance once
+// the invoice is past due. When on, the reminder cron also emails the client
+// the updated overdue amount every day until it's paid.
+function OverdueCalculator({ inv, balance, onChange }: { inv: Invoice; balance: number; onChange: (u: Partial<Invoice>) => void }) {
+  const enabled = (Number(inv.late_fee_apr) || 0) > 0;
+  const aprPct = enabled ? +(((inv.late_fee_apr as number) || 0) * 100).toFixed(2) : 18;
+  const [draftPct, setDraftPct] = useState(String(aprPct));
+  useEffect(() => { setDraftPct(String(aprPct)); }, [aprPct]);
+
+  // Live figures using the current (possibly just-edited) rate.
+  const preview: Invoice = { ...inv, late_fee_apr: enabled ? (Number(draftPct) || 0) / 100 : 0, late_fee_start: inv.late_fee_start || inv.due_date };
+  const days = daysOverdue(preview);
+  const fee = lateFee(preview);
+  const dueWith = amountDueWithLateFee(preview);
+  const hasDue = !!inv.due_date;
+
+  function toggle(on: boolean) {
+    if (on) onChange({ late_fee_apr: (Number(draftPct) || 18) / 100, late_fee_start: inv.late_fee_start || inv.due_date });
+    else onChange({ late_fee_apr: null });
+  }
+  function commitPct() {
+    const pct = Number(draftPct);
+    if (!Number.isFinite(pct) || pct < 0) { setDraftPct(String(aprPct)); return; }
+    onChange({ late_fee_apr: pct / 100, late_fee_start: inv.late_fee_start || inv.due_date });
+  }
+
+  return (
+    <div className="border border-border bg-card/40 p-4 space-y-3">
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input type="checkbox" checked={enabled} onChange={(e) => toggle(e.target.checked)} className="accent-accent w-4 h-4" />
+        <span className="text-xs font-bold uppercase tracking-wider text-muted">Charge a late fee on overdue balance</span>
+      </label>
+      {enabled && (
+        <>
+          <div className="flex items-center gap-3 text-sm">
+            <span className="text-muted">Annual rate (APR)</span>
+            <div className="relative">
+              <input
+                type="number" value={draftPct}
+                onChange={(e) => setDraftPct(e.target.value)}
+                onBlur={commitPct}
+                className="w-24 bg-card border border-border pl-3 pr-6 py-1.5 text-sm text-right font-mono text-foreground focus:outline-none focus:border-accent"
+              />
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-sm text-muted pointer-events-none">%</span>
+            </div>
+            <span className="text-xs text-muted">accrues daily · client dunned daily until paid</span>
+          </div>
+          {!hasDue ? (
+            <p className="text-xs" style={{ color: "#f59e0b" }}>Set a Due Date above — the fee accrues from the due date.</p>
+          ) : balance <= 0 ? (
+            <p className="text-xs text-muted">No outstanding balance — nothing is accruing.</p>
+          ) : days <= 0 ? (
+            <p className="text-xs text-muted">Not past due yet — the fee begins accruing after {fmtDate(inv.due_date)}.</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2 text-sm pt-1">
+              <div><p className="text-xs text-muted">Days overdue</p><p className="font-mono font-bold">{days}</p></div>
+              <div><p className="text-xs text-muted">Late fee accrued</p><p className="font-mono font-bold" style={{ color: "#ef4444" }}>{money(fee)}</p></div>
+              <div><p className="text-xs text-muted">Total due today</p><p className="font-mono font-bold" style={{ color: "#ef4444" }}>{money(dueWith)}</p></div>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

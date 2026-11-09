@@ -31,7 +31,19 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
   const total = taxable + taxAmt;
   const paid = (inv.payments || []).reduce((s, p) => s + p.amount, 0);
   const balance = total - paid;
-  const amountDue = balance > 0 ? balance : total;
+  // Late fee: simple daily finance charge on the outstanding balance once past
+  // due (18%/yr ⇒ late_fee_apr 0.18). Accrues from late_fee_start or due_date.
+  const lateApr = Number(inv.late_fee_apr) || 0;
+  const lateStart = inv.late_fee_start || inv.due_date || "";
+  const lateDays =
+    lateApr > 0 && lateStart
+      ? Math.max(0, Math.floor((Date.now() - new Date(lateStart + "T00:00:00").getTime()) / 86400000))
+      : 0;
+  const lateFeeAmt =
+    lateApr > 0 && balance > 0 && lateDays > 0
+      ? Math.round(balance * (lateApr / 365) * lateDays * 100) / 100
+      : 0;
+  const amountDue = (balance > 0 ? balance : total) + lateFeeAmt;
 
   const bizName = profile?.name || "Wallflower RELIC";
   // Invoice logo from branding assignment; falls back to the entity logo.
@@ -133,6 +145,7 @@ export function generateInvoiceHtml(inv: Invoice, terms = "", forEmail = false, 
         <td style="padding:8px 0 4px;text-align:right;font-family:monospace;font-weight:bold;">${money(total)}</td>
       </tr>
       ${paid > 0 ? `<tr><td style="padding:4px 0;color:#22c55e;">Paid:</td><td style="padding:4px 0;text-align:right;font-family:monospace;color:#22c55e;">${money(paid)}</td></tr>` : ""}
+      ${lateFeeAmt > 0 ? `<tr><td style="padding:4px 0;color:#b91c1c;">Late fee (${+(lateApr * 100).toFixed(2)}% APR · ${lateDays} day${lateDays === 1 ? "" : "s"} overdue):</td><td style="padding:4px 0;text-align:right;font-family:monospace;color:#b91c1c;">${money(lateFeeAmt)}</td></tr>` : ""}
       <tr>
         <td colspan="2" style="padding-top:8px;">
           <div style="background:#f0f0f0;padding:10px 14px;display:flex;justify-content:space-between;">

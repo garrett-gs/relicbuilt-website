@@ -457,6 +457,11 @@ export interface Invoice {
   reminders_sent: number;
   last_reminder_sent?: string;
   next_reminder_date?: string;
+  // Late-fee accrual. late_fee_apr = 0.18 means 18%/yr, accruing daily (simple
+  // interest) on the outstanding balance once past due, from late_fee_start
+  // (falls back to due_date). When set, the reminder cron also duns daily.
+  late_fee_apr?: number | null;
+  late_fee_start?: string | null;
   // Amount due up front (the deposit). The invoice total is always the full
   // project amount; the deposit is recorded as a payment against it and the
   // balance stays on the same invoice. null/absent ⇒ full total due now (100%).
