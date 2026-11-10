@@ -29,13 +29,35 @@ export async function createEstimateFromQuoteRequest(
   // Stable proposal token so the Nexus build-portal URL is fixed from creation.
   const proposalToken = `prop_${(crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/-/g, "")}`;
 
+  // Who it's for, carried over from the Nexus quote. Link an existing Axiom
+  // customer by email (then by exact name) so the estimate ties to their record;
+  // otherwise just carry the name/email/phone so the proposal still addresses
+  // them. Never auto-create a customer here (avoids duplicates).
+  const clientName = wo.client_name || "";
+  const clientEmail = wo.client_email || null;
+  const clientPhone = wo.client_phone || null;
+  let customerId: string | null = null;
+  if (clientEmail) {
+    const { data: byEmail } = await axiom
+      .from("customers").select("id").eq("entity", ctx.entity).ilike("email", clientEmail).limit(1).maybeSingle();
+    customerId = byEmail?.id ?? null;
+  }
+  if (!customerId && clientName) {
+    const { data: byName } = await axiom
+      .from("customers").select("id").eq("entity", ctx.entity).ilike("name", clientName).limit(1).maybeSingle();
+    customerId = byName?.id ?? null;
+  }
+
   const { data } = await axiom
     .from("estimates")
     .insert({
       entity: ctx.entity,
       estimate_number,
       project_name: `Wallflower — ${wo.item_name}`,
-      client_name: wo.assigned_to || "",
+      client_name: clientName,
+      client_email: clientEmail,
+      client_phone: clientPhone,
+      customer_id: customerId,
       status: "draft",
       line_items: [],
       labor_items: [],
@@ -44,6 +66,9 @@ export async function createEstimateFromQuoteRequest(
         `Work Order: ${wo.item_name}`,
         `Type: ${wo.work_type}`,
         `Scope: ${wo.scope}`,
+        wo.occasion ? `Occasion: ${wo.occasion}` : "",
+        wo.event_date ? `Event date: ${wo.event_date}` : "",
+        wo.venue ? `Venue: ${wo.venue}` : "",
         wo.description ? `Description: ${wo.description}` : "",
         wo.quantity > 1 ? `Quantity: ${wo.quantity}` : "",
       ].filter(Boolean).join("\n"),

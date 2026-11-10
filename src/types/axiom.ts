@@ -613,6 +613,15 @@ export interface WallflowerWorkOrder {
   // "work_order" = work on existing inventory (repair, paint, alteration),
   // executed on the board. Defaults to "work_order" at the DB level.
   request_type: "quote_request" | "work_order";
+  // Who it's for, from the Nexus quote/order. Carried into the estimate (and on
+  // through proposal → project → invoice) when the request is priced.
+  client_name?: string | null;
+  client_email?: string | null;
+  client_phone?: string | null;
+  client_company?: string | null;
+  event_date?: string | null;
+  venue?: string | null;
+  occasion?: string | null;
   work_type: string;
   scope: string;
   assigned_to?: string;

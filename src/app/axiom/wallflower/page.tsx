@@ -431,6 +431,11 @@ export default function WallflowerPage() {
                           <div className="min-w-0 flex-1">
                             <p className="font-medium text-sm truncate">{wo.item_name}</p>
                             <p className="text-muted text-xs truncate">{wo.work_type} · {wo.scope}</p>
+                            {wo.client_name && (
+                              <p className="text-xs truncate text-foreground/70" title={[wo.client_name, wo.occasion, wo.event_date].filter(Boolean).join(" · ")}>
+                                For: {wo.client_name}{wo.occasion ? ` · ${wo.occasion}` : ""}
+                              </p>
+                            )}
                             {wo.billing_type === "maintenance" && (
                               <span
                                 className="inline-block mt-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5"

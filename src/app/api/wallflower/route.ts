@@ -52,6 +52,13 @@ export async function POST(req: NextRequest) {
       billing_type,
       pricing_requested,
       request_type,
+      client_name,
+      client_email,
+      client_phone,
+      client_company,
+      event_date,
+      venue,
+      occasion,
       mode,
     } = body;
 
@@ -87,6 +94,13 @@ export async function POST(req: NextRequest) {
       item_name: item_name.trim(),
       item_source: item_source || "custom",
       request_type: requestType,
+      client_name: client_name || null,
+      client_email: client_email || null,
+      client_phone: client_phone || null,
+      client_company: client_company || null,
+      event_date: event_date || null,
+      venue: venue || null,
+      occasion: occasion || null,
       work_type: work_type || "Repair",
       scope: scope || "External",
       assigned_to: assigned_to || null,
@@ -163,6 +177,7 @@ export async function POST(req: NextRequest) {
           isQuote
             ? "Custom price request — build an estimate and send the quote."
             : "Work order on existing inventory (repair / paint / alteration).",
+          client_name ? `For: ${client_name}${client_company ? ` (${client_company})` : ""}${occasion ? ` — ${occasion}` : ""}${event_date ? `, ${event_date}` : ""}` : "",
           isMaintenance ? "Maintenance / cost-tracking only — do not produce a customer-facing price." : "",
           `Type: ${work_type || "Repair"} · Scope: ${scope || "External"}${quantity && quantity > 1 ? ` · Qty: ${quantity}` : ""}`,
           description || "",
