@@ -608,6 +608,11 @@ export interface WallflowerWorkOrder {
   id: string;
   item_name: string;
   item_source: "inventory" | "custom";
+  // Intake category. "quote_request" = a custom price request: build an estimate,
+  // send the price, and if accepted it becomes a custom build (project).
+  // "work_order" = work on existing inventory (repair, paint, alteration),
+  // executed on the board. Defaults to "work_order" at the DB level.
+  request_type: "quote_request" | "work_order";
   work_type: string;
   scope: string;
   assigned_to?: string;

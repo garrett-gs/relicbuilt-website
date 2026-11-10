@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
       nexus_ref,
       billing_type,
       pricing_requested,
+      request_type,
       mode,
     } = body;
 
@@ -60,6 +61,16 @@ export async function POST(req: NextRequest) {
 
     const isMaintenance = billing_type === "maintenance" || pricing_requested === false;
     const billingType: "billable" | "maintenance" = isMaintenance ? "maintenance" : "billable";
+
+    // Intake category. Prefer the explicit request_type from Nexus; otherwise
+    // derive: a Nexus quote (or an explicit pricing request) is a price request
+    // to be estimated; everything else is work on existing inventory.
+    const requestType: "quote_request" | "work_order" =
+      request_type === "quote_request" || request_type === "work_order"
+        ? request_type
+        : nexus_ref?.type === "quote" || pricing_requested === true
+          ? "quote_request"
+          : "work_order";
 
     // Nexus sends status:"new"; the board's New column keys off "pending".
     const statusVal = !status || status === "new" ? "pending" : status;
@@ -75,6 +86,7 @@ export async function POST(req: NextRequest) {
       wallflower_order_number: wallflower_order_number || null,
       item_name: item_name.trim(),
       item_source: item_source || "custom",
+      request_type: requestType,
       work_type: work_type || "Repair",
       scope: scope || "External",
       assigned_to: assigned_to || null,
@@ -142,11 +154,15 @@ export async function POST(req: NextRequest) {
     // Alert the owner + add to daily reminders on first intake only — a re-push
     // update shouldn't re-ping. Best-effort; the helper swallows its own errors.
     if (!isUpdate) {
+      const isQuote = requestType === "quote_request";
       await notifyNewIntake({
         kind: "work_order",
-        title: `${item_name.trim()}${isMaintenance ? " — MAINTENANCE (no quote)" : ""}`,
+        title: `${isQuote ? "Quote request" : "Work order"}: ${item_name.trim()}${isMaintenance ? " — MAINTENANCE (no quote)" : ""}`,
         clientName: submitted_by || "Wallflower",
         summary: [
+          isQuote
+            ? "Custom price request — build an estimate and send the quote."
+            : "Work order on existing inventory (repair / paint / alteration).",
           isMaintenance ? "Maintenance / cost-tracking only — do not produce a customer-facing price." : "",
           `Type: ${work_type || "Repair"} · Scope: ${scope || "External"}${quantity && quantity > 1 ? ` · Qty: ${quantity}` : ""}`,
           description || "",

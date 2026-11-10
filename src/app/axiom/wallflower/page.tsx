@@ -73,6 +73,19 @@ const COLUMNS: { key: WallflowerWorkOrder["status"]; label: string }[] = [
 ];
 const COLUMN_KEYS = new Set<string>(COLUMNS.map((c) => c.key));
 
+// Quote requests run the full estimate pipeline (above). Work orders skip
+// estimating/accepting and go straight to execution on existing inventory.
+const QUOTE_COLUMNS = COLUMNS;
+const WORK_COLUMNS: { key: WallflowerWorkOrder["status"]; label: string }[] = [
+  { key: "pending", label: STATUS_LABELS.pending },
+  { key: "in_progress", label: STATUS_LABELS.in_progress },
+  { key: "complete", label: STATUS_LABELS.complete },
+  { key: "cancelled", label: STATUS_LABELS.cancelled },
+];
+// Normalize a possibly-missing request_type (older rows) to a tab.
+const typeOf = (o: WallflowerWorkOrder): "quote_request" | "work_order" =>
+  o.request_type === "quote_request" ? "quote_request" : "work_order";
+
 const inp = "w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent";
 const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
 
@@ -108,6 +121,7 @@ export default function WallflowerPage() {
   const [selected, setSelected] = useState<WallflowerWorkOrder | null>(null);
   const [drawerEstimateId, setDrawerEstimateId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<"quote_request" | "work_order">("quote_request");
   const [showCreate, setShowCreate] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
 
@@ -127,7 +141,12 @@ export default function WallflowerPage() {
     });
   }, []);
 
+  // Tab counts (ignore the search box so the badges reflect the whole queue).
+  const quoteCount = orders.filter((o) => typeOf(o) === "quote_request").length;
+  const workCount = orders.filter((o) => typeOf(o) === "work_order").length;
+
   const filtered = orders.filter((o) => {
+    if (typeOf(o) !== tab) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -139,20 +158,26 @@ export default function WallflowerPage() {
     return true;
   });
 
-  // Bucket orders into their status column. Any unexpected status value lands
-  // in a trailing "Other" column so an order can never vanish from the board.
+  // Columns for the active tab: quote requests use the full pipeline, work
+  // orders a shorter execute-only set.
+  const tabColumns = tab === "quote_request" ? QUOTE_COLUMNS : WORK_COLUMNS;
+  const tabColumnKeys = new Set<string>(tabColumns.map((c) => c.key));
+
+  // Bucket orders into their status column. Any status with no column in this
+  // tab lands in a trailing "Other" column so an order can never vanish.
   const grouped = filtered.reduce<Record<string, WallflowerWorkOrder[]>>((acc, o) => {
-    const key = COLUMN_KEYS.has(o.status) ? o.status : "__other";
+    const key = tabColumnKeys.has(o.status) ? o.status : "__other";
     (acc[key] ||= []).push(o);
     return acc;
   }, {});
-  const boardColumns: { key: string; label: string }[] = [...COLUMNS];
+  const boardColumns: { key: string; label: string }[] = [...tabColumns];
   if (grouped["__other"]?.length) boardColumns.push({ key: "__other", label: "Other" });
 
   async function createOrder(form: Partial<WallflowerWorkOrder>) {
     const { data } = await axiom.from("wallflower_work_orders").insert({
       item_name: form.item_name || "Untitled",
       item_source: form.item_source || "custom",
+      request_type: form.request_type || "work_order",
       work_type: form.work_type || "Repair",
       scope: form.scope || "Internal",
       assigned_to: form.assigned_to || null,
@@ -172,6 +197,7 @@ export default function WallflowerPage() {
         user_name: userEmail,
       });
       load();
+      setTab(typeOf(data));
       setSelected(data);
       setShowCreate(false);
     }
@@ -351,9 +377,11 @@ export default function WallflowerPage() {
         <div>
           <h1 className="text-2xl font-heading font-bold flex items-center gap-2">
             <ClipboardList size={22} className="text-accent" />
-            Work Orders
+            Nexus Intake
           </h1>
-          <p className="text-muted text-sm mt-0.5">{orders.length} work orders</p>
+          <p className="text-muted text-sm mt-0.5">
+            {tab === "quote_request" ? "Custom price requests — build an estimate, send the quote." : "Work on existing inventory — repairs, paint, alterations."}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">
@@ -361,7 +389,7 @@ export default function WallflowerPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search work orders..."
+              placeholder={tab === "quote_request" ? "Search quote requests..." : "Search work orders..."}
               className="w-56 bg-card border border-border pl-9 pr-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-accent"
             />
           </div>
@@ -371,11 +399,31 @@ export default function WallflowerPage() {
         </div>
       </div>
 
+      {/* Tabs: quote requests vs work orders */}
+      <div className="flex items-center gap-1 mb-4 border-b border-border">
+        {([
+          { key: "quote_request" as const, label: "Quote Requests", count: quoteCount },
+          { key: "work_order" as const, label: "Work Orders", count: workCount },
+        ]).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => { setTab(t.key); setSelected(null); }}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
+              tab === t.key ? "border-accent text-foreground" : "border-transparent text-muted hover:text-foreground"
+            )}
+          >
+            {t.label}
+            <span className={cn("text-xs tabular-nums px-1.5 py-0.5 rounded", tab === t.key ? "bg-accent/15 text-accent" : "bg-card text-muted")}>{t.count}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Board — one column per status */}
       {orders.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-muted text-sm gap-3">
           <ClipboardList size={48} className="text-muted/20" />
-          <p>No work orders yet. They arrive from Nexus, or add one with “New”.</p>
+          <p>Nothing here yet. Quote requests and work orders arrive from Nexus, or add one with “New”.</p>
         </div>
       ) : (
         <div className="flex-1 flex gap-4 overflow-x-auto pb-2 min-h-0">
@@ -521,6 +569,7 @@ export default function WallflowerPage() {
       {showCreate && (
         <CreateModal
           teamMembers={teamMembers}
+          defaultType={tab}
           onSubmit={createOrder}
           onClose={() => setShowCreate(false)}
         />
@@ -540,15 +589,17 @@ export default function WallflowerPage() {
 
 // ── Create Modal ─────────────────────────────────────────────
 
-function CreateModal({ teamMembers, onSubmit, onClose }: {
+function CreateModal({ teamMembers, defaultType, onSubmit, onClose }: {
   teamMembers: TeamMember[];
+  defaultType: "quote_request" | "work_order";
   onSubmit: (f: Partial<WallflowerWorkOrder>) => void;
   onClose: () => void;
 }) {
   const [form, setForm] = useState({
     item_name: "",
-    item_source: "custom" as "inventory" | "custom",
-    work_type: "Repair",
+    request_type: defaultType,
+    item_source: (defaultType === "work_order" ? "inventory" : "custom") as "inventory" | "custom",
+    work_type: defaultType === "quote_request" ? "New Build" : "Repair",
     scope: "Internal",
     assigned_to: "",
     deadline: "",
@@ -556,16 +607,47 @@ function CreateModal({ teamMembers, onSubmit, onClose }: {
     quantity: 1,
     nexus_ref: null as NexusRef | null,
   });
+  const isQuote = form.request_type === "quote_request";
+  function setType(t: "quote_request" | "work_order") {
+    setForm((f) => ({
+      ...f,
+      request_type: t,
+      item_source: t === "work_order" ? "inventory" : "custom",
+      work_type: t === "quote_request" ? "New Build" : "Repair",
+    }));
+  }
 
   return (
     <>
       <div className="fixed inset-0 bg-black/60 z-50" onClick={onClose} />
       <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-background border border-border p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-heading font-bold">New Work Order</h2>
+          <h2 className="text-lg font-heading font-bold">{isQuote ? "New Quote Request" : "New Work Order"}</h2>
           <button onClick={onClose} className="text-muted hover:text-foreground"><X size={18} /></button>
         </div>
         <div className="space-y-4">
+          <div>
+            <label className={lbl}>Type</label>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                { key: "quote_request" as const, label: "Quote Request", hint: "Custom price → estimate" },
+                { key: "work_order" as const, label: "Work Order", hint: "Repair / paint / alter" },
+              ]).map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setType(t.key)}
+                  className={cn(
+                    "text-left border px-3 py-2 transition-colors",
+                    form.request_type === t.key ? "border-accent bg-accent/5" : "border-border hover:border-accent/40"
+                  )}
+                >
+                  <p className="text-sm font-medium">{t.label}</p>
+                  <p className="text-[11px] text-muted">{t.hint}</p>
+                </button>
+              ))}
+            </div>
+          </div>
           <div>
             <label className={lbl}>Item Name <span className="text-accent">*</span></label>
             <input className={inp} value={form.item_name} onChange={(e) => setForm((f) => ({ ...f, item_name: e.target.value }))} placeholder="e.g. Oak Dining Table Repair" />
@@ -629,7 +711,7 @@ function CreateModal({ teamMembers, onSubmit, onClose }: {
           />
 
           <div className="flex gap-3 pt-2">
-            <Button onClick={() => onSubmit(form)} disabled={!form.item_name.trim()}>Create Work Order</Button>
+            <Button onClick={() => onSubmit(form)} disabled={!form.item_name.trim()}>{isQuote ? "Create Quote Request" : "Create Work Order"}</Button>
             <Button variant="outline" onClick={onClose}>Cancel</Button>
           </div>
         </div>
@@ -1231,9 +1313,9 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
       <div className="flex gap-3 pt-4 border-t border-border flex-wrap items-center">
         <SaveButton dirty={dirty} saved={saved} onClick={save} />
 
-        {!order.estimate_id && (
+        {typeOf(order) === "quote_request" && !order.estimate_id && (
           <Button variant="outline" onClick={onCreateEstimate}>
-            <Calculator size={14} className="mr-1" /> Create Estimate
+            <Calculator size={14} className="mr-1" /> Build Estimate
           </Button>
         )}
 
