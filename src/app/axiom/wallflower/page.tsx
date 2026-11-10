@@ -12,6 +12,7 @@ import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import DateField from "@/components/ui/DateField";
 import EstimateDrawer from "@/components/axiom/EstimateDrawer";
+import { createEstimateFromQuoteRequest } from "@/lib/estimate-from-work-order";
 import { cn, formatDueDate } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2, Calculator, ClipboardList,
@@ -116,7 +117,7 @@ function formatElapsed(clockIn: string, nowMs: number) {
 
 export default function WallflowerPage() {
   const { userEmail } = useAuth();
-  const { nexusConnected } = useEntity();
+  const { nexusConnected, entity } = useEntity();
   const [orders, setOrders] = useState<WallflowerWorkOrder[]>([]);
   const [selected, setSelected] = useState<WallflowerWorkOrder | null>(null);
   const [drawerEstimateId, setDrawerEstimateId] = useState<string | null>(null);
@@ -227,76 +228,12 @@ export default function WallflowerPage() {
   }
 
   async function createEstimate(wo: WallflowerWorkOrder) {
-    // Generate estimate number
-    const year = new Date().getFullYear();
-    const { data: latest } = await axiom.from("estimates")
-      .select("estimate_number")
-      .like("estimate_number", `EST-${year}-%`)
-      .order("estimate_number", { ascending: false })
-      .limit(1)
-      .single();
-    const lastNum = latest?.estimate_number ? parseInt(latest.estimate_number.split("-").pop() || "0", 10) : 0;
-    const estimate_number = `EST-${year}-${String(lastNum + 1).padStart(4, "0")}`;
-
-    // Stable proposal token so the Nexus build-portal URL is fixed from the
-    // moment the estimate exists — handed to Nexus below.
-    const proposalToken = `prop_${(crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/-/g, "")}`;
-
-    const { data } = await axiom.from("estimates").insert({
-      estimate_number,
-      project_name: `Wallflower — ${wo.item_name}`,
-      client_name: wo.assigned_to || "",
-      status: "draft",
-      line_items: [],
-      labor_items: [],
-      markup_percent: 0,
-      notes: [
-        `Work Order: ${wo.item_name}`,
-        `Type: ${wo.work_type}`,
-        `Scope: ${wo.scope}`,
-        wo.description ? `Description: ${wo.description}` : "",
-        wo.quantity > 1 ? `Quantity: ${wo.quantity}` : "",
-      ].filter(Boolean).join("\n"),
-      images: wo.images && wo.images.length > 0 ? wo.images : undefined,
-      proposal_token: proposalToken,
-    }).select().single();
-
-    if (data) {
-      // Link estimate to work order
-      await axiom.from("wallflower_work_orders").update({
-        estimate_id: data.id,
-        status: "estimated",
-        updated_at: new Date().toISOString(),
-      }).eq("id", wo.id);
-
-      // Tell Wallflower we've quoted it. Non-blocking.
-      authedFetch("/api/wallflower-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ source: { workOrderId: wo.id }, status: "estimated" }),
-      }).catch((err) => console.error("[wallflower-status] notify failed:", err));
-
-      // Open the Nexus custom-build pricing loop for this estimate. Intake no
-      // longer does this (work orders land as work orders), so it fires here,
-      // when pricing actually begins. Non-blocking.
-      authedFetch("/api/wallflower/link-estimate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ estimateId: data.id, estimateNumber: estimate_number, proposalToken, workOrderId: wo.id }),
-      }).catch((err) => console.error("[wallflower/link-estimate] notify failed:", err));
-
-      await logActivity({
-        action: "created",
-        entity: "estimate",
-        entity_id: data.id,
-        label: `Created estimate ${estimate_number} from Wallflower work order`,
-        user_name: userEmail,
-      });
-
+    const res = await createEstimateFromQuoteRequest(wo, { entity, userEmail });
+    if (res) {
       // Reflect the new link locally and open the editor inline.
-      setSelected((prev) => prev && prev.id === wo.id ? { ...prev, estimate_id: data.id, status: "estimated" } : prev);
+      setSelected((prev) => prev && prev.id === wo.id ? { ...prev, estimate_id: res.id, status: "estimated" } : prev);
       load();
-      setDrawerEstimateId(data.id);
+      setDrawerEstimateId(res.id);
     }
   }
 

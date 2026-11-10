@@ -9,7 +9,8 @@ import { useEntity } from "@/components/axiom/EntityProvider";
 import { proposalBiz } from "@/lib/entity-profile";
 import { useAutosave } from "@/components/axiom/useAutosave";
 import { persistEstimate, deleteEstimateById } from "@/lib/estimate-actions";
-import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, ProposalScheduleItem, ProposalDocument, SalesNote } from "@/types/axiom";
+import { createEstimateFromQuoteRequest } from "@/lib/estimate-from-work-order";
+import { Estimate, EstimateLineItem, EstimateLaborItem, CustomWork, Customer, Vendor, CatalogItem, ProposalHighlight, ProposalScope, ProposalScheduleItem, ProposalDocument, SalesNote, WallflowerWorkOrder } from "@/types/axiom";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import DateField from "@/components/ui/DateField";
@@ -347,6 +348,17 @@ export default function EstimatorPage() {
     }
   }
 
+  // Start an estimate from a Nexus quote request: create + link it (same as the
+  // Nexus Intake board's Build Estimate), then open it here to price.
+  async function createFromQuoteRequest(wo: WallflowerWorkOrder) {
+    const res = await createEstimateFromQuoteRequest(wo, { entity, userEmail });
+    if (!res) return;
+    await load();
+    const { data } = await axiom.from("estimates").select("*").eq("id", res.id).single();
+    if (data) setSelected(data);
+    setShowCreate(false);
+  }
+
   async function updateEstimate(id: string, updates: Partial<Estimate>) {
     await persistEstimate(id, updates, userEmail);
     load();
@@ -586,7 +598,7 @@ export default function EstimatorPage() {
 
       {/* Create modal */}
       {showCreate && (
-        <CreateModal onSubmit={createEstimate} onClose={() => setShowCreate(false)} />
+        <CreateModal onSubmit={createEstimate} onPickQuoteRequest={createFromQuoteRequest} onClose={() => setShowCreate(false)} />
       )}
     </div>
   );
@@ -594,14 +606,18 @@ export default function EstimatorPage() {
 
 // ── Create modal ──────────────────────────────────────────────
 
-function CreateModal({ onSubmit, onClose }: {
+function CreateModal({ onSubmit, onPickQuoteRequest, onClose }: {
   onSubmit: (f: { project_name: string; client_name: string; customer_id: string; change_order_for_id?: string }) => void;
+  onPickQuoteRequest: (wo: WallflowerWorkOrder) => void;
   onClose: () => void;
 }) {
-  const { entity } = useEntity();
+  const { entity, nexusConnected } = useEntity();
   const [form, setForm] = useState({ project_name: "", client_name: "", customer_id: "", change_order_for_id: "" });
-  const [estimateType, setEstimateType] = useState<"new" | "change_order">("new");
+  const [estimateType, setEstimateType] = useState<"new" | "change_order" | "quote_request">("new");
   const [activeProjects, setActiveProjects] = useState<Array<{ id: string; project_name: string; client_name?: string }>>([]);
+  // Un-started Nexus quote requests (request_type quote_request, not yet estimated).
+  const [quoteRequests, setQuoteRequests] = useState<WallflowerWorkOrder[]>([]);
+  const [selectedWoId, setSelectedWoId] = useState("");
 
   // When the Customer pick is a company, we load the contacts at that company
   // here so the Contact field below can offer them as suggestions.
@@ -632,6 +648,21 @@ function CreateModal({ onSubmit, onClose }: {
         if (data) setActiveProjects(data as Array<{ id: string; project_name: string; client_name?: string }>);
       });
   }, [estimateType, entity]);
+
+  // Load un-started quote requests for the picker.
+  useEffect(() => {
+    if (estimateType !== "quote_request") return;
+    axiom
+      .from("wallflower_work_orders")
+      .select("*")
+      .eq("request_type", "quote_request")
+      .is("estimate_id", null)
+      .not("status", "in", "(complete,cancelled)")
+      .order("created_at", { ascending: false })
+      .then(({ data }) => {
+        if (data) setQuoteRequests(data as WallflowerWorkOrder[]);
+      });
+  }, [estimateType]);
 
   // When user picks a project for a change order, auto-fill the project_name
   // and client_name so they don't have to retype
@@ -752,8 +783,54 @@ function CreateModal({ onSubmit, onClose }: {
               >
                 Change Order
               </button>
+              {nexusConnected && (
+                <button
+                  onClick={() => setEstimateType("quote_request")}
+                  className={cn(
+                    "flex-1 border px-4 py-2.5 text-sm transition-colors",
+                    estimateType === "quote_request" ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:text-foreground"
+                  )}
+                >
+                  Quote Request
+                </button>
+              )}
             </div>
           </div>
+
+          {estimateType === "quote_request" ? (
+            <>
+              <div>
+                <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Quote Request *</label>
+                <select
+                  value={selectedWoId}
+                  onChange={(e) => setSelectedWoId(e.target.value)}
+                  className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
+                >
+                  <option value="">Select a quote request…</option>
+                  {quoteRequests.map((wo) => (
+                    <option key={wo.id} value={wo.id}>
+                      {wo.item_name}{wo.work_type ? ` — ${wo.work_type}` : ""}{wo.nexus_ref?.number ? ` (${wo.nexus_ref.number})` : ""}
+                    </option>
+                  ))}
+                </select>
+                {quoteRequests.length === 0 && (
+                  <p className="text-xs text-muted mt-1.5 italic">No un-priced quote requests. New ones arrive from Nexus in the Nexus Intake board.</p>
+                )}
+              </div>
+              <p className="text-xs text-muted">Pulls the request in as a draft estimate, linked back to Nexus, and opens it here to price.</p>
+              <div className="flex gap-3">
+                <Button
+                  onClick={() => { const wo = quoteRequests.find((w) => w.id === selectedWoId); if (wo) onPickQuoteRequest(wo); }}
+                  disabled={!selectedWoId}
+                >
+                  Open in Estimator
+                </Button>
+                <Button variant="outline" onClick={onClose}>Cancel</Button>
+              </div>
+            </>
+          ) : (
+          <>
+          {/* new / change-order fields */}
 
           {estimateType === "change_order" && (
             <div>
@@ -821,6 +898,8 @@ function CreateModal({ onSubmit, onClose }: {
             <Button onClick={submit} disabled={submitDisabled}>Create</Button>
             <Button variant="outline" onClick={onClose}>Cancel</Button>
           </div>
+          </>
+          )}
         </div>
       </div>
     </>

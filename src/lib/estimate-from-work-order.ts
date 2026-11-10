@@ -1,0 +1,87 @@
+// Shared "price this quote request" action: turns a Nexus quote-request work
+// order into a linked draft estimate and opens the Nexus pricing loop. Used by
+// both the Nexus Intake board (Build Estimate) and the Estimator's New Estimate
+// → From Quote Request flow, so the two entry points behave identically.
+
+import { axiom } from "@/lib/axiom-supabase";
+import { authedFetch } from "@/lib/authed-fetch";
+import { logActivity } from "@/lib/activity";
+import type { WallflowerWorkOrder, BusinessEntity } from "@/types/axiom";
+
+export async function createEstimateFromQuoteRequest(
+  wo: WallflowerWorkOrder,
+  ctx: { entity: BusinessEntity; userEmail: string },
+): Promise<{ id: string; estimate_number: string } | null> {
+  // Next estimate number (EST-YYYY-####).
+  const year = new Date().getFullYear();
+  const { data: latest } = await axiom
+    .from("estimates")
+    .select("estimate_number")
+    .like("estimate_number", `EST-${year}-%`)
+    .order("estimate_number", { ascending: false })
+    .limit(1)
+    .single();
+  const lastNum = latest?.estimate_number
+    ? parseInt(latest.estimate_number.split("-").pop() || "0", 10)
+    : 0;
+  const estimate_number = `EST-${year}-${String(lastNum + 1).padStart(4, "0")}`;
+
+  // Stable proposal token so the Nexus build-portal URL is fixed from creation.
+  const proposalToken = `prop_${(crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/-/g, "")}`;
+
+  const { data } = await axiom
+    .from("estimates")
+    .insert({
+      entity: ctx.entity,
+      estimate_number,
+      project_name: `Wallflower — ${wo.item_name}`,
+      client_name: wo.assigned_to || "",
+      status: "draft",
+      line_items: [],
+      labor_items: [],
+      markup_percent: 0,
+      notes: [
+        `Work Order: ${wo.item_name}`,
+        `Type: ${wo.work_type}`,
+        `Scope: ${wo.scope}`,
+        wo.description ? `Description: ${wo.description}` : "",
+        wo.quantity > 1 ? `Quantity: ${wo.quantity}` : "",
+      ].filter(Boolean).join("\n"),
+      images: wo.images && wo.images.length > 0 ? wo.images : undefined,
+      proposal_token: proposalToken,
+    })
+    .select()
+    .single();
+
+  if (!data) return null;
+
+  // Link the estimate back to the quote request and flip it to Estimated.
+  await axiom
+    .from("wallflower_work_orders")
+    .update({ estimate_id: data.id, status: "estimated", updated_at: new Date().toISOString() })
+    .eq("id", wo.id);
+
+  // Tell Wallflower we've quoted it. Non-blocking.
+  authedFetch("/api/wallflower-status", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source: { workOrderId: wo.id }, status: "estimated" }),
+  }).catch((err) => console.error("[wallflower-status] notify failed:", err));
+
+  // Open the Nexus custom-build pricing loop for this estimate. Non-blocking.
+  authedFetch("/api/wallflower/link-estimate", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ estimateId: data.id, estimateNumber: estimate_number, proposalToken, workOrderId: wo.id }),
+  }).catch((err) => console.error("[wallflower/link-estimate] notify failed:", err));
+
+  await logActivity({
+    action: "created",
+    entity: "estimate",
+    entity_id: data.id,
+    label: `Created estimate ${estimate_number} from Wallflower quote request`,
+    user_name: ctx.userEmail,
+  });
+
+  return { id: data.id, estimate_number };
+}
