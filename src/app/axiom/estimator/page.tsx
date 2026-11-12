@@ -329,7 +329,7 @@ export default function EstimatorPage() {
       .single();
     const lastNum = latest?.estimate_number ? parseInt(latest.estimate_number.split("-").pop() || "0", 10) : 0;
     const estimate_number = `${prefix}-${year}-${String(lastNum + 1).padStart(4, "0")}`;
-    const { data } = await axiom.from("estimates").insert({
+    const { data, error } = await axiom.from("estimates").insert({
       entity,
       estimate_number,
       project_name: form.project_name || "Untitled estimate",
@@ -341,12 +341,18 @@ export default function EstimatorPage() {
       labor_items: [],
       markup_percent: 0,
     }).select().single();
-    if (data) {
-      await logActivity({ action: "created", entity: "estimate", entity_id: data.id, label: `Created estimate ${estimate_number}`, user_name: userEmail });
-      load();
-      if (opts?.guided) setWizardEstimate(data); else setSelected(data);
-      setShowCreate(false);
+    if (error || !data) {
+      console.error("[estimator] create failed:", error);
+      alert(
+        `Couldn't create the estimate.\n\n${error?.message
+          || "The server accepted the request but returned no row — your login session has likely expired. Sign out (bottom-left) and back in, then try again."}`,
+      );
+      return;
     }
+    await logActivity({ action: "created", entity: "estimate", entity_id: data.id, label: `Created estimate ${estimate_number}`, user_name: userEmail });
+    load();
+    if (opts?.guided) setWizardEstimate(data); else setSelected(data);
+    setShowCreate(false);
   }
 
   // Start an estimate from a Nexus quote request: create + link it (same as the
