@@ -126,3 +126,11 @@ input[type="number"] {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted);
 }
+
+/* Guided estimate wizard: EstimateDetail renders with data-wizsec set to the
+   current step; blocks tagged data-sec that don't match are hidden, so the
+   same editor shows one step at a time. data-wizsec="all" = the full editor. */
+[data-wizsec="info"] [data-sec]:not([data-sec~="info"]) { display: none !important; }
+[data-wizsec="materials"] [data-sec]:not([data-sec~="materials"]) { display: none !important; }
+[data-wizsec="pricing"] [data-sec]:not([data-sec~="pricing"]) { display: none !important; }
+[data-wizsec="proposal"] [data-sec]:not([data-sec~="proposal"]) { display: none !important; }

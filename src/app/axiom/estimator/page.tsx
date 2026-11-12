@@ -256,6 +256,7 @@ export default function EstimatorPage() {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [selected, setSelected] = useState<Estimate | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [wizardEstimate, setWizardEstimate] = useState<Estimate | null>(null);
   // Working = anything still in the funnel (draft / sent / rejected / etc).
   // Accepted = the client signed off, so we get it out of the day-to-day list.
   const [tab, setTab] = useState<"working" | "accepted" | "archive">("working");
@@ -316,7 +317,7 @@ export default function EstimatorPage() {
     : tab === "accepted" ? acceptedEstimates
     : archivedEstimates;
 
-  async function createEstimate(form: { project_name: string; client_name: string; customer_id: string; change_order_for_id?: string }) {
+  async function createEstimate(form: { project_name: string; client_name: string; customer_id: string; change_order_for_id?: string }, opts?: { guided?: boolean }) {
     const year = new Date().getFullYear();
     const isChangeOrder = !!form.change_order_for_id;
     const prefix = isChangeOrder ? "CO" : "EST";
@@ -343,7 +344,7 @@ export default function EstimatorPage() {
     if (data) {
       await logActivity({ action: "created", entity: "estimate", entity_id: data.id, label: `Created estimate ${estimate_number}`, user_name: userEmail });
       load();
-      setSelected(data);
+      if (opts?.guided) setWizardEstimate(data); else setSelected(data);
       setShowCreate(false);
     }
   }
@@ -598,7 +599,24 @@ export default function EstimatorPage() {
 
       {/* Create modal */}
       {showCreate && (
-        <CreateModal onSubmit={createEstimate} onPickQuoteRequest={createFromQuoteRequest} onClose={() => setShowCreate(false)} />
+        <CreateModal
+          onSubmit={createEstimate}
+          onGuided={(f) => createEstimate(f, { guided: true })}
+          onPickQuoteRequest={createFromQuoteRequest}
+          onClose={() => setShowCreate(false)}
+        />
+      )}
+      {wizardEstimate && (
+        <GuidedEstimateWizard
+          estimate={wizardEstimate}
+          onClose={() => { setWizardEstimate(null); load(); }}
+          onFinish={async (id) => {
+            const { data } = await axiom.from("estimates").select("*").eq("id", id).single();
+            setWizardEstimate(null);
+            if (data) setSelected(data as Estimate);
+            load();
+          }}
+        />
       )}
     </div>
   );
@@ -606,8 +624,9 @@ export default function EstimatorPage() {
 
 // ── Create modal ──────────────────────────────────────────────
 
-function CreateModal({ onSubmit, onPickQuoteRequest, onClose }: {
+function CreateModal({ onSubmit, onGuided, onPickQuoteRequest, onClose }: {
   onSubmit: (f: { project_name: string; client_name: string; customer_id: string; change_order_for_id?: string }) => void;
+  onGuided: (f: { project_name: string; client_name: string; customer_id: string; change_order_for_id?: string }) => void;
   onPickQuoteRequest: (wo: WallflowerWorkOrder) => void;
   onClose: () => void;
 }) {
@@ -729,7 +748,7 @@ function CreateModal({ onSubmit, onPickQuoteRequest, onClose }: {
     setShowContactSuggestions(false);
   }
 
-  function submit() {
+  function submit(guided = false) {
     // If the user typed a contact name without picking from the suggestion
     // dropdown, try to match it against the loaded company contacts (or the
     // company contact with that exact name). This way a typed-but-correct
@@ -742,12 +761,13 @@ function CreateModal({ onSubmit, onPickQuoteRequest, onClose }: {
       const partial = exact || companyContacts.find((c) => c.name.toLowerCase().includes(q));
       if (partial) resolvedId = partial.id;
     }
-    onSubmit({
+    const payload = {
       project_name: form.project_name,
       client_name: form.client_name,
       customer_id: resolvedId,
       change_order_for_id: estimateType === "change_order" ? form.change_order_for_id : undefined,
-    });
+    };
+    if (guided) onGuided(payload); else onSubmit(payload);
   }
 
   const submitDisabled = !form.project_name || (estimateType === "change_order" && !form.change_order_for_id);
@@ -895,7 +915,12 @@ function CreateModal({ onSubmit, onPickQuoteRequest, onClose }: {
             )}
           </div>
           <div className="flex gap-3">
-            <Button onClick={submit} disabled={submitDisabled}>Create</Button>
+            <Button onClick={() => submit(false)} disabled={submitDisabled}>Create</Button>
+            {estimateType === "new" && (
+              <Button variant="outline" onClick={() => submit(true)} disabled={submitDisabled}>
+                <Sparkles size={14} className="mr-1" /> Guided
+              </Button>
+            )}
             <Button variant="outline" onClick={onClose}>Cancel</Button>
           </div>
           </>
@@ -908,10 +933,16 @@ function CreateModal({ onSubmit, onPickQuoteRequest, onClose }: {
 
 // ── Estimate detail ───────────────────────────────────────────
 
-export function EstimateDetail({ estimate, onUpdate, onDelete }: {
+// Guided-wizard section keys; each maps to a data-sec tag on the blocks below.
+export type EstimateWizardSection = "info" | "materials" | "pricing" | "proposal";
+
+export function EstimateDetail({ estimate, onUpdate, onDelete, section }: {
   estimate: Estimate;
   onUpdate: (u: Partial<Estimate>) => Promise<void>;
   onDelete: () => void;
+  // Guided wizard: when set, only the block(s) tagged with this section key
+  // show (CSS in globals.css hides the rest). Undefined = the full editor.
+  section?: EstimateWizardSection;
 }) {
   const { userEmail: detailUserEmail } = useAuth();
   const { nexusConnected } = useEntity();
@@ -2343,9 +2374,9 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
   }
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12" data-wizsec={section || "all"}>
       {/* Project Details */}
-      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4" data-sec="info">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Project Details</h3>
       </div>
@@ -2544,7 +2575,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
       </div>
 
       {/* Sales Notes — append-only communication log under client info */}
-      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4" data-sec="info">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">
             Sales Notes <span className="text-muted text-xs font-normal ml-1.5">({salesNotes.length})</span>
@@ -2608,7 +2639,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
       </div>
 
       {/* Line Items & Labor */}
-      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4" data-sec="materials">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">Line Items &amp; Labor</h3>
       </div>
@@ -2812,7 +2843,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
       </div>
 
       {/* Markup + Totals */}
-      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4" data-sec="pricing">
         <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3 mb-4">Markup &amp; Totals</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
           <div>
@@ -2884,13 +2915,13 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
       </div>
 
       {/* Notes */}
-      <div>
+      <div data-sec="info">
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Notes</label>
         <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
       </div>
 
       {/* Field Notes — markup photos saved from the iPad app */}
-      <div>
+      <div data-sec="proposal">
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">
           Field Notes <span className="text-muted normal-case font-normal">({fieldNotes.length})</span>
         </label>
@@ -2917,7 +2948,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
       </div>
 
       {/* Proposal — moved from project detail. Build the client-facing proposal here. */}
-      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4">
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4" data-sec="proposal">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">
             Proposal
@@ -3717,5 +3748,126 @@ function Field({ label, value, onChange, required }: {
       </label>
       <input value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
     </div>
+  );
+}
+
+// ── Guided Estimate wizard ────────────────────────────────────
+// Walks a new estimate through the sections one step at a time, reusing the
+// full EstimateDetail editor (gated by its `section` prop + globals.css). Each
+// step autosaves; Finish opens the estimate in the normal editor.
+const WIZARD_STEPS: { key: EstimateWizardSection | "review"; label: string; hint: string; optional?: boolean }[] = [
+  { key: "info", label: "Project Info", hint: "Name the build and who it's for." },
+  { key: "materials", label: "Materials & Labor", hint: "Add your line items and labor." },
+  { key: "pricing", label: "Pricing", hint: "Set the markup and check the totals." },
+  { key: "proposal", label: "Proposal", hint: "Scope, highlights, visuals, documents, and deposit.", optional: true },
+  { key: "review", label: "Review & Finish", hint: "Look it over, then open the full editor to preview or send." },
+];
+
+function GuidedEstimateWizard({ estimate, onClose, onFinish }: {
+  estimate: Estimate;
+  onClose: () => void;
+  onFinish: (id: string) => void;
+}) {
+  const { userEmail } = useAuth();
+  const [stepIdx, setStepIdx] = useState(0);
+  const [totals, setTotals] = useState<{ mat: number; lab: number; markup: number; total: number } | null>(null);
+  const step = WIZARD_STEPS[stepIdx];
+  const isReview = step.key === "review";
+
+  const onUpdate = useCallback(
+    async (u: Partial<Estimate>) => { await persistEstimate(estimate.id, u, userEmail); },
+    [estimate.id, userEmail],
+  );
+  const onDelete = useCallback(
+    async () => { await deleteEstimateById(estimate.id, userEmail); onClose(); },
+    [estimate.id, userEmail, onClose],
+  );
+
+  useEffect(() => {
+    if (!isReview) return;
+    axiom.from("estimates").select("line_items,labor_items,markup_percent,adjustment").eq("id", estimate.id).single()
+      .then(({ data }) => {
+        if (!data) return;
+        const mat = (data.line_items || []).reduce((s: number, li: { quantity?: number; unit_price?: number }) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
+        const lab = (data.labor_items || []).reduce((s: number, li: { cost?: number }) => s + (li.cost || 0), 0);
+        const markup = Math.round((mat + lab) * ((data.markup_percent || 0) / 100) * 100) / 100;
+        const total = Math.round((mat + lab + markup + (data.adjustment || 0)) * 100) / 100;
+        setTotals({ mat, lab, markup, total });
+      });
+  }, [isReview, estimate.id]);
+
+  const go = (i: number) => setStepIdx(Math.max(0, Math.min(WIZARD_STEPS.length - 1, i)));
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/60 z-50" onClick={onClose} />
+      <div className="fixed inset-2 md:inset-8 z-50 bg-background border border-border flex flex-col md:flex-row overflow-hidden rounded">
+        {/* Step rail */}
+        <div className="md:w-60 shrink-0 border-b md:border-b-0 md:border-r border-border bg-card/40 p-4 overflow-x-auto">
+          <div className="flex items-center justify-between mb-3 md:mb-6">
+            <h2 className="font-heading font-bold text-base">Guided Estimate</h2>
+            <button onClick={onClose} className="text-muted hover:text-foreground md:hidden"><X size={18} /></button>
+          </div>
+          <ol className="flex md:flex-col gap-1">
+            {WIZARD_STEPS.map((s, i) => {
+              const done = i < stepIdx, current = i === stepIdx;
+              return (
+                <li key={s.key} className="shrink-0">
+                  <button onClick={() => go(i)} className={cn("w-full text-left flex items-center gap-2.5 px-3 py-2 rounded text-sm whitespace-nowrap transition-colors", current ? "bg-accent/10 text-accent" : done ? "text-foreground hover:bg-card" : "text-muted hover:text-foreground")}>
+                    <span className={cn("w-5 h-5 shrink-0 rounded-full border flex items-center justify-center text-[11px] font-mono", current ? "border-accent text-accent" : done ? "border-accent bg-accent text-background" : "border-border")}>
+                      {done ? <CheckCircle2 size={13} /> : i + 1}
+                    </span>
+                    {s.label}{s.optional ? <span className="text-muted/60 text-[10px] ml-auto hidden md:inline">optional</span> : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+        {/* Body */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex items-start justify-between gap-4 px-5 md:px-6 py-4 border-b border-border">
+            <div className="min-w-0">
+              <p className="text-xs uppercase tracking-wider text-accent mb-0.5">Step {stepIdx + 1} of {WIZARD_STEPS.length}</p>
+              <h3 className="text-lg font-heading font-bold truncate">{step.label}</h3>
+              <p className="text-sm text-muted mt-0.5">{step.hint}</p>
+            </div>
+            <button onClick={onClose} className="text-muted hover:text-foreground hidden md:block shrink-0"><X size={20} /></button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-5 md:p-6">
+            {isReview && (
+              <div className="max-w-md space-y-4">
+                <div className="bg-card border border-border p-4">
+                  <p className="text-xs uppercase tracking-wider text-muted mb-3">{estimate.estimate_number}</p>
+                  {totals ? (
+                    <div className="space-y-1.5 text-sm">
+                      <div className="flex justify-between"><span className="text-muted">Materials</span><span className="font-mono">{money(totals.mat)}</span></div>
+                      <div className="flex justify-between"><span className="text-muted">Labor</span><span className="font-mono">{money(totals.lab)}</span></div>
+                      <div className="flex justify-between"><span className="text-muted">Markup</span><span className="font-mono">{money(totals.markup)}</span></div>
+                      <div className="flex justify-between font-bold border-t border-border pt-1.5 mt-1.5"><span>Total</span><span className="font-mono">{money(totals.total)}</span></div>
+                    </div>
+                  ) : <p className="text-sm text-muted">Totaling…</p>}
+                </div>
+                <p className="text-sm text-muted">Everything&apos;s saved. Open the full editor to preview the proposal, add a final drawing or signature, and send it.</p>
+              </div>
+            )}
+            <div style={{ display: isReview ? "none" : undefined }}>
+              <EstimateDetail estimate={estimate} onUpdate={onUpdate} onDelete={onDelete} section={(isReview ? "proposal" : step.key) as EstimateWizardSection} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3 px-5 md:px-6 py-4 border-t border-border">
+            <Button variant="outline" onClick={() => go(stepIdx - 1)} disabled={stepIdx === 0}><ChevronLeft size={14} className="mr-1" /> Back</Button>
+            <div className="flex items-center gap-2">
+              {step.optional && !isReview && (
+                <button onClick={() => go(stepIdx + 1)} className="text-sm text-muted hover:text-foreground px-2">Skip</button>
+              )}
+              {isReview
+                ? <Button onClick={() => onFinish(estimate.id)}>Open in Full Editor</Button>
+                : <Button onClick={() => go(stepIdx + 1)}>Next <ChevronRight size={14} className="ml-1" /></Button>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
