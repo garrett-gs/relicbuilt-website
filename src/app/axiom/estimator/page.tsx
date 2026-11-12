@@ -3795,7 +3795,7 @@ function GuidedEstimateWizard({ estimate, onClose, onFinish }: {
 }) {
   const { userEmail } = useAuth();
   const [stepIdx, setStepIdx] = useState(0);
-  const [totals, setTotals] = useState<{ mat: number; lab: number; markup: number; total: number } | null>(null);
+  const [preview, setPreview] = useState<{ total: number; html: string } | null>(null);
   const step = WIZARD_STEPS[stepIdx];
   const isReview = step.key === "review";
 
@@ -3810,15 +3810,40 @@ function GuidedEstimateWizard({ estimate, onClose, onFinish }: {
 
   useEffect(() => {
     if (!isReview) return;
-    axiom.from("estimates").select("line_items,labor_items,markup_percent,adjustment").eq("id", estimate.id).single()
-      .then(({ data }) => {
-        if (!data) return;
-        const mat = (data.line_items || []).reduce((s: number, li: { quantity?: number; unit_price?: number }) => s + (li.quantity || 0) * (li.unit_price || 0), 0);
-        const lab = (data.labor_items || []).reduce((s: number, li: { cost?: number }) => s + (li.cost || 0), 0);
-        const markup = Math.round((mat + lab) * ((data.markup_percent || 0) / 100) * 100) / 100;
-        const total = Math.round((mat + lab + markup + (data.adjustment || 0)) * 100) / 100;
-        setTotals({ mat, lab, markup, total });
+    let active = true;
+    setPreview(null);
+    (async () => {
+      // Pull the freshly-autosaved estimate, settings (for branding/terms) and
+      // the customer, then render the real client-facing proposal.
+      const [{ data: est }, { data: settings }] = await Promise.all([
+        axiom.from("estimates").select("*").eq("id", estimate.id).single(),
+        axiom.from("settings").select("*").limit(1).single(),
+      ]);
+      if (!active || !est) return;
+      const li = est.line_items || [];
+      const lab = est.labor_items || [];
+      const materialTotal = li.reduce((s: number, x: { quantity?: number; unit_price?: number }) => s + (x.quantity || 0) * (x.unit_price || 0), 0);
+      const laborTotal = lab.reduce((s: number, x: { cost?: number }) => s + (x.cost || 0), 0);
+      const markupAmount = Math.round((materialTotal + laborTotal) * ((est.markup_percent || 0) / 100) * 100) / 100;
+      const total = Math.round((materialTotal + laborTotal + markupAmount + (est.adjustment || 0)) * 100) / 100;
+      let clientCompany: string | undefined, clientAddress: string | undefined;
+      if (est.customer_id) {
+        const { data: c } = await axiom.from("customers").select("*").eq("id", est.customer_id).maybeSingle();
+        if (c) { clientCompany = c.company_name || undefined; clientAddress = composeClientAddress(c) || undefined; }
+      }
+      const body = generateEstimateProposalHtml({
+        estimate: est as Estimate,
+        biz: proposalBiz(est.entity, settings),
+        totals: { materialTotal, laborTotal, markupAmount, total },
+        approveUrl: "#",
+        forEmail: false,
+        clientCompany,
+        clientAddress,
       });
+      const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;background:#e9e8e4;padding:16px;font-family:Arial,Helvetica,sans-serif;color:#222}</style></head><body>${body}</body></html>`;
+      if (active) setPreview({ total, html });
+    })();
+    return () => { active = false; };
   }, [isReview, estimate.id]);
 
   const go = (i: number) => setStepIdx(Math.max(0, Math.min(WIZARD_STEPS.length - 1, i)));
@@ -3861,19 +3886,19 @@ function GuidedEstimateWizard({ estimate, onClose, onFinish }: {
           </div>
           <div className="flex-1 overflow-y-auto p-5 md:p-6">
             {isReview && (
-              <div className="max-w-md space-y-4">
-                <div className="bg-card border border-border p-4">
-                  <p className="text-xs uppercase tracking-wider text-muted mb-3">{estimate.estimate_number}</p>
-                  {totals ? (
-                    <div className="space-y-1.5 text-sm">
-                      <div className="flex justify-between"><span className="text-muted">Materials</span><span className="font-mono">{money(totals.mat)}</span></div>
-                      <div className="flex justify-between"><span className="text-muted">Labor</span><span className="font-mono">{money(totals.lab)}</span></div>
-                      <div className="flex justify-between"><span className="text-muted">Markup</span><span className="font-mono">{money(totals.markup)}</span></div>
-                      <div className="flex justify-between font-bold border-t border-border pt-1.5 mt-1.5"><span>Total</span><span className="font-mono">{money(totals.total)}</span></div>
-                    </div>
-                  ) : <p className="text-sm text-muted">Totaling…</p>}
+              <div className="h-full flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <p className="text-sm text-muted">
+                    {estimate.estimate_number}
+                    {preview ? <> · <span className="text-foreground font-mono font-semibold">{money(preview.total)}</span> total</> : null}
+                  </p>
+                  <p className="text-xs text-muted">This is the client-facing proposal. Open the full editor to add a signature line or send it.</p>
                 </div>
-                <p className="text-sm text-muted">Everything&apos;s saved. Open the full editor to preview the proposal, add a final drawing or signature, and send it.</p>
+                <div className="flex-1 min-h-[60vh] border border-border rounded overflow-hidden" style={{ background: "#e9e8e4" }}>
+                  {preview
+                    ? <iframe title="Proposal preview" srcDoc={preview.html} className="w-full h-full" style={{ border: 0, minHeight: "60vh" }} />
+                    : <div className="p-6 text-sm text-muted">Building the proposal preview…</div>}
+                </div>
               </div>
             )}
             <div style={{ display: isReview ? "none" : undefined }}>
