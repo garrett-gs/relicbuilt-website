@@ -12,19 +12,26 @@ export async function createEstimateFromQuoteRequest(
   wo: WallflowerWorkOrder,
   ctx: { entity: BusinessEntity; userEmail: string },
 ): Promise<{ id: string; estimate_number: string } | null> {
-  // Next estimate number (EST-YYYY-####).
+  // Next estimate number from the GLOBAL max (server-side) so it never collides
+  // with another company's estimate in the shared table. Falls back to a
+  // tenant-scoped guess only if the endpoint is unreachable.
   const year = new Date().getFullYear();
-  const { data: latest } = await axiom
-    .from("estimates")
-    .select("estimate_number")
-    .like("estimate_number", `EST-${year}-%`)
-    .order("estimate_number", { ascending: false })
-    .limit(1)
-    .single();
-  const lastNum = latest?.estimate_number
-    ? parseInt(latest.estimate_number.split("-").pop() || "0", 10)
-    : 0;
-  const estimate_number = `EST-${year}-${String(lastNum + 1).padStart(4, "0")}`;
+  let estimate_number = "";
+  try {
+    const res = await authedFetch(`/api/next-estimate-number?prefix=EST&year=${year}`);
+    if (res.ok) {
+      const j = await res.json();
+      if (j?.estimate_number) estimate_number = j.estimate_number as string;
+    }
+  } catch { /* fall through */ }
+  if (!estimate_number) {
+    const { data: latest } = await axiom
+      .from("estimates").select("estimate_number")
+      .like("estimate_number", `EST-${year}-%`)
+      .order("estimate_number", { ascending: false }).limit(1).maybeSingle();
+    const lastNum = latest?.estimate_number ? parseInt(latest.estimate_number.split("-").pop() || "0", 10) : 0;
+    estimate_number = `EST-${year}-${String(lastNum + 1).padStart(4, "0")}`;
+  }
 
   // Stable proposal token so the Nexus build-portal URL is fixed from creation.
   const proposalToken = `prop_${(crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/-/g, "")}`;

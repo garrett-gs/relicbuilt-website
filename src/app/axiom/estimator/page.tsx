@@ -321,35 +321,54 @@ export default function EstimatorPage() {
     const year = new Date().getFullYear();
     const isChangeOrder = !!form.change_order_for_id;
     const prefix = isChangeOrder ? "CO" : "EST";
-    const { data: latest } = await axiom.from("estimates")
-      .select("estimate_number")
-      .like("estimate_number", `${prefix}-${year}-%`)
-      .order("estimate_number", { ascending: false })
-      .limit(1)
-      .single();
-    const lastNum = latest?.estimate_number ? parseInt(latest.estimate_number.split("-").pop() || "0", 10) : 0;
-    const estimate_number = `${prefix}-${year}-${String(lastNum + 1).padStart(4, "0")}`;
-    const { data, error } = await axiom.from("estimates").insert({
-      entity,
-      estimate_number,
-      project_name: form.project_name || "Untitled estimate",
-      client_name: form.client_name,
-      customer_id: form.customer_id || null,
-      change_order_for_id: form.change_order_for_id || null,
-      status: "draft",
-      line_items: [],
-      labor_items: [],
-      markup_percent: 0,
-    }).select().single();
-    if (error || !data) {
-      console.error("[estimator] create failed:", error);
+
+    // Next number from the GLOBAL max (server-side, service role) so it never
+    // collides with another company's estimate in the shared table. Falls back
+    // to a tenant-scoped guess only if the endpoint is unreachable.
+    async function nextNumber(): Promise<string> {
+      try {
+        const res = await authedFetch(`/api/next-estimate-number?prefix=${prefix}&year=${year}`);
+        if (res.ok) {
+          const j = await res.json();
+          if (j?.estimate_number) return j.estimate_number as string;
+        }
+      } catch { /* fall through */ }
+      const { data: latest } = await axiom.from("estimates").select("estimate_number")
+        .like("estimate_number", `${prefix}-${year}-%`).order("estimate_number", { ascending: false }).limit(1).maybeSingle();
+      const n = latest?.estimate_number ? parseInt(latest.estimate_number.split("-").pop() || "0", 10) : 0;
+      return `${prefix}-${year}-${String(n + 1).padStart(4, "0")}`;
+    }
+
+    let data: Estimate | null = null;
+    let lastErr: { message?: string } | null = null;
+    // Retry only on a number collision (a concurrent create grabbed it first).
+    for (let attempt = 0; attempt < 4 && !data; attempt++) {
+      const estimate_number = await nextNumber();
+      const res = await axiom.from("estimates").insert({
+        entity,
+        estimate_number,
+        project_name: form.project_name || "Untitled estimate",
+        client_name: form.client_name,
+        customer_id: form.customer_id || null,
+        change_order_for_id: form.change_order_for_id || null,
+        status: "draft",
+        line_items: [],
+        labor_items: [],
+        markup_percent: 0,
+      }).select().single();
+      if (res.data) { data = res.data as Estimate; break; }
+      lastErr = res.error;
+      if (!res.error || !/duplicate key|unique constraint/i.test(res.error.message || "")) break;
+    }
+    if (!data) {
+      console.error("[estimator] create failed:", lastErr);
       alert(
-        `Couldn't create the estimate.\n\n${error?.message
-          || "The server accepted the request but returned no row — your login session has likely expired. Sign out (bottom-left) and back in, then try again."}`,
+        `Couldn't create the estimate.\n\n${lastErr?.message
+          || "The server returned no row — your login session may have expired. Sign out (bottom-left) and back in, then try again."}`,
       );
       return;
     }
-    await logActivity({ action: "created", entity: "estimate", entity_id: data.id, label: `Created estimate ${estimate_number}`, user_name: userEmail });
+    await logActivity({ action: "created", entity: "estimate", entity_id: data.id, label: `Created estimate ${data.estimate_number}`, user_name: userEmail });
     load();
     if (opts?.guided) setWizardEstimate(data); else setSelected(data);
     setShowCreate(false);
