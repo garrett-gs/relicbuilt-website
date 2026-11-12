@@ -25,10 +25,10 @@
 // opens already-stale doesn't reload on arrival — only a deploy that lands while
 // the tab is open does. Never fires in local/dev ("dev").
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { flushPendingAutosaves } from "@/components/axiom/useAutosave";
 
-const POLL_MS = 30 * 60 * 1000; // 30 min
+const POLL_MS = 2 * 60 * 1000; // 2 min — pick up fresh deploys quickly
 const DEBOUNCE_MS = 60 * 1000; // ignore focus re-checks within 60s
 const IDLE_MS = 4 * 1000; // visible tab: reload once input has been quiet this long
 const SETTLE_POLL_MS = 1500; // while an update is pending, re-check for a quiet moment this often
@@ -37,6 +37,10 @@ const MIN_OVERLAY_MS = 600; // hold the "Updating…" flash long enough to regis
 
 export default function AutoUpdateOverlay() {
   const [applying, setApplying] = useState(false);
+  // A newer deploy is live and waiting — drives the "Update ready" pill so the
+  // user can apply it instantly instead of waiting for the idle auto-reload.
+  const [updateReady, setUpdateReady] = useState(false);
+  const applyRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let baseline: string | null = null;
@@ -103,6 +107,8 @@ export default function AutoUpdateOverlay() {
 
     function markPending() {
       pending = true;
+      applyRef.current = applyUpdate; // let the "Reload" pill apply instantly
+      setUpdateReady(true);
       if (!settleTimer) settleTimer = setInterval(tryApply, SETTLE_POLL_MS);
       tryApply();
     }
@@ -151,18 +157,37 @@ export default function AutoUpdateOverlay() {
     };
   }, []);
 
-  if (!applying) return null;
+  if (!applying && !updateReady) return null;
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className="fixed inset-0 z-[1030] flex items-center justify-center bg-black/35 backdrop-blur-[2px]"
-    >
-      <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-6 py-3.5 text-sm font-semibold uppercase tracking-wider text-foreground shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
-        <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
-        Updating…
-      </div>
-    </div>
+    <>
+      {applying && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed inset-0 z-[1030] flex items-center justify-center bg-black/35 backdrop-blur-[2px]"
+        >
+          <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-6 py-3.5 text-sm font-semibold uppercase tracking-wider text-foreground shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
+            <span className="h-2 w-2 rounded-full bg-accent animate-pulse" />
+            Updating…
+          </div>
+        </div>
+      )}
+      {updateReady && !applying && (
+        <div
+          role="status"
+          className="fixed bottom-4 right-4 z-[1029] flex items-center gap-3 rounded-lg border border-accent bg-card px-4 py-2.5 shadow-[0_10px_30px_rgba(0,0,0,0.4)]"
+        >
+          <span className="h-2 w-2 shrink-0 rounded-full bg-accent animate-pulse" />
+          <span className="text-sm text-foreground">A new version of Axiom is ready.</span>
+          <button
+            onClick={() => applyRef.current?.()}
+            className="text-sm font-semibold text-accent hover:underline"
+          >
+            Reload
+          </button>
+        </div>
+      )}
+    </>
   );
 }
