@@ -737,7 +737,13 @@ export default function SettingsPage() {
           <Field label="Reminder Interval (days)" value={String(settings.reminder_interval_days)} onChange={(v) => updateField("reminder_interval_days", Number(v))} type="number" />
           <div>
             <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Terms & Conditions</label>
-            <textarea value={settings.terms_text || ""} onChange={(e) => updateField("terms_text", e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[200px] resize-y" />
+            <textarea
+              value={isRelicSite ? (rp.terms || "") : (settings.terms_text || "")}
+              onChange={(e) => isRelicSite
+                ? updateField("relic_profile", { ...rp, terms: e.target.value })
+                : updateField("terms_text", e.target.value)}
+              className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[200px] resize-y"
+            />
           </div>
         </div>
       )}
