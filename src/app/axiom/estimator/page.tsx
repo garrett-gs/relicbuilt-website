@@ -332,7 +332,7 @@ export default function EstimatorPage() {
     const { data } = await axiom.from("estimates").insert({
       entity,
       estimate_number,
-      project_name: form.project_name,
+      project_name: form.project_name || "Untitled estimate",
       client_name: form.client_name,
       customer_id: form.customer_id || null,
       change_order_for_id: form.change_order_for_id || null,
@@ -917,7 +917,7 @@ function CreateModal({ onSubmit, onGuided, onPickQuoteRequest, onClose }: {
           <div className="flex gap-3">
             <Button onClick={() => submit(false)} disabled={submitDisabled}>Create</Button>
             {estimateType === "new" && (
-              <Button variant="outline" onClick={() => submit(true)} disabled={submitDisabled}>
+              <Button variant="outline" onClick={() => submit(true)}>
                 <Sparkles size={14} className="mr-1" /> Guided
               </Button>
             )}
