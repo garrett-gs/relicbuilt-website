@@ -20,7 +20,7 @@ import { useRef } from "react";
 
 interface Customer { id: string; name: string; email?: string; phone?: string; }
 import { generateInvoiceHtml } from "@/lib/invoice-html";
-import { resolveEntityProfile, venmoLinks } from "@/lib/entity-profile";
+import { resolveEntityProfile, venmoLinks, termsFor } from "@/lib/entity-profile";
 import { authedFetch } from "@/lib/authed-fetch";
 
 function money(n: number) {
@@ -380,8 +380,13 @@ function InvoiceDetail({ invoice: init, onDelete, onPreview, onUpdate, userEmail
       // Persist any pending edits first so the emailed doc + pay link match
       // what's on screen and what's in the DB.
       if (dirty) await save();
-      const profile = resolveEntityProfile(inv.entity, bizSettings);
-      const html = generateInvoiceHtml(inv, bizSettings.terms_text || "", true, profile);
+      // Read settings LIVE so the latest Terms are used, not a stale snapshot
+      // loaded when the page first mounted.
+      const { data: fresh } = await axiom.from("settings")
+        .select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text,venmo_handle,relic_profile,logo_url,branding").limit(1).single();
+      const s = fresh || bizSettings;
+      const profile = resolveEntityProfile(inv.entity, s);
+      const html = generateInvoiceHtml(inv, termsFor(inv.entity, s), true, profile);
       const res = await authedFetch("/api/send-po", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -691,8 +696,12 @@ function InvoicePreview({ invoice, onClose, userEmail }: { invoice: Invoice; onC
     if (!sendTo || !bizSettings) return;
     setSending(true); setSendResult(null);
     try {
-      const profile = resolveEntityProfile(invoice.entity, bizSettings);
-      const html = generateInvoiceHtml(invoice, bizSettings.terms_text || "", true, profile);
+      // Read settings LIVE so the latest Terms are used, not a stale snapshot.
+      const { data: fresh } = await axiom.from("settings")
+        .select("biz_name,biz_email,biz_phone,biz_address,biz_city,biz_state,biz_zip,terms_text,venmo_handle,relic_profile,logo_url,branding").limit(1).single();
+      const s = fresh || bizSettings;
+      const profile = resolveEntityProfile(invoice.entity, s);
+      const html = generateInvoiceHtml(invoice, termsFor(invoice.entity, s), true, profile);
       const res = await authedFetch("/api/send-po", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

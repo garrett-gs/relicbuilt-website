@@ -7,7 +7,7 @@
 // (one project only) + CRON_SECRET, matching the other crons.
 
 import { NextRequest, NextResponse } from "next/server";
-import { resolveEntityProfile } from "@/lib/entity-profile";
+import { resolveEntityProfile, termsFor } from "@/lib/entity-profile";
 import { generateInvoiceHtml } from "@/lib/invoice-html";
 import { calcBalance, deriveStatus, lateFee, daysOverdue } from "@/lib/invoice-balance";
 import type { Invoice, BusinessEntity } from "@/types/axiom";
@@ -55,7 +55,6 @@ export async function GET(req: NextRequest) {
   const interval = Number(settings?.reminder_interval_days) > 0
     ? Number(settings?.reminder_interval_days)
     : DEFAULT_INTERVAL_DAYS;
-  const terms: string = settings?.terms_text || "";
 
   // Candidates: a due date is set and the invoice isn't marked paid. Balance
   // and cadence are re-checked per row below.
@@ -90,7 +89,7 @@ export async function GET(req: NextRequest) {
     if (!dueToSend) continue;
 
     const profile = resolveEntityProfile(inv.entity as BusinessEntity | undefined, settings);
-    const html = generateInvoiceHtml(inv, terms, true, profile);
+    const html = generateInvoiceHtml(inv, termsFor(inv.entity as BusinessEntity | undefined, settings), true, profile);
     const subject = `Balance due — Invoice ${inv.invoice_number} from ${profile.name}`;
 
     const res = await fetch("https://api.resend.com/emails", {

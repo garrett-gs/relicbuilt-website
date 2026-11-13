@@ -213,6 +213,23 @@ export function resolveEntityProfile(
 }
 
 /**
+ * Single source of truth for a tenant's Terms & Conditions. Every document
+ * generator (invoice, proposal, …) MUST read terms through this, and the
+ * Settings form writes the same per-entity field, so an edit shows up
+ * everywhere. Each entity reads ONLY its own field — no cross-entity fallback
+ * (falling back would print another company's terms, the original bug). Empty
+ * returns "" so generators render nothing rather than placeholder text.
+ */
+export function termsFor(
+  entity: BusinessEntity | undefined,
+  settings: SettingsLike | null | undefined
+): string {
+  const s = settings || {};
+  if (entity === "relic") return (s.relic_profile?.terms || "").trim();
+  return (s.terms_text || "").trim();
+}
+
+/**
  * Build the `biz` object the proposal templates consume for a given entity.
  * Wallflower keeps the templates' historic defaults (no logo/footer/website
  * overrides, so its proposal wording is unchanged); Relic supplies its own
@@ -231,7 +248,7 @@ export function proposalBiz(
     biz_zip: s.biz_zip,
     biz_phone: s.biz_phone,
     biz_email: s.biz_email,
-    terms_text: s.terms_text,
+    terms_text: termsFor(entity, s),
     deposit_percent: s.deposit_percent,
   };
   // The proposal logo assignment (library logo + width) applies to both
@@ -256,8 +273,8 @@ export function proposalBiz(
     biz_zip: p.zip,
     biz_phone: p.phone,
     biz_email: p.email,
-    // Relic's own terms take precedence; fall back to the shared settings terms.
-    terms_text: (s.relic_profile?.terms) || s.terms_text,
+    // Single source of truth — Relic reads only its own terms, no fallback.
+    terms_text: termsFor("relic", s),
     deposit_percent: s.deposit_percent,
     logo_url: assignedLogoUrl || p.logoUrl,
     logo_width: proposalAssign?.width,
