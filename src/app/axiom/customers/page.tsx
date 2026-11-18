@@ -29,7 +29,7 @@ const lbl = "text-xs uppercase tracking-wider text-muted block mb-1.5";
 
 export default function CustomersPage() {
   const { userEmail } = useAuth();
-  const { entity, nexusConnected } = useEntity();
+  const { entity, nexusConnected, internalClientEnabled } = useEntity();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
@@ -206,7 +206,30 @@ export default function CustomersPage() {
     }
   }
 
+  // Only one internal client per workspace. Returns a message to show if setting
+  // this record internal isn't allowed (capability off, or another is already
+  // internal), else null. Backstops the UI, which also disables the option.
+  function guardInternal(selfKind: "companies" | "customers", selfId: string): string | null {
+    if (!internalClientEnabled) return "Turn on Internal client in Settings → General before marking a client internal.";
+    const co = companies.find((c) => c.internal && !(selfKind === "companies" && c.id === selfId));
+    const cu = customers.find((c) => c.internal && !(selfKind === "customers" && c.id === selfId));
+    const other = co?.name || cu?.name;
+    return other ? `Only one internal client per workspace — “${other}” is already the internal client. Set it to External first.` : null;
+  }
+
+  // Name of the OTHER internal record (not this one), for disabling the Internal
+  // option in the editor. Null if none exists besides self.
+  function otherInternalFor(selfKind: "companies" | "customers", selfId: string): string | null {
+    const co = companies.find((c) => c.internal && !(selfKind === "companies" && c.id === selfId));
+    const cu = customers.find((c) => c.internal && !(selfKind === "customers" && c.id === selfId));
+    return co?.name || cu?.name || null;
+  }
+
   async function updateCompany(id: string, fields: Partial<Company>) {
+    if (fields.internal === true) {
+      const blocked = guardInternal("companies", id);
+      if (blocked) { alert(blocked); return; }
+    }
     await axiom.from("companies").update({ ...fields, updated_at: new Date().toISOString() }).eq("id", id);
     // Keep the denormalized company_name on this company's contacts in sync so
     // the estimator customer search keeps finding them after a rename.
@@ -217,6 +240,10 @@ export default function CustomersPage() {
   }
 
   async function updateCustomer(id: string, fields: Partial<Customer>) {
+    if (fields.internal === true) {
+      const blocked = guardInternal("customers", id);
+      if (blocked) { alert(blocked); return; }
+    }
     // If the contact's company link changes, refresh the cached company_name.
     const patch: Record<string, unknown> = { ...fields, updated_at: new Date().toISOString() };
     if ("company_id" in fields) {
@@ -422,6 +449,8 @@ export default function CustomersPage() {
             onDelete={() => deleteCustomer(selectedCustomer.id)}
             onAddNote={(text) => addNote(selectedCustomer.id, text)}
             onUpdate={(fields) => updateCustomer(selectedCustomer.id, fields)}
+            internalAllowed={internalClientEnabled}
+            otherInternalName={otherInternalFor("customers", selectedCustomer.id)}
           />
         ) : selectedCompany ? (
           <CompanyDetail
@@ -433,6 +462,8 @@ export default function CustomersPage() {
             onSelectContact={selectCustomer}
             onAddContact={() => setShowCreateContact(selectedCompany.id)}
             onUpdate={(fields) => updateCompany(selectedCompany.id, fields)}
+            internalAllowed={internalClientEnabled}
+            otherInternalName={otherInternalFor("companies", selectedCompany.id)}
           />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-muted gap-2">
@@ -465,9 +496,59 @@ export default function CustomersPage() {
   );
 }
 
+// ── Client type control (External / Internal) ────────────────
+
+function ClientTypeControl({ internal, allowed, otherInternalName, onChange, internalHelp }: {
+  internal: boolean;
+  allowed: boolean;
+  otherInternalName: string | null;
+  onChange: (v: boolean) => void;
+  internalHelp: string;
+}) {
+  // Internal is blocked when this record is currently External and either the
+  // capability is off or another record is already the internal client.
+  const internalBlocked = !internal && (!allowed || otherInternalName !== null);
+  const blockedReason = !allowed
+    ? "Turn on Internal client in Settings → General to use this."
+    : otherInternalName
+    ? `“${otherInternalName}” is already the internal client (one per workspace).`
+    : "";
+  return (
+    <div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => onChange(false)}
+          className={cn(
+            "flex-1 border px-3 py-2 text-sm transition-colors",
+            !internal ? "border-accent text-accent bg-accent/10" : "border-border text-muted hover:text-foreground"
+          )}
+        >
+          External
+        </button>
+        <button
+          type="button"
+          disabled={internalBlocked}
+          onClick={() => onChange(true)}
+          className={cn(
+            "flex-1 border px-3 py-2 text-sm transition-colors",
+            internal ? "border-accent text-accent bg-accent/10" : "border-border text-muted hover:text-foreground",
+            internalBlocked && "opacity-40 cursor-not-allowed hover:text-muted"
+          )}
+        >
+          Internal
+        </button>
+      </div>
+      <p className="text-[11px] text-muted mt-1.5">
+        {internal ? internalHelp : internalBlocked ? blockedReason : "Standard client — estimates, proposals, and invoices billed by Relic with margin."}
+      </p>
+    </div>
+  );
+}
+
 // ── Company detail panel ─────────────────────────────────────
 
-function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact, onAddContact, onUpdate }: {
+function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact, onAddContact, onUpdate, internalAllowed, otherInternalName }: {
   company: Company;
   contacts: Customer[];
   projects: CustomWork[];
@@ -475,6 +556,8 @@ function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact,
   onSelectContact: (id: string) => void;
   onAddContact: () => void;
   onUpdate: (fields: Partial<Company>) => void;
+  internalAllowed: boolean;
+  otherInternalName: string | null;
 }) {
   const [confirmDel, setConfirmDel] = useState(false);
   const [form, setForm] = useState({ name: company.name, industry: company.industry ?? "", address: company.address ?? "", phone: company.phone ?? "", website: company.website ?? "", internal: company.internal ?? false });
@@ -545,20 +628,16 @@ function CompanyDetail({ company, contacts, projects, onDelete, onSelectContact,
             )}
           </div>
         </div>
-        <label className="flex items-start gap-2.5 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={form.internal}
-            onChange={(e) => { setForm((f) => ({ ...f, internal: e.target.checked })); markDirty(); }}
-            className="accent-accent mt-0.5"
+        <div>
+          <label className={lbl}>Client type</label>
+          <ClientTypeControl
+            internal={form.internal}
+            allowed={internalAllowed}
+            otherInternalName={otherInternalName}
+            onChange={(v) => { setForm((f) => ({ ...f, internal: v })); markDirty(); }}
+            internalHelp="Builds for this business price at cost and go to Nexus as project spend only. (Set it on the estimate's customer too, since builds send by customer.)"
           />
-          <span>
-            <span className="text-sm text-foreground">Internal (our own business)</span>
-            <span className="block text-[11px] text-muted mt-0.5">
-              Builds for this business price at cost and go to Nexus as project spend only. (Set it on the estimate&apos;s customer too, since builds send by customer.)
-            </span>
-          </span>
-        </label>
+        </div>
       </div>
 
 
@@ -719,7 +798,7 @@ function CompanyPortalSection({ company, onUpdate }: { company: Company; onUpdat
 
 // ── Customer / Contact detail panel ─────────────────────────
 
-function CustomerDetail({ customer, company, companies, projects, invoices, onDelete, onAddNote, onUpdate }: {
+function CustomerDetail({ customer, company, companies, projects, invoices, onDelete, onAddNote, onUpdate, internalAllowed, otherInternalName }: {
   customer: Customer;
   company: Company | null;
   companies: Company[];
@@ -728,6 +807,8 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
   onDelete: () => void;
   onAddNote: (text: string) => void;
   onUpdate: (fields: Partial<Customer>) => void;
+  internalAllowed: boolean;
+  otherInternalName: string | null;
 }) {
   const [confirmDel, setConfirmDel] = useState(false);
   const [form, setForm] = useState({
@@ -865,20 +946,16 @@ function CustomerDetail({ customer, company, companies, projects, invoices, onDe
             <option value="inactive">Inactive</option>
           </select>
         </div>
-        <label className="flex items-start gap-2.5 cursor-pointer bg-card border border-border rounded px-3 py-2.5">
-          <input
-            type="checkbox"
-            checked={form.internal}
-            onChange={(e) => { setForm((f) => ({ ...f, internal: e.target.checked })); markDirty(); }}
-            className="accent-accent mt-0.5"
+        <div>
+          <label className={lbl}>Client type</label>
+          <ClientTypeControl
+            internal={form.internal}
+            allowed={internalAllowed}
+            otherInternalName={otherInternalName}
+            onChange={(v) => { setForm((f) => ({ ...f, internal: v })); markDirty(); }}
+            internalHelp="Builds for this customer skip the client proposal & sign-off, price at cost, and go to Nexus as project spend only."
           />
-          <span>
-            <span className="text-sm text-foreground">Internal (our own business)</span>
-            <span className="block text-[11px] text-muted mt-0.5">
-              Builds for this customer skip the client proposal &amp; sign-off, price at cost, and go to Nexus as project spend only.
-            </span>
-          </span>
-        </label>
+        </div>
         <div className="grid grid-cols-2 gap-3">
           <div><label className={lbl}>Email</label><input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} className={inp} /></div>
           <div><label className={lbl}>Phone</label><input type="tel" value={form.phone} onChange={(e) => set("phone", formatPhone(e.target.value))} placeholder="(###) ###-####" className={inp} /></div>

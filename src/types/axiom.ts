@@ -732,6 +732,10 @@ export interface RelicProfile {
   branding?: BrandingConfig;
   /** Whether this (RELIC) workspace is connected to a Nexus rental side. */
   nexus_connected?: boolean;
+  /** Whether this (RELIC) workspace has the internal-client capability on —
+   *  lets one client be billed at cost with work orders + the Nexus bridge.
+   *  Admin-toggleable; falls back to the INTERNAL_CLIENT_ENABLED env (off). */
+  internal_client_enabled?: boolean;
 }
 
 export interface Settings {
@@ -750,6 +754,10 @@ export interface Settings {
   /** Whether this (default/Wallflower) workspace is connected to a Nexus
    *  rental side. Admin-toggleable; falls back to the NEXUS_CONNECTED env. */
   nexus_connected?: boolean;
+  /** Whether this (default/Wallflower) workspace has the internal-client
+   *  capability on — lets one client be billed at cost with work orders + the
+   *  Nexus bridge. Admin-toggleable; falls back to INTERNAL_CLIENT_ENABLED (off). */
+  internal_client_enabled?: boolean;
   logo_url?: string;
   /** Dormant: former per-entity sidebar logo (sidebar now shows the Axiom
    *  product mark). Kept so existing rows don't error. */

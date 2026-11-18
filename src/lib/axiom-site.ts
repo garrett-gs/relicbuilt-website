@@ -21,6 +21,13 @@ export const SITE_ENTITY: BusinessEntity | null =
 export const NEXUS_CONNECTED = process.env.NEXT_PUBLIC_AXIOM_NEXUS_CONNECTED !== "false";
 
 /**
+ * Whether the internal-client capability is on by default for this deployment.
+ * Opt-in: defaults to false, only the literal string "true" turns it on. The
+ * per-workspace Settings toggle (settings.internal_client_enabled) overrides it.
+ */
+export const INTERNAL_CLIENT_ENABLED = process.env.NEXT_PUBLIC_AXIOM_INTERNAL_CLIENT === "true";
+
+/**
  * Break-glass owner allowlist. These emails ALWAYS have RELIC access once
  * signed in — independent of the editable Settings roster and even if the
  * settings read fails. It lives in deploy config (not the app), so a typo in

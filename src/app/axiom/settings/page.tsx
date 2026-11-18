@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
-import { SITE_ENTITY, NEXUS_CONNECTED } from "@/lib/axiom-site";
+import { SITE_ENTITY, NEXUS_CONNECTED, INTERNAL_CLIENT_ENABLED } from "@/lib/axiom-site";
 import { Settings, TeamMember, BrandingConfig, LogoPlacement } from "@/types/axiom";
 import { LOGO_PLACEMENTS, venmoLinks } from "@/lib/entity-profile";
 import qrcode from "qrcode-generator";
@@ -162,6 +162,15 @@ export default function SettingsPage() {
   const setNexus = (on: boolean) => {
     if (isRelicSite) updateField("relic_profile", { ...rp, nexus_connected: on });
     else updateField("nexus_connected", on);
+  };
+  // Internal-client capability toggle (per site). Off until an admin turns it
+  // on; effective default is the build-time INTERNAL_CLIENT_ENABLED for this deploy.
+  // TODO(relicon-billing): gate availability on entitlement products.includes("internal-client").
+  const internalClientStored = isRelicSite ? rp.internal_client_enabled : settings.internal_client_enabled;
+  const internalClientOn = internalClientStored ?? INTERNAL_CLIENT_ENABLED;
+  const setInternalClient = (on: boolean) => {
+    if (isRelicSite) updateField("relic_profile", { ...rp, internal_client_enabled: on });
+    else updateField("internal_client_enabled", on);
   };
   // Upload a logo PNG → stored in the `branding` bucket, its URL saved on the
   // identity's logo field (used on documents & email).
@@ -420,6 +429,32 @@ export default function SettingsPage() {
                 </button>
               </div>
               <p className="text-xs text-muted mt-2">{nexusOn ? "Connected — Nexus features are available in this workspace." : "Not connected — Nexus features are hidden."}</p>
+            </div>
+          )}
+
+          {isAdmin && (
+            <div className="pt-6 mt-6 border-t border-border">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-heading font-bold text-foreground">Internal Client</h3>
+                  <p className="text-xs text-muted mt-0.5 max-w-sm">Lets one client be billed at cost with work orders and the Nexus bridge — e.g. Wallflower RELIC. Off by default; only turn it on if you have a partner that runs its own Nexus.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setInternalClient(!internalClientOn)}
+                  aria-pressed={internalClientOn}
+                  className={cn(
+                    "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors mt-1",
+                    internalClientOn ? "bg-accent" : "bg-border"
+                  )}
+                >
+                  <span className={cn(
+                    "inline-block h-4 w-4 rounded-full bg-white shadow transition-transform",
+                    internalClientOn ? "translate-x-6" : "translate-x-1"
+                  )} />
+                </button>
+              </div>
+              <p className="text-xs text-muted mt-2">{internalClientOn ? "On — a customer can be set to the Internal client type (one per workspace)." : "Off — all clients are External."}</p>
             </div>
           )}
         </div>

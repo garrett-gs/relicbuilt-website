@@ -473,6 +473,7 @@ create table public.settings (
   app_logo_url text,
   biz_website text,
   nexus_connected boolean,
+  internal_client_enabled boolean not null default false,
   primary key (id)
 );
 

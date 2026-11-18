@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore, R
 import { axiom, setAxiomTenant } from "@/lib/axiom-supabase";
 import { useAuth } from "./AuthProvider";
 import { TeamMember, BusinessEntity, RelicProfile } from "@/types/axiom";
-import { SITE_ENTITY, NEXUS_CONNECTED, isOwnerEmail } from "@/lib/axiom-site";
+import { SITE_ENTITY, NEXUS_CONNECTED, INTERNAL_CLIENT_ENABLED, isOwnerEmail } from "@/lib/axiom-site";
 
 /**
  * Which business entity the app is currently scoped to.
@@ -54,6 +54,7 @@ interface EntityContextType {
   brandEmail: string;              // the entity's business email, from settings
   accent: string;                  // the entity's accent color, from settings
   nexusConnected: boolean;         // whether this workspace is linked to Nexus
+  internalClientEnabled: boolean;  // whether the internal-client capability is on
 }
 
 const EntityContext = createContext<EntityContextType | null>(null);
@@ -71,6 +72,7 @@ export function EntityProvider({ children }: { children: ReactNode }) {
     biz_name?: string;
     biz_email?: string;
     nexus_connected?: boolean;
+    internal_client_enabled?: boolean;
     relic_profile?: RelicProfile | null;
   } | null>(null);
 
@@ -94,7 +96,7 @@ export function EntityProvider({ children }: { children: ReactNode }) {
     if (owner) setHasRelicAccess(true);
     let active = true;
     setAccessLoading(true);
-    axiom.from("settings").select("team_members, accent_color, biz_name, biz_email, nexus_connected, relic_profile").limit(1).single().then(({ data }) => {
+    axiom.from("settings").select("team_members, accent_color, biz_name, biz_email, nexus_connected, internal_client_enabled, relic_profile").limit(1).single().then(({ data }) => {
       if (!active) return;
       setSettingsRow(data as typeof settingsRow);
       // Relic is no longer a restricted entity — any signed-in Axiom user can
@@ -138,6 +140,12 @@ export function EntityProvider({ children }: { children: ReactNode }) {
   const nexusStored =
     entity === "relic" ? settingsRow?.relic_profile?.nexus_connected : settingsRow?.nexus_connected;
   const nexusConnected = nexusStored ?? NEXUS_CONNECTED;
+  // Internal-client capability is a per-site setting; until an admin turns it
+  // on, fall back to the build-time INTERNAL_CLIENT_ENABLED default (off).
+  // TODO(relicon-billing): also require entitlement products.includes("internal-client").
+  const icStored =
+    entity === "relic" ? settingsRow?.relic_profile?.internal_client_enabled : settingsRow?.internal_client_enabled;
+  const internalClientEnabled = icStored ?? INTERNAL_CLIENT_ENABLED;
 
   // Stamp data-entity (for any entity-specific CSS) and drive --accent from the
   // business's chosen color so the UI recolors to match.
@@ -157,7 +165,7 @@ export function EntityProvider({ children }: { children: ReactNode }) {
 
   return (
     <EntityContext.Provider
-      value={{ entity, setEntity, hasRelicAccess, locked, accessDenied, loading: accessLoading, brandName, brandEmail, accent, nexusConnected }}
+      value={{ entity, setEntity, hasRelicAccess, locked, accessDenied, loading: accessLoading, brandName, brandEmail, accent, nexusConnected, internalClientEnabled }}
     >
       {children}
     </EntityContext.Provider>
