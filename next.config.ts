@@ -1,5 +1,9 @@
 import type { NextConfig } from "next";
 
+// Cache-bust 2026-11-19: NEXT_PUBLIC_AXIOM_ENTITY is inlined per-route at build
+// time; a git push reuses .next/cache, so unchanged routes keep a stale inline.
+// Editing this config file is a webpack build dependency, which invalidates the
+// whole cache and forces every route to recompile with the current env value.
 const nextConfig: NextConfig = {
   // Keep @sparticuz/chromium out of the serverless bundle — Next's
   // bundler tree-shakes the binary files otherwise, and Puppeteer
