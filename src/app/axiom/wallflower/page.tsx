@@ -6,18 +6,18 @@ import { useEntity } from "@/components/axiom/EntityProvider";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
-import { WallflowerWorkOrder, TeamMember, NexusRef, Material, LaborEntry, InventoryItem } from "@/types/axiom";
+import { WallflowerWorkOrder, TeamMember, NexusRef, Material, LaborEntry, InventoryItem, LaborBill } from "@/types/axiom";
 import NexusRefPicker from "@/components/axiom/NexusRefPicker";
 import Button from "@/components/ui/Button";
 import SaveButton from "@/components/ui/SaveButton";
 import DateField from "@/components/ui/DateField";
 import EstimateDrawer from "@/components/axiom/EstimateDrawer";
 import { createEstimateFromQuoteRequest } from "@/lib/estimate-from-work-order";
-import { cn, formatDueDate } from "@/lib/utils";
+import { cn, formatDueDate, formatDate } from "@/lib/utils";
 import {
   Plus, X, Search, Trash2, Calculator, ClipboardList,
   Image as ImageIcon, Loader2, Upload, Paperclip, GripVertical,
-  Clock, Play, Square, Package, DollarSign,
+  Clock, Play, Square, Package, DollarSign, Receipt,
 } from "lucide-react";
 import { authedFetch } from "@/lib/authed-fetch";
 
@@ -126,6 +126,9 @@ export default function WallflowerPage() {
   const [tab, setTab] = useState<"quote_request" | "work_order">("quote_request");
   const [showCreate, setShowCreate] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
+  // Flat shop labor rate ($/hr) for record-only labor bills, from the Internal
+  // Client Identity in Settings (relic_profile on the Relic home, else top-level).
+  const [flatLaborRate, setFlatLaborRate] = useState(0);
 
   const load = useCallback(async () => {
     const { data } = await axiom
@@ -138,10 +141,13 @@ export default function WallflowerPage() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    axiom.from("settings").select("team_members").limit(1).single().then(({ data }) => {
+    axiom.from("settings").select("team_members, relic_profile, internal_client_profile").limit(1).single().then(({ data }) => {
       if (data?.team_members) setTeamMembers(data.team_members.filter((m: TeamMember) => m.name));
+      const icp =
+        (entity === "relic" ? data?.relic_profile?.internal_client_profile : data?.internal_client_profile) || {};
+      setFlatLaborRate(Number(icp.labor_rate) || 0);
     });
-  }, []);
+  }, [entity]);
 
   // Tab counts (ignore the search box so the badges reflect the whole queue).
   const quoteCount = orders.filter((o) => typeOf(o) === "quote_request").length;
@@ -522,6 +528,7 @@ export default function WallflowerPage() {
               key={selected.id}
               order={selected}
               teamMembers={teamMembers}
+              flatLaborRate={flatLaborRate}
               onUpdate={(u) => updateOrder(selected.id, u)}
               onDelete={() => deleteOrder(selected.id)}
               onCreateEstimate={() => createEstimate(selected)}
@@ -688,9 +695,10 @@ function CreateModal({ teamMembers, defaultType, onSubmit, onClose }: {
 
 // ── Order Detail ─────────────────────────────────────────────
 
-function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate, onViewEstimate }: {
+function OrderDetail({ order, teamMembers, flatLaborRate, onUpdate, onDelete, onCreateEstimate, onViewEstimate }: {
   order: WallflowerWorkOrder;
   teamMembers: TeamMember[];
+  flatLaborRate: number;
   onUpdate: (u: Partial<WallflowerWorkOrder>) => void;
   onDelete: () => void;
   onCreateEstimate: () => void;
@@ -735,8 +743,11 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
   const [exVendor, setExVendor] = useState("");
   const [exCost, setExCost] = useState(0);
 
+  const [laborBill, setLaborBill] = useState<LaborBill | null>(order.labor_bill || null);
+
   const materialTotal = materials.reduce((s, m) => s + (m.cost || 0), 0);
   const laborTotal = labor.reduce((s, l) => s + (l.cost || 0), 0);
+  const laborHours = Math.round(labor.reduce((s, l) => s + (l.hours || 0), 0) * 100) / 100;
   const actualCost = Math.round((materialTotal + laborTotal) * 100) / 100;
   const margin = quotedTotal > 0 ? ((quotedTotal - actualCost) / quotedTotal) * 100 : 0;
 
@@ -804,6 +815,29 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
     setLabor(updated); markDirty();
   }
   function removeLabor(i: number) { setLabor(labor.filter((_, idx) => idx !== i)); markDirty(); }
+
+  // ── Record-only labor bill ──
+  // Totals the logged hours at the flat shop rate (Internal Client Identity),
+  // numbered as a child of the order's Nexus number (e.g. WF-8832-L1). No pay
+  // rail — a reference the internal client carries to their own customer.
+  // Re-generating recomputes from current hours and bumps the child index.
+  function generateLaborBill() {
+    const base =
+      order.wallflower_order_number || order.nexus_ref?.number || `WO-${order.id.slice(0, 8)}`;
+    const prevIdx = laborBill
+      ? parseInt(laborBill.number.match(/-L(\d+)$/)?.[1] || "0", 10) || 0
+      : 0;
+    const bill: LaborBill = {
+      number: `${base}-L${prevIdx + 1}`,
+      hours: laborHours,
+      rate: flatLaborRate,
+      total: Math.round(laborHours * flatLaborRate * 100) / 100,
+      created_at: new Date().toISOString(),
+      created_by: userEmail,
+    };
+    setLaborBill(bill);
+    onUpdate({ labor_bill: bill }); // persist immediately
+  }
 
   // ── Materials: inventory allocation + freeform expense (mirrors Projects) ──
   async function searchInventory(q: string) {
@@ -1215,6 +1249,42 @@ function OrderDetail({ order, teamMembers, onUpdate, onDelete, onCreateEstimate,
           )}
         </div>
         {!order.estimate_id && <p className="text-xs text-muted mt-2">Link or create an estimate to compare against a quote.</p>}
+      </div>
+
+      {/* ── Labor Bill (record-only) ── */}
+      <div className="bg-card border border-border p-4">
+        <div className="flex items-center gap-2 mb-3"><Receipt size={14} className="text-accent" /><span className="text-xs uppercase tracking-wider text-muted">Labor Bill</span><span className="text-[10px] uppercase tracking-wider text-muted/60">record-only</span></div>
+        {laborBill ? (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-y-2 text-sm">
+              <span className="text-muted">Number</span><span className="text-right font-mono">{laborBill.number}</span>
+              <span className="text-muted">Hours</span><span className="text-right font-mono">{laborBill.hours}</span>
+              <span className="text-muted">Rate</span><span className="text-right font-mono">{money(laborBill.rate)}/hr</span>
+              <span className="font-medium border-t border-border pt-2">Labor Total</span><span className="text-right font-mono font-medium border-t border-border pt-2">{money(laborBill.total)}</span>
+            </div>
+            <p className="text-xs text-muted">Generated {formatDate(laborBill.created_at)}{laborBill.created_by ? ` · ${laborBill.created_by}` : ""}. No payment is collected here.</p>
+            <button
+              type="button"
+              onClick={generateLaborBill}
+              disabled={flatLaborRate <= 0 || laborHours <= 0}
+              className="text-xs font-semibold text-accent hover:underline disabled:text-muted disabled:no-underline disabled:cursor-not-allowed"
+            >
+              Regenerate from current hours ({laborHours}h × {money(flatLaborRate)})
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-sm text-muted">{laborHours > 0 ? `${laborHours} logged hour${laborHours === 1 ? "" : "s"} × ${money(flatLaborRate)}/hr = ` : "No logged hours yet. "}{laborHours > 0 && <span className="font-mono text-foreground">{money(Math.round(laborHours * flatLaborRate * 100) / 100)}</span>}</p>
+            <Button
+              variant="secondary"
+              onClick={generateLaborBill}
+              disabled={flatLaborRate <= 0 || laborHours <= 0}
+            >
+              <Receipt size={14} className="mr-1" /> Generate labor bill
+            </Button>
+            {flatLaborRate <= 0 && <p className="text-xs text-muted">Set a flat shop rate in Settings → Internal Client Identity first.</p>}
+          </div>
+        )}
       </div>
 
       {/* Nexus reference — link to a Nexus order or quote */}
