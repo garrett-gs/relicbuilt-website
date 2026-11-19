@@ -122,6 +122,7 @@ export default function WallflowerPage() {
   const [selected, setSelected] = useState<WallflowerWorkOrder | null>(null);
   const [drawerEstimateId, setDrawerEstimateId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [clientFilter, setClientFilter] = useState("all");
   const [tab, setTab] = useState<"quote_request" | "work_order">("quote_request");
   const [showCreate, setShowCreate] = useState(false);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -146,8 +147,18 @@ export default function WallflowerPage() {
   const quoteCount = orders.filter((o) => typeOf(o) === "quote_request").length;
   const workCount = orders.filter((o) => typeOf(o) === "work_order").length;
 
+  // Distinct end-clients across the whole queue, for the client filter. These
+  // are the read-only names carried in from Nexus (client_company preferred,
+  // falling back to client_name) — not linked Axiom customer records.
+  const clientOptions = [
+    ...new Set(
+      orders.map((o) => o.client_company || o.client_name).filter((v): v is string => !!v)
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+
   const filtered = orders.filter((o) => {
     if (typeOf(o) !== tab) return false;
+    if (clientFilter !== "all" && (o.client_company || o.client_name) !== clientFilter) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
@@ -314,13 +325,26 @@ export default function WallflowerPage() {
         <div>
           <h1 className="text-2xl font-heading font-bold flex items-center gap-2">
             <ClipboardList size={22} className="text-accent" />
-            Nexus Intake
+            Wallflower Hub
           </h1>
           <p className="text-muted text-sm mt-0.5">
             {tab === "quote_request" ? "Custom price requests — build an estimate, send the quote." : "Work on existing inventory — repairs, paint, alterations."}
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {clientOptions.length > 0 && (
+            <select
+              value={clientFilter}
+              onChange={(e) => setClientFilter(e.target.value)}
+              title="Filter by end-client"
+              className="max-w-[12rem] bg-card border border-border px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-accent"
+            >
+              <option value="all">All clients</option>
+              {clientOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          )}
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
             <input

@@ -349,6 +349,12 @@ export default function ProjectsPage() {
   const [invoiceStatuses, setInvoiceStatuses] = useState<InvoiceStatusLite[]>([]);
   const { isSuperAdmin } = useAxiomRole(); // Archive is super-admin only
   const { entity } = useEntity();
+  // Wallflower (internal-client) builds run on the project engine but are kept
+  // OFF the Relic Projects board by default — they're worked from the Wallflower
+  // Hub. Toggle to surface them here. Stage 1 identifies them by the
+  // system-applied "Wallflower — " name prefix (set in createEstimateFromQuoteRequest);
+  // Stage 2 swaps this for an explicit internal flag during the numbering work.
+  const [showWallflower, setShowWallflower] = useState(false);
 
   const load = useCallback(async () => {
     const { data } = await axiom.from("custom_work").select("*").eq("entity", entity).order("created_at", { ascending: false });
@@ -506,10 +512,12 @@ export default function ProjectsPage() {
     if (w) { w.document.write(html); w.document.close(); }
   }
 
-  const activeProjects = projects.filter((p) => p.status !== "complete");
-  const archivedProjects = projects.filter((p) => p.status === "complete");
-  const inProgressProjects = projects.filter((p) => p.status === "in_progress");
-  const pipelineProjects = projects.filter((p) => p.status === "accepted");
+  const isWallflowerBuild = (p: CustomWork) => (p.project_name || "").startsWith("Wallflower — ");
+  const visibleProjects = showWallflower ? projects : projects.filter((p) => !isWallflowerBuild(p));
+  const activeProjects = visibleProjects.filter((p) => p.status !== "complete");
+  const archivedProjects = visibleProjects.filter((p) => p.status === "complete");
+  const inProgressProjects = visibleProjects.filter((p) => p.status === "in_progress");
+  const pipelineProjects = visibleProjects.filter((p) => p.status === "accepted");
 
   // Payment badge for a project row (null = show nothing):
   //  • RELIC — from Axiom invoices: a deposit invoice → "Deposit paid/due";
@@ -632,6 +640,19 @@ export default function ProjectsPage() {
             </button>
           </div>
         </div>
+
+        {/* Wallflower builds live in the Hub; surface them here on demand. */}
+        {projects.some(isWallflowerBuild) && (
+          <label className="flex items-center gap-2 mb-2 text-[11px] text-muted cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showWallflower}
+              onChange={(e) => setShowWallflower(e.target.checked)}
+              className="accent-accent"
+            />
+            Show Wallflower Hub builds
+          </label>
+        )}
 
         {/* Active / Archive tabs */}
         <div className="flex border-b border-border mb-3 text-[11px] uppercase tracking-wider">

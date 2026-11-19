@@ -59,7 +59,7 @@ const navSections = [
     items: [
       { href: "/axiom/customers", icon: Users, label: "Customers" },
       { href: "/axiom/catalog", icon: Package, label: "Catalog" },
-      { href: "/axiom/wallflower", icon: ClipboardList, label: "Nexus Intake", wallflowerOnly: true },
+      { href: "/axiom/wallflower", icon: ClipboardList, label: "Wallflower Hub", wallflowerOnly: true },
     ],
   },
   {
@@ -211,9 +211,9 @@ export default function Sidebar() {
         {navSections.map((section) => {
           const items = section.items
             .filter((item) => !("adminOnly" in item && item.adminOnly) || isAdminOrManager)
-            .filter((item) => !("wallflowerOnly" in item && item.wallflowerOnly && entity === "relic"))
-            // Nexus-tied nav (Work Orders inbox) is hidden when this
-            // workspace isn't connected to a Nexus.
+            // The Wallflower Hub (internal-client work fed from Nexus) now lives
+            // in the single Relic-home workspace, so it is NO LONGER hidden on
+            // the Relic entity — only when this workspace has no Nexus at all.
             .filter((item) => !("wallflowerOnly" in item && item.wallflowerOnly && !nexusConnected))
             // Staff accounts only ever see the Time Clock.
             .filter((item) => !isStaff || item.href === "/axiom/timeclock");
