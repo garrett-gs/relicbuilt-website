@@ -3,6 +3,10 @@ import { notifyWallflowerStatus } from "@/lib/wallflower-status";
 import { notifyNewIntake } from "@/lib/notify-new-intake";
 import { axiomAdmin, siteTenantId } from "@/lib/axiom-admin";
 
+// NOTE: this route stamps tenant_id via axiomAdmin()'s x-axiom-tenant header,
+// which derives from NEXT_PUBLIC_AXIOM_ENTITY (inlined at build time). Vercel's
+// per-route build cache can serve a stale inline, so if the entity lock changes,
+// this file must be touched to force its bundle to recompile. (2026-11-19)
 const API_KEY = process.env.WALLFLOWER_API_KEY || "wfrelic2026";
 
 export async function POST(req: NextRequest) {
