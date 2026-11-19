@@ -12,6 +12,8 @@
 // a stale version string; the client also cache-busts the request itself.
 
 import { NextResponse } from "next/server";
+import { SITE_ENTITY } from "@/lib/axiom-site";
+import { SITE_TENANT_SLUG } from "@/lib/axiom-admin";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +24,15 @@ const VERSION =
 
 export async function GET() {
   return NextResponse.json(
-    { version: VERSION },
+    {
+      version: VERSION,
+      // TEMP DIAGNOSTIC (remove after): what this deployment actually sees for
+      // the entity lock. rawEntity=null means NEXT_PUBLIC_AXIOM_ENTITY isn't in
+      // this build's env; tenantSlug is what new intake rows get stamped with.
+      rawEntity: process.env.NEXT_PUBLIC_AXIOM_ENTITY ?? null,
+      siteEntity: SITE_ENTITY,
+      tenantSlug: SITE_TENANT_SLUG,
+    },
     {
       headers: {
         "Cache-Control": "no-store, no-cache, must-revalidate",
