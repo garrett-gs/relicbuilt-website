@@ -3,8 +3,14 @@ import { randomUUID } from "crypto";
 import { getWRClient } from "@/lib/wr-supabase";
 import { buildPortalUrl, notifyNexusBuildLink } from "@/lib/notify-nexus-build-link";
 import { notifyNexusBuildCost } from "@/lib/notify-nexus-build-cost";
+import { generateInternalBuildDoc } from "@/lib/internal-build-doc";
 import { requireTeamMember } from "@/lib/api-auth";
 import { axiomAdmin } from "@/lib/axiom-admin";
+
+// Rendering the branded build-doc PDF uses headless Chromium (puppeteer), which
+// needs the Node runtime and a longer budget than the default.
+export const runtime = "nodejs";
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   const auth = await requireTeamMember(req);
@@ -30,14 +36,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Estimate not found" }, { status: 404 });
     }
 
+    // Settings carry the entity branding (for the proposal doc) and the internal
+    // client identity. Load once and reuse.
+    const { data: settings } = await axiom.from("settings").select("*").limit(1).single();
+
     // Nexus is Wallflower's system. A Relic estimate only goes there when the
     // Relic business is switched to Nexus-connected in Settings.
     if (estimate.entity === "relic") {
-      const { data: settingsRow } = await axiom.from("settings").select("relic_profile").limit(1).single();
-      if (!(settingsRow?.relic_profile as { nexus_connected?: boolean } | null)?.nexus_connected) {
+      if (!(settings?.relic_profile as { nexus_connected?: boolean } | null)?.nexus_connected) {
         return NextResponse.json({ error: "Relic estimates aren't sent to Nexus (Relic isn't Nexus-connected)" }, { status: 403 });
       }
     }
+
+    // The internal client's back-of-house identity (name/logo), used to brand the
+    // client-facing build document. Stored on relic_profile (Relic home) or at
+    // the top level (other sites).
+    const internalProfile = ((estimate.entity === "relic"
+      ? (settings?.relic_profile as { internal_client_profile?: unknown } | null)?.internal_client_profile
+      : (settings as { internal_client_profile?: unknown } | null)?.internal_client_profile) || {}) as {
+      name?: string;
+      logo_url?: string;
+      labor_rate?: number;
+    };
 
     // Internal build? (estimate is for our own business, e.g. Wallflower RELIC.)
     // Internal builds skip the whole client proposal/sign-off package, price at
@@ -111,6 +131,26 @@ export async function POST(req: NextRequest) {
       .filter((d: { url?: string }) => d && d.url)
       .map((d: { name?: string; url: string }) => ({ name: d.name || "Document", url: d.url, type: "document" }));
     buildFiles = [...buildFiles, ...proposalDocs];
+
+    // ── Branded build document (internal clients) ──
+    // For an internal build, render the client-facing proposal re-branded as the
+    // internal client (their logo/name — Relic stays back-of-house) into a
+    // print-ready PDF and publish it as a public, non-expiring link. It travels
+    // to Nexus as a document (below) and rides along in the build's files.
+    const documents: { name: string; url: string }[] = [];
+    if (internal) {
+      const doc = await generateInternalBuildDoc({
+        supabase: axiom,
+        estimate,
+        settings: settings as Parameters<typeof generateInternalBuildDoc>[0]["settings"],
+        internal: internalProfile,
+        totals: { materialTotal, laborTotal, markupAmount, total },
+      });
+      if (doc) {
+        documents.push(doc);
+        buildFiles = [...buildFiles, { name: doc.name, url: doc.url, type: "document" }];
+      }
+    }
 
     // Determine type: labor-only (maintenance) vs custom build
     const isLaborOnly = lineItems.length === 0 && laborItems.length > 0;
@@ -201,6 +241,7 @@ export async function POST(req: NextRequest) {
         estimateAmount: total,
         status: "sent",
         event: "updated",
+        documents,
       });
     }
 
@@ -212,6 +253,36 @@ export async function POST(req: NextRequest) {
       materialTotal,
       laborTotal,
     });
+
+    // ── Internal builds: deliver the branded document to Nexus ──
+    // Internal (at-cost) builds skip the customer-quote pricing webhook, but the
+    // printable, branded document still goes back so the end customer can view/
+    // print it. documents_only → Nexus attaches the doc to the build's client
+    // portal + stashes the link, and never touches quote pricing or appends a
+    // line. Targeted at the Nexus quote the work order referenced, if any.
+    if (internal && documents.length > 0) {
+      let nexusRef: unknown = null;
+      try {
+        const { data: wo } = await axiom
+          .from("wallflower_work_orders")
+          .select("nexus_ref")
+          .eq("estimate_id", estimate.id)
+          .not("nexus_ref", "is", null)
+          .limit(1)
+          .maybeSingle();
+        nexusRef = wo?.nexus_ref ?? null;
+      } catch { /* leave null — Nexus falls back to relic_build_id matching */ }
+      await notifyNexusBuildLink({
+        estimateId: estimate.id,
+        estimateNumber: estimate.estimate_number,
+        proposalToken: "", // no client portal token for internal builds
+        relicBuildId: wrData.id,
+        event: "updated",
+        documents,
+        documentsOnly: true,
+        nexusRef,
+      });
+    }
 
     // ── Auto-append this build onto a linked Nexus quote's items[] ──
     // If the estimate's work order references a Nexus quote (nexus_ref), the
@@ -287,7 +358,7 @@ export async function POST(req: NextRequest) {
       quoteAppend = { error: e instanceof Error ? e.message : "quote append failed" };
     }
 
-    return NextResponse.json({ success: true, internal, wr_id: wrData.id, build_url: buildUrl, quote_append: quoteAppend });
+    return NextResponse.json({ success: true, internal, wr_id: wrData.id, build_url: buildUrl, documents: documents.length, quote_append: quoteAppend });
   } catch (err) {
     console.error("send-to-wr error:", err);
     return NextResponse.json(

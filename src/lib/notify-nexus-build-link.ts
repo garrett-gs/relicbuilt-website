@@ -34,6 +34,15 @@ interface BuildLinkArgs {
   relicBuildId?: string | null; // resolved from the WR DB if not supplied
   wallflowerOrderId?: string | null;
   nexusRef?: unknown;
+  // Printable, Wallflower-branded build documents to attach on the Nexus side
+  // (public, non-expiring links). Nexus adds them to the build's client portal
+  // (build_files) and stashes them on the quote line + relic_builds row.
+  documents?: { name: string; url: string }[];
+  // documents_only: attach the documents + stash their links, but do NOT sync
+  // prices or append a quote line. Used for internal (at-cost) builds, whose
+  // cost rides the separate project-spend bridge — we never touch the customer
+  // quote's pricing, only deliver the document.
+  documentsOnly?: boolean;
 }
 
 export function buildPortalUrl(estimateId: string, proposalToken: string): string {
@@ -42,7 +51,11 @@ export function buildPortalUrl(estimateId: string, proposalToken: string): strin
 }
 
 export async function notifyNexusBuildLink(args: BuildLinkArgs): Promise<void> {
-  if (!args.proposalToken) return;
+  // Normally keyed on the proposal token (which forms the client build URL). A
+  // documents-only push (internal, at-cost builds) has no client portal token —
+  // allow it through as long as it carries documents to deliver.
+  const hasDocs = !!(args.documents && args.documents.length);
+  if (!args.proposalToken && !hasDocs) return;
   const bearer = process.env.WR_SUPABASE_SERVICE_KEY;
   const wrBase = process.env.WR_SUPABASE_URL;
   const endpoint = process.env.NEXUS_BUILD_WEBHOOK_URL || (wrBase ? `${wrBase}/functions/v1/${FN}` : "");
@@ -96,7 +109,7 @@ export async function notifyNexusBuildLink(args: BuildLinkArgs): Promise<void> {
   const payload = {
     event: EVENT_MAP[args.event],
     relic_build_id: relicBuildId,
-    build_url: buildPortalUrl(args.estimateId, args.proposalToken),
+    build_url: args.proposalToken ? buildPortalUrl(args.estimateId, args.proposalToken) : "",
     estimate_id: args.estimateId,
     estimate_number: args.estimateNumber ?? null,
     estimate_amount: args.estimateAmount ?? 0,
@@ -105,6 +118,8 @@ export async function notifyNexusBuildLink(args: BuildLinkArgs): Promise<void> {
     approved_by: args.approvedBy ?? null,
     wallflower_order_id: wallflowerOrderId,
     nexus_ref: args.nexusRef ?? null,
+    documents: args.documents && args.documents.length > 0 ? args.documents : undefined,
+    documents_only: args.documentsOnly || undefined,
   };
 
   try {
