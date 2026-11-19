@@ -643,6 +643,13 @@ export interface WallflowerWorkOrder {
   reference_images?: { url: string; name?: string; uploaded_at?: string }[];
   // Optional reference to a Nexus order/quote this work order relates to.
   nexus_ref?: NexusRef | null;
+  // Wallflower/Nexus-side human number for this order. For internal (Nexus-fed)
+  // work this becomes the Axiom estimate identity, kept end-to-end so Nexus sees
+  // its own number return. Absent on work created directly in Axiom.
+  wallflower_order_number?: string | null;
+  // Record-only labor bill derived from logged hours × the flat shop rate.
+  // No pay rail — a reference document for the internal client. See LaborBill.
+  labor_bill?: LaborBill | null;
   // Time & material tracking, mirroring custom_work (see migration v28).
   // materials/labor_log are JSONB arrays; actual_cost is the rolled-up total
   // (materials + labor); active_clock holds an in-progress clock between a
@@ -661,6 +668,23 @@ export interface NexusRef {
   number: string;
   client_name?: string;
   event_date?: string;
+}
+
+// Record-only labor bill for an internal-client work order: logged hours at the
+// flat shop rate, numbered as a child of the order (e.g. WF-8832-L1). There is
+// no pay button — it's a reference the internal client (Wallflower) carries back
+// to their own customer, not a billable Axiom invoice.
+export interface LaborBill {
+  /** Child number derived from the order's Nexus number, e.g. "WF-8832-L1". */
+  number: string;
+  /** Total logged hours rolled into this bill. */
+  hours: number;
+  /** Flat shop rate ($/hr) applied, captured at generation time. */
+  rate: number;
+  /** hours × rate. */
+  total: number;
+  created_at: string;
+  created_by?: string;
 }
 
 // ── Activity ────────────────────────────────────────────────
@@ -704,6 +728,19 @@ export interface BrandingConfig {
   assignments?: Partial<Record<LogoPlacement, LogoAssignment>>;
 }
 
+// Back-of-house identity for the one internal client (e.g. Wallflower RELIC).
+// Relic is the builder, but the internal client's own end-customer sees their
+// brand: this holds the name + logo placed on the branded build document, and
+// the flat shop rate used for record-only labor bills. One per workspace.
+export interface InternalClientProfile {
+  /** Display name on the end-customer document, e.g. "Wallflower RELIC". */
+  name?: string;
+  /** Horizontal logo URL (branding bucket) placed on the branded build doc. */
+  logo_url?: string;
+  /** Flat shop labor rate in dollars/hour for record-only labor bills. */
+  labor_rate?: number;
+}
+
 // Relic entity's business identity (Phase 2). Wallflower RELIC keeps using the
 // biz_* fields on Settings; this JSONB blob holds Relic's separate branding for
 // invoices/POs/proposals and outbound email.
@@ -736,6 +773,9 @@ export interface RelicProfile {
    *  lets one client be billed at cost with work orders + the Nexus bridge.
    *  Admin-toggleable; falls back to the INTERNAL_CLIENT_ENABLED env (off). */
   internal_client_enabled?: boolean;
+  /** Back-of-house identity (name/logo/flat labor rate) for this (RELIC)
+   *  workspace's one internal client. Branded docs + labor bills read this. */
+  internal_client_profile?: InternalClientProfile;
 }
 
 export interface Settings {
@@ -758,6 +798,9 @@ export interface Settings {
    *  capability on — lets one client be billed at cost with work orders + the
    *  Nexus bridge. Admin-toggleable; falls back to INTERNAL_CLIENT_ENABLED (off). */
   internal_client_enabled?: boolean;
+  /** Back-of-house identity (name/logo/flat labor rate) for this (default/
+   *  Wallflower) workspace's one internal client. */
+  internal_client_profile?: InternalClientProfile | null;
   logo_url?: string;
   /** Dormant: former per-entity sidebar logo (sidebar now shows the Axiom
    *  product mark). Kept so existing rows don't error. */

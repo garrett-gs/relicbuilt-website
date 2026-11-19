@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { SITE_ENTITY, NEXUS_CONNECTED, INTERNAL_CLIENT_ENABLED } from "@/lib/axiom-site";
-import { Settings, TeamMember, BrandingConfig, LogoPlacement } from "@/types/axiom";
+import { Settings, TeamMember, BrandingConfig, LogoPlacement, InternalClientProfile } from "@/types/axiom";
 import { LOGO_PLACEMENTS, venmoLinks } from "@/lib/entity-profile";
 import qrcode from "qrcode-generator";
 import { useAuth } from "@/components/axiom/AuthProvider";
@@ -31,6 +31,7 @@ export default function SettingsPage() {
   const [dirty, setDirty] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [brandUploading, setBrandUploading] = useState(false);
+  const [internalLogoUploading, setInternalLogoUploading] = useState(false);
 
   // "Add User (with login)" modal
   const [showAddUser, setShowAddUser] = useState(false);
@@ -172,6 +173,33 @@ export default function SettingsPage() {
     if (isRelicSite) updateField("relic_profile", { ...rp, internal_client_enabled: on });
     else updateField("internal_client_enabled", on);
   };
+  // Internal-client identity (per site): the back-of-house brand + flat labor
+  // rate for the one internal client. Relic stores it on relic_profile, everyone
+  // else on the top-level column (mirrors the nexus_connected/internal split).
+  const internalProfile: InternalClientProfile =
+    (isRelicSite ? rp.internal_client_profile : settings.internal_client_profile) || {};
+  const setInternalProfile = (patch: Partial<InternalClientProfile>) => {
+    const next = { ...internalProfile, ...patch };
+    if (isRelicSite) updateField("relic_profile", { ...rp, internal_client_profile: next });
+    else updateField("internal_client_profile", next);
+  };
+  // Upload the internal client's logo → `branding` bucket → internalProfile.logo_url.
+  async function handleInternalLogoUpload(file: File) {
+    setInternalLogoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("entity", SITE_ENTITY ?? "wallflower_relic");
+      const res = await authedFetch("/api/upload-logo", { method: "POST", body: fd });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Upload failed.");
+      setInternalProfile({ logo_url: json.url });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setInternalLogoUploading(false);
+    }
+  }
   // Upload a logo PNG → stored in the `branding` bucket, its URL saved on the
   // identity's logo field (used on documents & email).
   async function handleLogoUpload(file: File) {
@@ -455,6 +483,64 @@ export default function SettingsPage() {
                 </button>
               </div>
               <p className="text-xs text-muted mt-2">{internalClientOn ? "On — a customer can be set to the Internal client type (one per workspace)." : "Off — all clients are External."}</p>
+
+              {internalClientOn && (
+                <div className="mt-5 rounded border border-border bg-card p-4 space-y-4">
+                  <div>
+                    <h4 className="text-sm font-heading font-bold text-foreground">Internal Client Identity</h4>
+                    <p className="text-xs text-muted mt-0.5 max-w-md">The back-of-house brand for your internal client (e.g. Wallflower RELIC). Their end-customer sees this name &amp; logo on the build document — you stay the builder behind it. The flat rate drives record-only labor bills.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground mb-1">Client name (on the end-customer document)</label>
+                    <input
+                      type="text"
+                      value={internalProfile.name ?? ""}
+                      onChange={(e) => setInternalProfile({ name: e.target.value })}
+                      placeholder="Wallflower RELIC"
+                      className="w-full max-w-sm bg-background border border-border rounded px-3 py-2 text-sm text-foreground"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground mb-1">Client logo (branded build document)</label>
+                    <div className="flex items-center gap-3">
+                      {internalProfile.logo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={internalProfile.logo_url} alt="Internal client logo" className="h-10 w-auto max-w-[160px] object-contain bg-background border border-border rounded p-1" />
+                      ) : (
+                        <span className="text-xs text-muted">No logo yet</span>
+                      )}
+                      <label className={cn("inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold cursor-pointer border border-border bg-background hover:border-accent transition-colors", internalLogoUploading && "opacity-60 pointer-events-none")}>
+                        <input type="file" accept="image/png,image/jpeg,image/svg+xml" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleInternalLogoUpload(f); e.target.value = ""; }} />
+                        {internalLogoUploading ? "Uploading…" : internalProfile.logo_url ? "Replace" : "Upload"}
+                      </label>
+                      {internalProfile.logo_url && (
+                        <button onClick={() => setInternalProfile({ logo_url: "" })} className="text-xs text-muted hover:text-red-500">Remove</button>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted mt-1">Horizontal logo works best (PNG/SVG); max 5&nbsp;MB.</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground mb-1">Flat shop labor rate</label>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm text-muted">$</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={internalProfile.labor_rate ?? ""}
+                        onChange={(e) => setInternalProfile({ labor_rate: e.target.value === "" ? undefined : Number(e.target.value) })}
+                        placeholder="0.00"
+                        className="w-28 bg-background border border-border rounded px-3 py-2 text-sm text-foreground"
+                      />
+                      <span className="text-sm text-muted">/ hour</span>
+                    </div>
+                    <p className="text-xs text-muted mt-1">Logged hours × this rate make the record-only labor bill. No pay button — it&apos;s a reference for the internal client.</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

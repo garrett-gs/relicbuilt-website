@@ -12,18 +12,28 @@ export async function createEstimateFromQuoteRequest(
   wo: WallflowerWorkOrder,
   ctx: { entity: BusinessEntity; userEmail: string },
 ): Promise<{ id: string; estimate_number: string } | null> {
-  // Next estimate number from the GLOBAL max (server-side) so it never collides
-  // with another company's estimate in the shared table. Falls back to a
-  // tenant-scoped guess only if the endpoint is unreachable.
+  // Numbering. Internal (Nexus-fed) work KEEPS its Wallflower/Nexus number as
+  // the Axiom estimate identity, end-to-end — Nexus sees its own number return,
+  // and child documents (the labor bill) derive from it (e.g. WF-8832-L1).
+  // External work uses Relic's native EST-YYYY-NNNN; the two formats never
+  // collide, so the global EST- scan below is unaffected.
   const year = new Date().getFullYear();
   let estimate_number = "";
-  try {
-    const res = await authedFetch(`/api/next-estimate-number?prefix=EST&year=${year}`);
-    if (res.ok) {
-      const j = await res.json();
-      if (j?.estimate_number) estimate_number = j.estimate_number as string;
-    }
-  } catch { /* fall through */ }
+  if (wo.wallflower_order_number) {
+    estimate_number = wo.wallflower_order_number;
+  }
+  // Fall back to Relic's native numbering from the GLOBAL max (server-side) so it
+  // never collides with another company's estimate in the shared table. Falls
+  // back again to a tenant-scoped guess only if the endpoint is unreachable.
+  if (!estimate_number) {
+    try {
+      const res = await authedFetch(`/api/next-estimate-number?prefix=EST&year=${year}`);
+      if (res.ok) {
+        const j = await res.json();
+        if (j?.estimate_number) estimate_number = j.estimate_number as string;
+      }
+    } catch { /* fall through */ }
+  }
   if (!estimate_number) {
     const { data: latest } = await axiom
       .from("estimates").select("estimate_number")
