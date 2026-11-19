@@ -8,6 +8,9 @@ import type { BusinessEntity } from "@/types/axiom";
  * Vercel change. See AXIOM_SPLIT_SITES_SPEC.md §2–§3.
  */
 
+// NOTE: NEXT_PUBLIC_* is inlined at build time. If you change the Vercel value,
+// you must rebuild WITHOUT the webpack cache (an empty commit reuses the stale
+// inlined value) — touch this file so its chunk recompiles with the new value.
 const rawEntity = process.env.NEXT_PUBLIC_AXIOM_ENTITY;
 
 /** The entity this deployment is locked to, or null for the legacy switcher mode. */
