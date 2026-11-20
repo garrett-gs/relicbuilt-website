@@ -14,9 +14,19 @@ import { SITE_ENTITY } from "@/lib/axiom-site";
 
 // The workspace this deployment serves. Each production site is locked to one
 // business; an unlocked (local) build acts as Wallflower.
-export const SITE_TENANT_SLUG: string = SITE_ENTITY ?? "wallflower_relic";
+// Resolve the workspace this deployment serves, at RUNTIME. AXIOM_SITE_ENTITY is
+// a non-public env var — unlike NEXT_PUBLIC_*, it is NOT inlined at build time,
+// so it reads the current value on every cold start and is immune to Vercel's
+// per-route build-cache staleness (which silently kept this route stamping the
+// wrong tenant after the entity lock changed). Falls back to the build-time
+// NEXT_PUBLIC entity, then to wallflower_relic.
+function resolveSiteTenant(): string {
+  return process.env.AXIOM_SITE_ENTITY || SITE_ENTITY || "wallflower_relic";
+}
 
-export function axiomAdmin(slug: string = SITE_TENANT_SLUG): SupabaseClient {
+export const SITE_TENANT_SLUG: string = resolveSiteTenant();
+
+export function axiomAdmin(slug: string = resolveSiteTenant()): SupabaseClient {
   return createClient(
     process.env.NEXT_PUBLIC_AXIOM_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_AXIOM_SUPABASE_ANON_KEY!,
