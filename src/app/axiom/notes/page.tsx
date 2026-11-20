@@ -1,375 +1,382 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { axiom } from "@/lib/axiom-supabase";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useEntity } from "@/components/axiom/EntityProvider";
-import { Note, Customer, BusinessEntity } from "@/types/axiom";
+import { Note, BusinessEntity } from "@/types/axiom";
 import { NoteRecordType, NOTE_RECORD_COLUMN } from "@/components/axiom/RecordNotesPanel";
-import { formatDateTime, cn } from "@/lib/utils";
-import Button from "@/components/ui/Button";
-import { Plus, X, Trash2, Search, StickyNote, Users2, Share2, Lock, Hammer, FileText, ClipboardList, AtSign } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Hammer, FileText, ClipboardList, AtSign, Share2, Lock, Trash2, Sparkles, X, Send } from "lucide-react";
 
 const entityLabel = (e?: BusinessEntity) => (e === "relic" ? "RELIC" : "Wallflower");
 
-// A record a note can be tagged to (the Slack-style @ target).
-type RecordRef = { type: NoteRecordType; id: string; label: string; sub?: string };
+type RecordRef = { type: NoteRecordType; id: string; name: string; num?: string; status?: string; client?: string };
 
-const RECORD_META: Record<NoteRecordType, { label: string; icon: typeof Hammer; href: (id: string) => string }> = {
-  project: { label: "Project", icon: Hammer, href: (id) => `/axiom/projects?id=${id}` },
-  quote: { label: "Quote", icon: FileText, href: () => `/axiom/estimator` },
-  order: { label: "Order", icon: ClipboardList, href: () => `/axiom/wallflower` },
+const TYPE_META: Record<NoteRecordType, { label: string; plural: string; icon: typeof Hammer; color: string; href: (id: string) => string }> = {
+  project: { label: "Project", plural: "Projects", icon: Hammer, color: "#6b8f4e", href: (id) => `/axiom/projects?id=${id}` },
+  quote: { label: "Quote", plural: "Quotes", icon: FileText, color: "#c98b4b", href: () => `/axiom/estimator` },
+  order: { label: "Order", plural: "Orders", icon: ClipboardList, color: "#4e7f8f", href: () => `/axiom/wallflower` },
 };
+const TYPE_ORDER: NoteRecordType[] = ["project", "quote", "order"];
 
-function recordOfNote(n: Note): { type: NoteRecordType; id: string } | null {
+function recordKeyOfNote(n: Note): { type: NoteRecordType; id: string } | null {
   if (n.custom_work_id) return { type: "project", id: n.custom_work_id };
   if (n.estimate_id) return { type: "quote", id: n.estimate_id };
   if (n.work_order_id) return { type: "order", id: n.work_order_id };
   return null;
 }
 
+// Stable per-person avatar color.
+const AV_COLORS = ["#6b8f4e", "#c98b4b", "#4e7f8f", "#8f6b8f", "#b8963c", "#8f4e4e"];
+function avatarFor(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  const color = AV_COLORS[h % AV_COLORS.length];
+  const local = name.split("@")[0].replace(/[._-]+/g, " ").trim();
+  const parts = local.split(" ").filter(Boolean);
+  const ini = ((parts[0]?.[0] || "") + (parts[1]?.[0] || parts[0]?.[1] || "")).toUpperCase() || "?";
+  return { color, ini };
+}
+
+function dayLabel(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+  if (sameDay(d, now)) return "Today";
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if (sameDay(d, y)) return "Yesterday";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+function timeLabel(iso: string) {
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
 export default function NotesPage() {
   const { userEmail } = useAuth();
   const { entity } = useEntity();
   const [notes, setNotes] = useState<Note[]>([]);
-  const [customers, setCustomers] = useState<Pick<Customer, "id" | "name">[]>([]);
   const [records, setRecords] = useState<RecordRef[]>([]);
-  const [search, setSearch] = useState("");
-  const [editing, setEditing] = useState<Note | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
+  const [view, setView] = useState<string>("all"); // "all" | "__none" | recordId
+
+  // composer
+  const [draft, setDraft] = useState("");
+  const [tag, setTag] = useState<RecordRef | null>(null);
+  const [shared, setShared] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuQuery, setMenuQuery] = useState("");
+  const [posting, setPosting] = useState(false);
+  const streamRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
-    // Own-entity notes, plus any note the other side marked shared.
     const { data } = await axiom
       .from("notes")
       .select("*")
       .or(`entity.eq.${entity},shared.eq.true`)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: true });
     if (data) setNotes(data);
   }, [entity]);
 
-  const loadCustomers = useCallback(async () => {
-    const { data } = await axiom.from("customers").select("id, name").eq("entity", entity).order("name");
-    if (data) setCustomers(data);
-  }, [entity]);
-
-  // Everything a note can be tagged to: projects, quotes, and work orders.
   const loadRecords = useCallback(async () => {
     const [projects, quotes, orders] = await Promise.all([
-      axiom.from("custom_work").select("id, project_name, client_name").eq("entity", entity).order("created_at", { ascending: false }).limit(200),
-      axiom.from("estimates").select("id, estimate_number, project_name, client_name").eq("entity", entity).order("created_at", { ascending: false }).limit(200),
-      axiom.from("wallflower_work_orders").select("id, item_name, wallflower_order_number").order("created_at", { ascending: false }).limit(200),
+      axiom.from("custom_work").select("id, project_name, client_name, status").eq("entity", entity).order("created_at", { ascending: false }).limit(200),
+      axiom.from("estimates").select("id, estimate_number, project_name, client_name, status").eq("entity", entity).order("created_at", { ascending: false }).limit(200),
+      axiom.from("wallflower_work_orders").select("id, item_name, wallflower_order_number, client_name, status").order("created_at", { ascending: false }).limit(200),
     ]);
     const refs: RecordRef[] = [];
-    (projects.data || []).forEach((p: { id: string; project_name?: string; client_name?: string }) =>
-      refs.push({ type: "project", id: p.id, label: p.project_name || "Untitled project", sub: p.client_name || undefined }));
-    (quotes.data || []).forEach((q: { id: string; estimate_number?: string; project_name?: string; client_name?: string }) =>
-      refs.push({ type: "quote", id: q.id, label: q.project_name || q.estimate_number || "Quote", sub: q.estimate_number || q.client_name || undefined }));
-    (orders.data || []).forEach((o: { id: string; item_name?: string; wallflower_order_number?: string }) =>
-      refs.push({ type: "order", id: o.id, label: o.item_name || "Work order", sub: o.wallflower_order_number || undefined }));
+    (projects.data || []).forEach((p: { id: string; project_name?: string; client_name?: string; status?: string }) =>
+      refs.push({ type: "project", id: p.id, name: p.project_name || "Untitled project", status: p.status, client: p.client_name || undefined }));
+    (quotes.data || []).forEach((q: { id: string; estimate_number?: string; project_name?: string; client_name?: string; status?: string }) =>
+      refs.push({ type: "quote", id: q.id, name: q.project_name || q.estimate_number || "Quote", num: q.estimate_number || undefined, status: q.status, client: q.client_name || undefined }));
+    (orders.data || []).forEach((o: { id: string; item_name?: string; wallflower_order_number?: string; client_name?: string; status?: string }) =>
+      refs.push({ type: "order", id: o.id, name: o.item_name || "Work order", num: o.wallflower_order_number || undefined, status: o.status, client: o.client_name || undefined }));
     setRecords(refs);
   }, [entity]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => { loadCustomers(); }, [loadCustomers]);
   useEffect(() => { loadRecords(); }, [loadRecords]);
 
-  const customerName = (id?: string) => customers.find((c) => c.id === id)?.name;
+  // close the tag menu on outside click
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false); };
+    document.addEventListener("click", h);
+    return () => document.removeEventListener("click", h);
+  }, []);
+
   const recordMap = useMemo(() => {
     const m = new Map<string, RecordRef>();
     records.forEach((r) => m.set(`${r.type}:${r.id}`, r));
     return m;
   }, [records]);
   const recordOf = (n: Note): RecordRef | null => {
-    const r = recordOfNote(n);
-    if (!r) return null;
-    return recordMap.get(`${r.type}:${r.id}`) || { type: r.type, id: r.id, label: `${RECORD_META[r.type].label}` };
+    const k = recordKeyOfNote(n);
+    if (!k) return null;
+    return recordMap.get(`${k.type}:${k.id}`) || { type: k.type, id: k.id, name: TYPE_META[k.type].label };
   };
+  const countFor = (predicate: (n: Note) => boolean) => notes.filter(predicate).length;
+  const countForRecord = (r: RecordRef) => countFor((n) => { const k = recordKeyOfNote(n); return !!k && k.type === r.type && k.id === r.id; });
 
-  const filtered = notes.filter((n) => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    const rec = recordOf(n);
-    return (n.title || "").toLowerCase().includes(q)
-      || (n.body || "").toLowerCase().includes(q)
-      || (customerName(n.customer_id) || "").toLowerCase().includes(q)
-      || (rec?.label || "").toLowerCase().includes(q)
-      || (rec?.sub || "").toLowerCase().includes(q);
-  });
+  const viewRecord = view !== "all" && view !== "__none" ? recordMap.get(view) || null : null;
 
-  async function saveNote(form: NoteFormValues, existing: Note | null) {
-    // Exactly one record column is set; the rest are cleared.
-    const recordCols = { custom_work_id: null, estimate_id: null, work_order_id: null } as Record<string, string | null>;
-    if (form.attach) recordCols[NOTE_RECORD_COLUMN[form.attach.type]] = form.attach.id;
+  const visibleNotes = useMemo(() => {
+    if (view === "all") return notes;
+    if (view === "__none") return notes.filter((n) => !recordKeyOfNote(n));
+    return notes.filter((n) => { const k = recordKeyOfNote(n); return !!k && `${k.type}:${k.id}` === view; });
+  }, [notes, view]);
 
-    const payload = {
-      title: form.title || null,
-      body: form.body || null,
-      shared: form.shared,
-      customer_id: form.customer_id || null,
-      ...recordCols,
-    };
+  // scroll to newest when the feed changes
+  useEffect(() => { if (streamRef.current) streamRef.current.scrollTop = streamRef.current.scrollHeight; }, [visibleNotes.length, view]);
 
-    if (existing) {
-      const { data } = await axiom.from("notes").update({ ...payload, updated_at: new Date().toISOString() }).eq("id", existing.id).select().single();
-      if (data) await logActivity({ action: "updated", entity: "note", entity_id: data.id, label: `Updated note: ${data.title || "Untitled"}`, user_name: userEmail });
-    } else {
-      const { data } = await axiom.from("notes").insert({ entity, created_by: userEmail || null, ...payload }).select().single();
-      if (data) await logActivity({ action: "created", entity: "note", entity_id: data.id, label: `Added note: ${data.title || "Untitled"}`, user_name: userEmail });
+  // when viewing a record, pre-tag the composer to it (like posting in a channel)
+  useEffect(() => {
+    if (viewRecord) { setTag(viewRecord); } else { setTag(null); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  const menuResults = useMemo(() => {
+    const q = menuQuery.trim().toLowerCase();
+    return q ? records.filter((r) => r.name.toLowerCase().includes(q) || (r.num || "").toLowerCase().includes(q)) : records;
+  }, [menuQuery, records]);
+
+  async function post() {
+    const body = draft.trim();
+    if (!body || posting) return;
+    setPosting(true);
+    try {
+      const recordCols: Record<string, string | null> = { custom_work_id: null, estimate_id: null, work_order_id: null };
+      if (tag) recordCols[NOTE_RECORD_COLUMN[tag.type]] = tag.id;
+      const { data } = await axiom
+        .from("notes")
+        .insert({ entity, body, shared, created_by: userEmail || null, ...recordCols })
+        .select()
+        .single();
+      if (data) {
+        await logActivity({ action: "created", entity: "note", entity_id: data.id, label: tag ? `Added note on ${TYPE_META[tag.type].label.toLowerCase()}` : "Added note", user_name: userEmail });
+      }
+      setDraft("");
+      if (!viewRecord) { setTag(null); setShared(false); }
+      await load();
+    } finally {
+      setPosting(false);
     }
-    setEditing(null);
-    setShowCreate(false);
-    load();
   }
 
-  async function deleteNote(id: string) {
+  async function remove(id: string) {
     if (!confirm("Delete this note? This can't be undone.")) return;
     await axiom.from("notes").delete().eq("id", id);
-    setEditing(null);
     load();
   }
+
+  const totalCount = notes.length;
+  const noneCount = countFor((n) => !recordKeyOfNote(n));
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-2">
+      <div className="mb-4">
         <h1 className="text-2xl font-heading font-bold">Notes</h1>
-        <Button onClick={() => setShowCreate(true)} size="sm"><Plus size={14} className="mr-1" /> New Note</Button>
-      </div>
-      <p className="text-sm text-muted mb-6">
-        Your running notebook — jot notes and <span className="text-accent">@ tag a project, quote, or order</span> so the note also shows up on that record. Private to {entityLabel(entity)} unless you mark it <span className="text-accent">Shared</span>. Never visible to clients.
-      </p>
-
-      <div className="relative mb-6 max-w-sm">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted" />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search notes, clients, records..." className="w-full bg-card border border-border pl-9 pr-4 py-2 text-sm text-foreground focus:outline-none focus:border-accent" />
+        <p className="text-sm text-muted mt-1">
+          Shop-wide feed — write a note and <span className="text-accent">@ tag a project, quote, or order</span> to file it there. Private to {entityLabel(entity)} unless you mark it Shared. Never visible to clients.
+        </p>
       </div>
 
-      <div className="space-y-2">
-        {filtered.map((n) => {
-          const fromOtherSide = n.entity !== entity;
-          const client = customerName(n.customer_id);
-          const rec = recordOf(n);
-          const RecIcon = rec ? RECORD_META[rec.type].icon : null;
-          return (
-            <div key={n.id} className="bg-card border border-border p-4 hover:border-accent/50 transition-colors">
-              <button onClick={() => setEditing(n)} className="w-full text-left">
+      <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-4 items-start">
+        {/* ── Rail: jump to record ── */}
+        <aside className="bg-card border border-border md:sticky md:top-3 p-3 order-2 md:order-1">
+          <RailButton active={view === "all"} onClick={() => setView("all")} icon={<Sparkles size={14} style={{ color: "var(--accent)" }} />} label="All notes" count={totalCount} />
+          {TYPE_ORDER.map((t) => {
+            const recs = records.filter((r) => r.type === t);
+            if (recs.length === 0) return null;
+            const Icon = TYPE_META[t].icon;
+            return (
+              <div key={t}>
+                <p className="text-[10px] uppercase tracking-[0.14em] text-muted px-2 mt-3 mb-1">{TYPE_META[t].plural}</p>
+                {recs.map((r) => (
+                  <RailButton
+                    key={`${r.type}:${r.id}`}
+                    active={view === `${r.type}:${r.id}`}
+                    onClick={() => setView(`${r.type}:${r.id}`)}
+                    icon={<Icon size={13} style={{ color: TYPE_META[t].color }} />}
+                    label={r.name}
+                    count={countForRecord(r)}
+                  />
+                ))}
+              </div>
+            );
+          })}
+          <p className="text-[10px] uppercase tracking-[0.14em] text-muted px-2 mt-3 mb-1">Other</p>
+          <RailButton active={view === "__none"} onClick={() => setView("__none")} icon={<span className="text-muted">·</span>} label="General (untagged)" count={noneCount} />
+        </aside>
+
+        {/* ── Main: feed + composer ── */}
+        <section className="bg-card border border-border flex flex-col overflow-hidden order-1 md:order-2" style={{ height: "calc(100vh - 160px)", minHeight: 420 }}>
+          {/* header */}
+          <div className="px-4 py-3 border-b border-border">
+            {view === "all" ? (
+              <>
+                <h2 className="text-base font-heading font-bold flex items-center gap-2"><Sparkles size={15} style={{ color: "var(--accent)" }} /> All notes</h2>
+                <p className="text-xs text-muted mt-1">Shop-wide feed — @ a record to file a note onto it.</p>
+              </>
+            ) : view === "__none" ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base font-heading font-bold">General notes</h2>
+                <button onClick={() => setView("all")} className="ml-auto text-xs text-muted border border-border px-2.5 py-1 hover:text-foreground hover:border-accent">← Feed</button>
+              </div>
+            ) : viewRecord ? (
+              <>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="font-medium text-sm truncate">{n.title || "Untitled note"}</p>
-                  {n.shared && !fromOtherSide && (
-                    <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-accent border border-accent/40 px-1.5 py-0.5"><Share2 size={10} /> Shared</span>
-                  )}
-                  {fromOtherSide && (
-                    <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted border border-border px-1.5 py-0.5"><Share2 size={10} /> From {entityLabel(n.entity)}</span>
+                  <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full border" style={{ color: TYPE_META[viewRecord.type].color, borderColor: TYPE_META[viewRecord.type].color + "55", background: TYPE_META[viewRecord.type].color + "1a" }}>
+                    {TYPE_META[viewRecord.type].label}
+                  </span>
+                  <h2 className="text-base font-heading font-bold">{viewRecord.name}</h2>
+                  {viewRecord.status && <span className="text-xs text-muted border border-border rounded-full px-2.5 py-0.5">{viewRecord.status}</span>}
+                  <Link href={TYPE_META[viewRecord.type].href(viewRecord.id)} className="text-xs text-accent border border-accent/40 px-2.5 py-1 hover:bg-accent/10">Open</Link>
+                  <button onClick={() => setView("all")} className="text-xs text-muted border border-border px-2.5 py-1 hover:text-foreground hover:border-accent">← Feed</button>
+                </div>
+                <div className="text-xs text-muted mt-1.5 flex gap-4 flex-wrap">
+                  {viewRecord.num && <span>{viewRecord.num}</span>}
+                  {viewRecord.client && <span>Client: <span className="text-foreground">{viewRecord.client}</span></span>}
+                </div>
+              </>
+            ) : null}
+          </div>
+
+          {/* stream */}
+          <div ref={streamRef} className="flex-1 overflow-y-auto py-1.5">
+            {viewRecord && (
+              <div className="mx-4 my-2 px-3 py-2 border border-dashed border-accent/40 bg-accent/10 text-[12.5px] text-accent/90 leading-snug">
+                This is the record&apos;s <b>Notes</b> tab. Notes tagged <b>@{viewRecord.name}</b> — here, on the record page, or by Claude over MCP — show up here and in the feed.
+              </div>
+            )}
+            {visibleNotes.length === 0 ? (
+              <p className="text-muted text-sm text-center py-8">No notes yet. Add one below — it&apos;ll file here and in the feed.</p>
+            ) : (
+              visibleNotes.map((n, i) => {
+                const prev = visibleNotes[i - 1];
+                const showDay = view === "all" && (!prev || dayLabel(prev.created_at) !== dayLabel(n.created_at));
+                const who = n.created_by || "Team";
+                const av = avatarFor(who);
+                const rec = recordOf(n);
+                const RecIcon = rec ? TYPE_META[rec.type].icon : null;
+                const fromOther = n.entity && n.entity !== entity;
+                return (
+                  <div key={n.id}>
+                    {showDay && (
+                      <div className="flex items-center gap-3 px-4 pt-3 pb-1.5 text-[11px] uppercase tracking-wider text-muted">
+                        <span className="h-px bg-border flex-1" /> {dayLabel(n.created_at)} <span className="h-px bg-border flex-1" />
+                      </div>
+                    )}
+                    <div className="group flex gap-3 px-4 py-2 hover:bg-background">
+                      <div className="w-8 h-8 rounded flex-none grid place-items-center font-heading font-bold text-[12px] text-black" style={{ background: av.color }}>{av.ini}</div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-bold text-[13.5px]">{who.split("@")[0]}</span>
+                          <span className="text-[11px] text-muted">{timeLabel(n.created_at)}</span>
+                          {n.shared && !fromOther && <span className="text-[10px] uppercase tracking-wider text-accent border border-accent/40 px-1 py-0.5 inline-flex items-center gap-1"><Share2 size={9} /> Shared</span>}
+                          {fromOther && <span className="text-[10px] uppercase tracking-wider text-muted border border-border px-1 py-0.5 inline-flex items-center gap-1"><Share2 size={9} /> {entityLabel(n.entity)}</span>}
+                          <button onClick={() => remove(n.id)} className="ml-auto text-muted hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Delete note"><Trash2 size={13} /></button>
+                        </div>
+                        {n.title && <p className="text-sm font-medium text-foreground mt-0.5">{n.title}</p>}
+                        {n.body && <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{n.body}</p>}
+                        {rec && RecIcon && view === "all" && (
+                          <button
+                            onClick={() => setView(`${rec.type}:${rec.id}`)}
+                            className="mt-1.5 inline-flex items-center gap-1.5 text-[11.5px] px-2 py-0.5 rounded-full border bg-black/40"
+                            style={{ color: TYPE_META[rec.type].color, borderColor: TYPE_META[rec.type].color + "55" }}
+                          >
+                            <AtSign size={11} /> {rec.name}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* composer */}
+          <div className="border-t border-border p-3">
+            <div className="border border-border bg-background focus-within:border-accent rounded-md p-2.5">
+              {tag && (
+                <div className="mb-2">
+                  <span className="inline-flex items-center gap-1.5 text-[11.5px] px-2 py-0.5 rounded-full border bg-black/40" style={{ color: TYPE_META[tag.type].color, borderColor: TYPE_META[tag.type].color + "55" }}>
+                    <AtSign size={11} /> {tag.name}
+                    {!viewRecord && <button onClick={() => setTag(null)} className="text-current"><X size={12} /></button>}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <div ref={menuRef} className="relative">
+                  <button onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v); }} className="inline-flex items-center gap-1.5 bg-black/40 border border-border text-muted px-2.5 py-2 rounded text-[12.5px] hover:text-foreground hover:border-accent">
+                    <AtSign size={13} /> Tag
+                  </button>
+                  {menuOpen && (
+                    <div className="absolute bottom-[calc(100%+6px)] left-0 w-72 max-h-80 overflow-y-auto bg-card border border-border rounded-lg p-1.5 shadow-2xl z-20" onClick={(e) => e.stopPropagation()}>
+                      <input autoFocus value={menuQuery} onChange={(e) => setMenuQuery(e.target.value)} placeholder="Search records…" className="w-full bg-background border border-border px-2.5 py-2 text-sm mb-1 focus:outline-none focus:border-accent" />
+                      {TYPE_ORDER.map((t) => {
+                        const recs = menuResults.filter((r) => r.type === t);
+                        if (recs.length === 0) return null;
+                        const Icon = TYPE_META[t].icon;
+                        return (
+                          <div key={t}>
+                            <p className="text-[10px] uppercase tracking-wider text-muted px-2 pt-2 pb-1">{TYPE_META[t].plural}</p>
+                            {recs.slice(0, 30).map((r) => (
+                              <button key={`${r.type}:${r.id}`} onClick={() => { setTag(r); setMenuOpen(false); setMenuQuery(""); }} className="w-full text-left flex items-center gap-2 px-2 py-2 rounded hover:bg-accent/10 text-sm">
+                                <Icon size={13} style={{ color: TYPE_META[t].color }} className="flex-none" />
+                                <span className="truncate flex-1">{r.name}</span>
+                                {r.num && <span className="text-[11px] text-muted">{r.num}</span>}
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })}
+                      {menuResults.length === 0 && <p className="text-xs text-muted px-2 py-3">No records match.</p>}
+                    </div>
                   )}
                 </div>
-                {n.body && <p className="text-xs text-muted mt-1 line-clamp-2 whitespace-pre-wrap">{n.body}</p>}
-                <p className="text-[11px] text-muted/70 mt-2">
-                  {formatDateTime(n.created_at)}
-                  {client ? ` · ${client}` : ""}
-                </p>
-              </button>
-              {rec && RecIcon && (
-                <Link
-                  href={RECORD_META[rec.type].href(rec.id)}
-                  className="inline-flex items-center gap-1.5 mt-2 text-[11px] text-accent border border-accent/30 bg-accent/5 hover:bg-accent/10 px-2 py-1 transition-colors"
-                  title={`Open ${RECORD_META[rec.type].label.toLowerCase()}`}
-                >
-                  <RecIcon size={11} />
-                  <span className="text-muted uppercase tracking-wider text-[9px]">{RECORD_META[rec.type].label}</span>
-                  <span className="text-foreground truncate max-w-[220px]">{rec.label}</span>
-                </Link>
-              )}
-            </div>
-          );
-        })}
-        {filtered.length === 0 && (
-          <div className="text-center py-16 text-muted">
-            <StickyNote size={28} className="mx-auto mb-3 opacity-40" />
-            <p className="text-sm">{search ? "No notes match your search" : "No notes yet — add your first one"}</p>
-          </div>
-        )}
-      </div>
 
-      {(showCreate || editing) && (
-        <NoteModal
-          note={editing}
-          entity={entity}
-          customers={customers}
-          records={records}
-          onClose={() => { setShowCreate(false); setEditing(null); }}
-          onSave={saveNote}
-          onDelete={deleteNote}
-        />
-      )}
+                <input
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); post(); } }}
+                  placeholder="Write a note…  ( @ a project, quote, or order to file it there )"
+                  className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-foreground"
+                />
+
+                <button
+                  onClick={() => setShared((v) => !v)}
+                  title={shared ? "Shared — visible to the other side" : "Private to this side"}
+                  className={cn("inline-flex items-center gap-1.5 px-2.5 py-2 rounded text-[12px] border", shared ? "border-accent/40 text-accent bg-accent/10" : "border-border text-muted hover:text-foreground")}
+                >
+                  {shared ? <Share2 size={13} /> : <Lock size={13} />}
+                </button>
+
+                <button onClick={post} disabled={!draft.trim() || posting} className="inline-flex items-center gap-1.5 bg-accent text-black font-bold px-3.5 py-2 rounded text-[13px] disabled:opacity-40">
+                  <Send size={13} /> Post
+                </button>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted mt-2 pl-0.5">
+              {viewRecord
+                ? <>Posting here attaches to <b className="text-foreground">@{viewRecord.name}</b> — it also appears in the main feed.</>
+                : <>Tagging a record files the note on it <em>and</em> keeps it in the feed. Leave untagged for a general shop note. Enter to post, Shift+Enter for a new line.</>}
+            </p>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
 
-interface NoteFormValues {
-  title: string;
-  body: string;
-  shared: boolean;
-  customer_id: string;
-  attach: RecordRef | null;
-}
-
-function NoteModal({
-  note,
-  entity,
-  customers,
-  records,
-  onClose,
-  onSave,
-  onDelete,
-}: {
-  note: Note | null;
-  entity: BusinessEntity;
-  customers: Pick<Customer, "id" | "name">[];
-  records: RecordRef[];
-  onClose: () => void;
-  onSave: (f: NoteFormValues, existing: Note | null) => void;
-  onDelete: (id: string) => void;
-}) {
-  const readOnly = !!note && note.entity !== entity; // shared from the other side
-
-  const existingAttach: RecordRef | null = useMemo(() => {
-    if (!note) return null;
-    const r = recordOfNote(note);
-    if (!r) return null;
-    return records.find((x) => x.type === r.type && x.id === r.id) || { type: r.type, id: r.id, label: RECORD_META[r.type].label };
-  }, [note, records]);
-
-  const [form, setForm] = useState<NoteFormValues>({
-    title: note?.title || "",
-    body: note?.body || "",
-    shared: note?.shared || false,
-    customer_id: note?.customer_id || "",
-    attach: existingAttach,
-  });
-  const set = <K extends keyof NoteFormValues>(k: K, v: NoteFormValues[K]) => setForm((f) => ({ ...f, [k]: v }));
-  const otherSide = entity === "relic" ? "Wallflower" : "RELIC";
-
-  // @ record picker
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerQuery, setPickerQuery] = useState("");
-  const pickerRef = useRef<HTMLDivElement>(null);
-  const pickerResults = useMemo(() => {
-    const q = pickerQuery.trim().toLowerCase();
-    const list = q
-      ? records.filter((r) => r.label.toLowerCase().includes(q) || (r.sub || "").toLowerCase().includes(q))
-      : records;
-    return list.slice(0, 40);
-  }, [pickerQuery, records]);
-
+function RailButton({ active, onClick, icon, label, count }: { active: boolean; onClick: () => void; icon: ReactNode; label: string; count: number }) {
   return (
-    <>
-      <div className="fixed inset-0 bg-black/60 z-50" onClick={onClose} />
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg max-h-[90vh] overflow-y-auto bg-background border border-border p-6 z-50">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-heading font-bold">{readOnly ? "Note" : note ? "Edit Note" : "New Note"}</h2>
-          <button onClick={onClose} className="text-muted"><X size={20} /></button>
-        </div>
-
-        {readOnly ? (
-          <div className="space-y-3">
-            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider text-muted border border-border px-1.5 py-0.5">
-              <Share2 size={10} /> Shared from {entityLabel(note!.entity)} — view only
-            </span>
-            <p className="font-medium text-base">{note!.title || "Untitled note"}</p>
-            <p className="text-sm text-foreground whitespace-pre-wrap leading-relaxed">{note!.body || "(empty)"}</p>
-            <p className="text-[11px] text-muted/70 pt-2 border-t border-border">{formatDateTime(note!.created_at)}</p>
-            <Button variant="outline" onClick={onClose}>Close</Button>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div>
-              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Title</label>
-              <input value={form.title} onChange={(e) => set("title", e.target.value)} placeholder="e.g. Lauren — kickoff call 9/21" className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent" />
-            </div>
-            <div>
-              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Note</label>
-              <textarea value={form.body} onChange={(e) => set("body", e.target.value)} rows={8} placeholder="Paste your call summary here, or jot notes…" className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent resize-y leading-relaxed" />
-            </div>
-
-            {/* @ Attach to a record */}
-            <div ref={pickerRef} className="relative">
-              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5 flex items-center gap-1.5"><AtSign size={12} /> Attach to a record (optional)</label>
-              {form.attach ? (
-                <div className="flex items-center gap-2 bg-accent/10 border border-accent/30 px-3 py-2.5">
-                  {(() => { const I = RECORD_META[form.attach.type].icon; return <I size={14} className="text-accent shrink-0" />; })()}
-                  <span className="text-[9px] uppercase tracking-wider text-muted">{RECORD_META[form.attach.type].label}</span>
-                  <span className="text-sm text-foreground truncate flex-1">{form.attach.label}{form.attach.sub ? <span className="text-muted"> · {form.attach.sub}</span> : null}</span>
-                  <button type="button" onClick={() => set("attach", null)} className="text-muted hover:text-foreground shrink-0" title="Remove"><X size={14} /></button>
-                </div>
-              ) : (
-                <>
-                  <input
-                    value={pickerQuery}
-                    onChange={(e) => { setPickerQuery(e.target.value); setPickerOpen(true); }}
-                    onFocus={() => setPickerOpen(true)}
-                    onBlur={() => setTimeout(() => setPickerOpen(false), 150)}
-                    placeholder="Type to search projects, quotes, orders…"
-                    className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent"
-                  />
-                  {pickerOpen && pickerResults.length > 0 && (
-                    <div className="absolute z-20 top-full left-0 right-0 bg-card border border-border shadow-lg mt-0.5 max-h-56 overflow-y-auto">
-                      {pickerResults.map((r) => {
-                        const I = RECORD_META[r.type].icon;
-                        return (
-                          <button
-                            key={`${r.type}:${r.id}`}
-                            type="button"
-                            onMouseDown={() => { set("attach", r); setPickerOpen(false); setPickerQuery(""); }}
-                            className="w-full text-left px-3 py-2.5 text-sm hover:bg-background flex items-center gap-2"
-                          >
-                            <I size={13} className="text-accent shrink-0" />
-                            <span className="text-[9px] uppercase tracking-wider text-muted w-12 shrink-0">{RECORD_META[r.type].label}</span>
-                            <span className="text-foreground truncate flex-1">{r.label}</span>
-                            {r.sub && <span className="text-xs text-muted truncate max-w-[120px]">{r.sub}</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div>
-              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5 flex items-center gap-1.5"><Users2 size={12} /> Link to client (optional)</label>
-              <select value={form.customer_id} onChange={(e) => set("customer_id", e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent">
-                <option value="">— None —</option>
-                {customers.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Visibility</label>
-              <div className="flex gap-1 bg-card border border-border rounded p-1">
-                <button type="button" onClick={() => set("shared", false)} className={cn("flex-1 flex items-center justify-center gap-1.5 text-xs py-2 rounded transition-colors", !form.shared ? "bg-accent/20 text-accent font-medium" : "text-muted hover:text-foreground")}>
-                  <Lock size={12} /> Private
-                </button>
-                <button type="button" onClick={() => set("shared", true)} className={cn("flex-1 flex items-center justify-center gap-1.5 text-xs py-2 rounded transition-colors", form.shared ? "bg-accent/20 text-accent font-medium" : "text-muted hover:text-foreground")}>
-                  <Share2 size={12} /> Shared
-                </button>
-              </div>
-              <p className="text-[11px] text-muted/70 mt-1.5">
-                {form.shared ? `Visible to the ${otherSide} side too. Clients never see it.` : `Only visible on the ${entityLabel(entity)} side.`}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 pt-1">
-              <Button onClick={() => onSave(form, note)} disabled={!form.title && !form.body}>{note ? "Save" : "Add Note"}</Button>
-              <Button variant="outline" onClick={onClose}>Cancel</Button>
-              {note && (
-                <button onClick={() => onDelete(note.id)} className="ml-auto text-muted hover:text-red-500" title="Delete note"><Trash2 size={16} /></button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </>
+    <button onClick={onClick} className={cn("w-full flex items-center gap-2 px-2.5 py-2 rounded text-[13px] text-left transition-colors", active ? "bg-accent/15 text-foreground" : "text-muted hover:bg-background hover:text-foreground")}>
+      <span className="w-4 text-center flex-none grid place-items-center">{icon}</span>
+      <span className="truncate flex-1">{label}</span>
+      <span className="text-[11px] text-muted bg-black/40 border border-border rounded-full px-1.5 flex-none">{count}</span>
+    </button>
   );
 }
