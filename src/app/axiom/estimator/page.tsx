@@ -17,7 +17,7 @@ import DateField from "@/components/ui/DateField";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { generateEstimateProposalHtml, generateMasterProposalHtml, composeClientAddress, type MasterProposalBuild } from "@/lib/proposal-html";
 import { fuzzyRank } from "@/lib/fuzzy-match";
-import { Plus, Trash2, X, ChevronDown, ChevronRight, ChevronLeft, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip, Layers, List, Eye, FileUp } from "lucide-react";
+import { Plus, Trash2, X, ChevronDown, ChevronRight, ChevronLeft, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip, Layers, List, Eye, FileUp, Lock } from "lucide-react";
 import { parseEstimateFile } from "@/lib/estimate-import";
 import { useRouter } from "next/navigation";
 import { authedFetch, openAuditTrail } from "@/lib/authed-fetch";
@@ -2168,6 +2168,25 @@ export function EstimateDetail({ estimate, onUpdate, onDelete, section }: {
     return () => { active = false; };
   }, [customerId]);
 
+  // Nexus-originated work: if a Wallflower work order points at this estimate,
+  // the request came through Nexus (a Wallflower / Relic / internal request).
+  // Nexus owns the client record and the client-facing quote, so Axiom shows
+  // those details read-only and drops the proposal/send-to-client flow — here we
+  // only build the at-cost estimate and post the number back. If a detail never
+  // came over from Nexus we simply don't show it (nothing to fill in by hand).
+  const [sourceWO, setSourceWO] = useState<WallflowerWorkOrder | null>(null);
+  useEffect(() => {
+    let active = true;
+    axiom
+      .from("wallflower_work_orders")
+      .select("*")
+      .eq("estimate_id", estimate.id)
+      .maybeSingle()
+      .then(({ data }) => { if (active) setSourceWO((data as WallflowerWorkOrder) || null); });
+    return () => { active = false; };
+  }, [estimate.id]);
+  const fromNexus = !!sourceWO;
+
   async function sendToWR() {
     if (dirty) save();
     setWrSending(true);
@@ -2399,7 +2418,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
   }
 
   return (
-    <div className="space-y-6 pb-12" data-wizsec={section || "all"}>
+    <div className="space-y-6 pb-12" data-wizsec={section || "all"} data-nexus={fromNexus ? "true" : "false"}>
       {/* Project Details */}
       <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4" data-sec="info">
       <div className="flex items-center justify-between mb-4">
@@ -2408,6 +2427,50 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1 space-y-3">
           <Field label="Project / Description" value={projectName} onChange={(v) => { setProjectName(v); markDirty(); }} />
+          {/* Nexus-originated requests: client details come from Nexus and are
+              shown read-only. Only fields that actually came over are listed —
+              nothing to fill in here. */}
+          {fromNexus && sourceWO && (
+            <div className="border border-accent/40 border-t-2 border-t-accent bg-accent/[0.06] p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-accent">From Nexus</span>
+                {sourceWO.wallflower_order_number && (
+                  <span className="ml-auto text-xs text-muted font-mono">{sourceWO.wallflower_order_number}</span>
+                )}
+              </div>
+              {(() => {
+                const rows = ([
+                  ["Client", sourceWO.client_name],
+                  ["Company", sourceWO.client_company],
+                  ["Email", sourceWO.client_email],
+                  ["Phone", sourceWO.client_phone],
+                  ["Occasion", sourceWO.occasion],
+                  ["Event date", sourceWO.event_date],
+                  ["Venue", sourceWO.venue],
+                  ["Work type", sourceWO.work_type],
+                  ["Submitted by", sourceWO.submitted_by],
+                ] as [string, string | null | undefined][]).filter(([, v]) => v && String(v).trim());
+                return rows.length > 0 ? (
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                    {rows.map(([k, v]) => (
+                      <div key={k}>
+                        <p className="text-[10px] uppercase tracking-wider text-muted mb-0.5">{k}</p>
+                        <p className="text-sm text-foreground break-words">{v}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted italic">No client details came over from Nexus — they live in the Nexus record.</p>
+                );
+              })()}
+              <div className="mt-3 pt-3 border-t border-accent/20 flex items-center gap-2 text-xs text-muted">
+                <Lock size={12} className="text-muted shrink-0" />
+                Managed in Nexus — edit the client there. Nothing on this estimate is sent to the customer.
+              </div>
+            </div>
+          )}
+          <div data-ext-only className="space-y-3">
           {linkedCompanyName && customerId && selectedType === "customer" && (
             <div className="bg-accent/10 border border-accent/30 px-3 py-2 text-xs flex items-center gap-2">
               <span className="text-muted">Customer is linked to company:</span>
@@ -2494,6 +2557,7 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
               )}
             </div>
           )}
+          </div>
           {/* Master project — optional parent grouping several builds together. */}
           <div>
             <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">
@@ -2972,8 +3036,26 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
         )}
       </div>
 
+      {/* Internal (Nexus) requests send no client-facing proposal — the at-cost
+          total posts back to Nexus, where Wallflower sends the quote. */}
+      {fromNexus && (
+        <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4" data-sec="proposal">
+          <div className="flex items-start gap-3">
+            <ExternalLink size={18} className="text-accent shrink-0 mt-0.5" />
+            <div className="text-sm">
+              <p className="text-foreground font-medium">At-cost total posts back to Nexus</p>
+              <p className="text-muted text-xs mt-1 leading-relaxed">
+                This is an internal (Nexus) request — no proposal, sign-off, or client-facing
+                document is produced here. Wallflower sends the quote from Nexus; Axiom just
+                returns the number. Use <span className="text-foreground">Send to Nexus (internal)</span> below.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Proposal — moved from project detail. Build the client-facing proposal here. */}
-      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4" data-sec="proposal">
+      <div data-ext-only className="bg-card border border-border border-t-2 border-t-accent/30 p-4" data-sec="proposal">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-foreground border-l-2 border-accent pl-3">
             Proposal

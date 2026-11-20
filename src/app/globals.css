@@ -134,3 +134,9 @@ input[type="number"] {
 [data-wizsec="materials"] [data-sec]:not([data-sec~="materials"]) { display: none !important; }
 [data-wizsec="pricing"] [data-sec]:not([data-sec~="pricing"]) { display: none !important; }
 [data-wizsec="proposal"] [data-sec]:not([data-sec~="proposal"]) { display: none !important; }
+
+/* Internal (Nexus-originated) estimate: the client record and the client-facing
+   quote live in Nexus, so the editable client block and the proposal/send-to-
+   client section (tagged data-ext-only) are hidden here — Axiom only builds the
+   at-cost estimate and posts the number back. */
+[data-nexus="true"] [data-ext-only] { display: none !important; }
