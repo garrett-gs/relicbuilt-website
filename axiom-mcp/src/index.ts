@@ -19,9 +19,10 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { TOOLS } from "./tools.js";
 import { WRITE_TOOLS } from "./writes.js";
+import { NOTE_TOOLS } from "./notes.js";
 import type { ToolResult } from "./types.js";
 
-const ALL_TOOLS = [...TOOLS, ...WRITE_TOOLS];
+const ALL_TOOLS = [...TOOLS, ...WRITE_TOOLS, ...NOTE_TOOLS];
 
 async function main(): Promise<void> {
   const server = new Server(
