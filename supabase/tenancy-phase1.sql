@@ -305,7 +305,9 @@ begin
         select tenant_id into v from public.custom_work where id = (r ->> 'project_id')::uuid;
       end if;
     when 'wallflower_work_orders' then
-      v := public.tenant_id_for_slug('wallflower_relic');
+      -- v51: follow the request workspace (one Relic home) instead of hardcoding
+      -- wallflower_relic; fall back to wallflower only with no workspace context.
+      v := coalesce(public.current_tenant_id(), public.tenant_id_for_slug('wallflower_relic'));
     when 'activity_log' then
       v := public.tenancy_tenant_of_record(r ->> 'entity', (r ->> 'entity_id')::uuid);
     else
