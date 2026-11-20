@@ -295,6 +295,8 @@ export interface Note {
   shared?: boolean;        // also visible on the other Axiom side
   customer_id?: string;    // optional link to a client
   custom_work_id?: string; // optional link to a build/project
+  estimate_id?: string;    // optional link to a quote/estimate (v52)
+  work_order_id?: string;  // optional link to a work order (v52)
   created_by?: string;
   created_at: string;
   updated_at: string;

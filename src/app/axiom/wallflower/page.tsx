@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { axiom } from "@/lib/axiom-supabase";
 import { useEntity } from "@/components/axiom/EntityProvider";
+import RecordNotesPanel from "@/components/axiom/RecordNotesPanel";
 import { logActivity } from "@/lib/activity";
 import { useAuth } from "@/components/axiom/AuthProvider";
 import { useAutosave } from "@/components/axiom/useAutosave";
@@ -534,6 +535,8 @@ export default function WallflowerPage() {
               onCreateEstimate={() => createEstimate(selected)}
               onViewEstimate={() => selected.estimate_id && setDrawerEstimateId(selected.estimate_id)}
             />
+            {/* Tagged notes — two-way with the Notes page / MCP for this order. */}
+            <RecordNotesPanel recordType="order" recordId={selected.id} entity={entity} className="mt-6" />
           </div>
         </>
       )}

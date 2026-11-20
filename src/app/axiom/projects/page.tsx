@@ -27,6 +27,7 @@ import { useRouter } from "next/navigation";
 import { generateProposalHtml } from "@/lib/proposal-html";
 import { resolveEntityProfile, proposalBiz } from "@/lib/entity-profile";
 import { generateProjectRecapHtml } from "@/lib/project-recap-html";
+import RecordNotesPanel from "@/components/axiom/RecordNotesPanel";
 import { notifyPortal } from "@/lib/notify-portal";
 import { Settings } from "@/types/axiom";
 import { authedFetch } from "@/lib/authed-fetch";
@@ -2244,6 +2245,11 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
         <label className="text-xs uppercase tracking-wider text-muted block mb-1.5">Internal Notes</label>
         <textarea value={notes} onChange={(e) => { setNotes(e.target.value); markDirty(); }} className="w-full bg-card border border-border px-4 py-3 text-foreground text-sm focus:outline-none focus:border-accent min-h-[80px] resize-y" />
       </div>
+
+      {/* Tagged notes — the threaded Notes feature. Two-way with the Notes page
+          (and anything Claude adds over MCP): notes tagged to this project land
+          here, and notes added here show up on the Notes page. */}
+      <RecordNotesPanel recordType="project" recordId={project.id} entity={project.entity || "relic"} />
 
       {/* Documents — PDFs, Word docs, drawings, anything that isn't an
           image. Lives separate from the Dropbox / File Folder link below

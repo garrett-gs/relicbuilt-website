@@ -16,6 +16,7 @@ import SaveButton from "@/components/ui/SaveButton";
 import DateField from "@/components/ui/DateField";
 import { cn, formatDate, formatDateTime } from "@/lib/utils";
 import { generateEstimateProposalHtml, generateMasterProposalHtml, composeClientAddress, type MasterProposalBuild } from "@/lib/proposal-html";
+import RecordNotesPanel from "@/components/axiom/RecordNotesPanel";
 import { fuzzyRank } from "@/lib/fuzzy-match";
 import { Plus, Trash2, X, ChevronDown, ChevronRight, ChevronLeft, CheckCircle2, Search, Package, MessageSquare, Send, Loader2, Sparkles, Hammer, ExternalLink, RefreshCw, Copy, FileText, Paperclip, Layers, List, Eye, FileUp, Lock } from "lucide-react";
 import { parseEstimateFile } from "@/lib/estimate-import";
@@ -2725,6 +2726,12 @@ Keep it concise with bullet points. This is for troubleshooting later.` },
             })}
           </div>
         )}
+      </div>
+
+      {/* Tagged notes — the threaded Notes feature, two-way with the Notes page
+          (and anything Claude adds over MCP) for this quote. */}
+      <div data-sec="info">
+        <RecordNotesPanel recordType="quote" recordId={estimate.id} entity={estimate.entity || "relic"} />
       </div>
 
       {/* Line Items & Labor */}
