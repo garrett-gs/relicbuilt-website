@@ -18,7 +18,6 @@ import {
   Calculator,
   ShoppingCart,
   Package,
-  LayoutList,
   Receipt,
   Camera,
   Activity,
@@ -42,7 +41,6 @@ const navSections = [
     label: "Overview",
     items: [
       { href: "/axiom/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-      { href: "/axiom/tracker", icon: LayoutList, label: "Tracker" },
       { href: "/axiom/notes", icon: StickyNote, label: "Notes" },
       { href: "/axiom/crew", icon: HardHat, label: "Crew", adminOnly: true },
     ],
