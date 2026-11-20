@@ -10,7 +10,7 @@ import CartDrawer from "@/components/shop/CartDrawer";
 // approval page reads as a standalone document, not a page embedded in the
 // website), and the whole Axiom app (which has its own sidebar chrome in
 // axiom/layout.tsx — the marketing masthead/footer don't belong on the ERP).
-const BARE_PREFIXES = ["/proposal", "/pay", "/approve", "/client", "/axiom"];
+const BARE_PREFIXES = ["/proposal", "/pay", "/approve", "/client", "/axiom", "/receipts"];
 
 export default function SiteShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

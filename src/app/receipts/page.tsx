@@ -1,147 +1,42 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { PurchaseOrder } from "@/types/axiom";
-import { Camera, Check, Plus, X, Loader2, Trash2, Delete, ShoppingCart, ChevronLeft, Package } from "lucide-react";
+import { PurchaseOrder, TeamMember } from "@/types/axiom";
+import { Camera, Check, Plus, X, Loader2, Trash2, ShoppingCart, Package, ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { Session } from "@supabase/supabase-js";
 import Button from "@/components/ui/Button";
-import { cn } from "@/lib/utils";
-import AddToPOModal, { AddToPOItem, POSource } from "@/components/ui/AddToPOModal";
+import AddToPOModal, { AddToPOItem } from "@/components/ui/AddToPOModal";
 import DateField from "@/components/ui/DateField";
+import { axiom } from "@/lib/axiom-supabase";
+import { authedFetch } from "@/lib/authed-fetch";
+import { SITE_ENTITY } from "@/lib/axiom-site";
 
-// ── Session ──────────────────────────────────────────────────
-// PINs are checked by /api/receipts/session; every other call sends the
-// signed session token it returns.
+// ── Identity ─────────────────────────────────────────────────
+// The receipts app is part of Axiom: whoever is signed into Axiom on this
+// device owns the receipts they add. No separate PIN — the receipt is stamped
+// with the signed-in team member's name (submitted_by). Reads and writes go
+// through the anon-key `axiom` client under RLS, exactly like /axiom/receipts.
 
-interface Session { name: string; token: string }
+// ── RELIC masthead ───────────────────────────────────────────
+// Branded RELIC (not the Wallflower marketing nav), with a way back into Axiom.
 
-// ── PIN Gate ─────────────────────────────────────────────────
-
-type GateStep = "select_member" | "enter_pin";
-
-function PinGate({ onUnlock }: { onUnlock: (session: Session) => void }) {
-  const [members, setMembers] = useState<string[] | null>(null);
-  const [step, setStep] = useState<GateStep>("select_member");
-  const [selected, setSelected] = useState<string | null>(null);
-  const [pin, setPin] = useState("");
-  const [pinError, setPinError] = useState(false);
-  const [pinMessage, setPinMessage] = useState("Incorrect PIN");
-  const [checking, setChecking] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/receipts/session")
-      .then((r) => r.json())
-      .then((d: { members?: string[] }) => setMembers(d.members ?? []))
-      .catch(() => setMembers([]));
-  }, []);
-
-  function selectMember(name: string) {
-    setSelected(name);
-    setPin("");
-    setPinError(false);
-    setStep("enter_pin");
-  }
-
-  async function check(entered: string) {
-    setChecking(true);
-    try {
-      const res = await fetch("/api/receipts/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: selected, pin: entered }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (res.ok && body.token) return onUnlock({ name: body.name, token: body.token });
-      setPinMessage(body.error || "Incorrect PIN");
-    } catch {
-      setPinMessage("No connection. Try again.");
-    } finally {
-      setChecking(false);
-    }
-    setPinError(true);
-    setTimeout(() => { setPin(""); setPinError(false); }, 1200);
-  }
-
-  function pressDigit(digit: string) {
-    if (checking) return;
-    if (pinError) { setPin(""); setPinError(false); }
-    const next = pin + digit;
-    setPin(next);
-    if (next.length === 4) void check(next);
-  }
-
-  function del() { setPin((p) => p.slice(0, -1)); setPinError(false); }
-
-  const pad = ["1","2","3","4","5","6","7","8","9","","0","⌫"];
-
-  if (step === "select_member") {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 gap-8">
-        <div className="text-center">
-          <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center mx-auto mb-4">
-            <Camera size={22} className="text-accent" />
-          </div>
-          <h1 className="text-2xl font-heading font-bold">RELIC Receipts</h1>
-          <p className="text-muted text-sm mt-1">Select your name to continue</p>
-        </div>
-        {members === null ? (
-          <Loader2 size={20} className="animate-spin text-muted" />
-        ) : members.length === 0 ? (
-          <p className="text-muted text-sm">No team members with PINs found — add them in Settings.</p>
-        ) : (
-          <div className="flex flex-col gap-3 w-72">
-            {members.map((name) => (
-              <button
-                key={name}
-                onClick={() => selectMember(name)}
-                className="bg-card border border-border px-5 py-4 text-left hover:border-accent hover:text-accent transition-colors"
-              >
-                <p className="font-medium">{name}</p>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
+function ReceiptsHeader() {
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 gap-8">
-      <div className="text-center">
-        <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center mx-auto mb-4">
-          <Camera size={22} className="text-accent" />
+    <div className="border-b border-border bg-background/80 backdrop-blur-md sticky top-0 z-40">
+      <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/relic-shield-gold.png" alt="RELIC" className="h-7 w-7 object-contain shrink-0" />
+          <span className="font-heading font-bold tracking-[0.18em] text-sm whitespace-nowrap">RELIC RECEIPTS</span>
         </div>
-        <h1 className="text-2xl font-heading font-bold">{selected}</h1>
-        <p className="text-muted text-sm mt-1">Enter your PIN</p>
+        <Link
+          href="/axiom/receipts"
+          className="flex items-center gap-1.5 text-xs uppercase tracking-wider font-bold text-muted hover:text-accent transition-colors whitespace-nowrap"
+        >
+          <ArrowLeft size={13} /> Back to Axiom
+        </Link>
       </div>
-      <div className="flex flex-col items-center gap-3">
-        <div className={cn("flex gap-4", pinError && "animate-[shake_0.4s_ease-in-out]")}>
-          {[0,1,2,3].map((i) => (
-            <div key={i} className={cn(
-              "w-4 h-4 rounded-full border-2 transition-colors",
-              pinError ? "bg-red-500 border-red-500" : i < pin.length ? "bg-accent border-accent" : "border-border bg-transparent"
-            )} />
-          ))}
-        </div>
-        {pinError && <p className="text-xs text-red-400">{pinMessage}</p>}
-        {checking && <Loader2 size={14} className="animate-spin text-muted" />}
-      </div>
-      <div className="grid grid-cols-3 gap-3 w-64">
-        {pad.map((k, i) => k === "" ? (
-          <div key={i} />
-        ) : k === "⌫" ? (
-          <button key={i} onPointerDown={del} className="h-16 rounded-lg bg-card border border-border flex items-center justify-center text-muted hover:text-foreground active:scale-95 transition-transform">
-            <Delete size={20} />
-          </button>
-        ) : (
-          <button key={i} onPointerDown={() => pressDigit(k)}
-            className="h-16 rounded-lg bg-card border border-border text-xl font-medium text-foreground hover:border-accent hover:text-accent active:scale-95 transition-all">
-            {k}
-          </button>
-        ))}
-      </div>
-      <button onClick={() => { setStep("select_member"); setPin(""); }} className="flex items-center gap-1 text-sm text-muted hover:text-foreground transition-colors">
-        <ChevronLeft size={14} /> Back
-      </button>
     </div>
   );
 }
@@ -172,6 +67,7 @@ interface ReceiptRecord {
   line_items: LineItem[];
   purchase_order_id?: string;
   notes?: string;
+  submitted_by?: string;
   created_at: string;
 }
 
@@ -181,38 +77,71 @@ type Step = "capture" | "parsing" | "review" | "saving" | "saved";
 
 export default function ReceiptsApp() {
   const [session, setSession] = useState<Session | null>(null);
-  // Stable, so ReceiptsMain's data loader doesn't re-run on every render.
-  const signOut = useCallback(() => setSession(null), []);
-  if (!session) return <PinGate onUnlock={setSession} />;
-  return <ReceiptsMain session={session} onSignOut={signOut} />;
+  const [authLoading, setAuthLoading] = useState(true);
+  const [memberName, setMemberName] = useState("");
+
+  // Share the Axiom auth session (same browser session as the main app).
+  useEffect(() => {
+    axiom.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setAuthLoading(false);
+    });
+    const { data: { subscription } } = axiom.auth.onAuthStateChange((_e, s) => setSession(s));
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Resolve the signed-in user's display name for submitted_by.
+  const email = session?.user?.email?.toLowerCase() || "";
+  useEffect(() => {
+    if (!email) return;
+    let active = true;
+    axiom.from("settings").select("team_members").limit(1).single().then(({ data }) => {
+      if (!active) return;
+      const members = (data?.team_members || []) as TeamMember[];
+      const m = members.find((x) => x.email?.toLowerCase() === email);
+      setMemberName(m?.name || email);
+    });
+    return () => { active = false; };
+  }, [email]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 size={20} className="animate-spin text-muted" />
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <ReceiptsHeader />
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-5 text-center">
+          <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center">
+            <Camera size={22} className="text-accent" />
+          </div>
+          <div>
+            <h1 className="text-xl font-heading font-bold">RELIC Receipts</h1>
+            <p className="text-muted text-sm mt-1 max-w-xs">
+              Sign in to Axiom to add receipts — each one is saved under your name.
+            </p>
+          </div>
+          <Link
+            href="/axiom/receipts"
+            className="bg-accent text-background px-5 py-2.5 text-sm font-medium hover:bg-accent/90 transition-colors"
+          >
+            Go to Axiom to sign in
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return <ReceiptsMain memberName={memberName || email} />;
 }
 
-function ReceiptsMain({ session, onSignOut }: { session: Session; onSignOut: () => void }) {
-  const memberName = session.name;
-
-  // Every receipts API call carries the PIN session; an expired or revoked
-  // one sends the person back to the PIN screen.
-  const api = useCallback(
-    async (url: string, init: RequestInit = {}) => {
-      const headers = new Headers(init.headers);
-      headers.set("x-receipts-session", session.token);
-      const res = await fetch(url, { ...init, headers });
-      if (res.status === 401) onSignOut();
-      return res;
-    },
-    [session.token, onSignOut],
-  );
-  const json = (body: unknown): RequestInit => ({
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const poSource: POSource = {
-    load: async () => (await api("/api/receipts/po")).json(),
-    add: async (body) => {
-      const res = await api("/api/receipts/po", { method: "POST", ...json(body) });
-      return res.json();
-    },
-  };
+function ReceiptsMain({ memberName }: { memberName: string }) {
+  const entity = SITE_ENTITY || "relic";
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("capture");
   const [imageUrl, setImageUrl] = useState("");
@@ -229,12 +158,13 @@ function ReceiptsMain({ session, onSignOut }: { session: Session; onSignOut: () 
   const [poItem, setPoItem] = useState<AddToPOItem | null>(null);
 
   const loadData = useCallback(async () => {
-    const res = await api("/api/receipts");
-    if (!res.ok) return;
-    const d = (await res.json()) as { purchase_orders: PurchaseOrder[]; receipts: ReceiptRecord[] };
-    setPurchaseOrders(d.purchase_orders);
-    setReceipts(d.receipts);
-  }, [api]);
+    const [{ data: po }, { data: rec }] = await Promise.all([
+      axiom.from("purchase_orders").select("*").in("status", ["pending", "approved"]).order("created_at", { ascending: false }),
+      axiom.from("receipts").select("*").order("created_at", { ascending: false }).limit(20),
+    ]);
+    setPurchaseOrders((po || []) as PurchaseOrder[]);
+    setReceipts((rec || []) as ReceiptRecord[]);
+  }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -247,7 +177,7 @@ function ReceiptsMain({ session, onSignOut }: { session: Session; onSignOut: () 
 
     const fd = new FormData();
     fd.append("file", file);
-    const up = await api("/api/receipts/upload", { method: "POST", body: fd });
+    const up = await authedFetch("/api/receipts/upload", { method: "POST", body: fd });
     const upBody = await up.json().catch(() => ({}));
     if (!up.ok || !upBody.url) {
       setError(upBody.error || "Upload failed.");
@@ -258,7 +188,11 @@ function ReceiptsMain({ session, onSignOut }: { session: Session; onSignOut: () 
     setImageUrl(publicUrl);
 
     try {
-      const res = await api("/api/parse-receipt", { method: "POST", ...json({ image_url: publicUrl }) });
+      const res = await authedFetch("/api/parse-receipt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_url: publicUrl }),
+      });
       const parsed: ParsedReceipt = await res.json();
       if (parsed.error) throw new Error(String(parsed.error));
       setVendor(parsed.vendor || "");
@@ -294,21 +228,18 @@ function ReceiptsMain({ session, onSignOut }: { session: Session; onSignOut: () 
 
   async function save() {
     setStep("saving");
-    const res = await api("/api/receipts", {
-      method: "POST",
-      ...json({
-        image_url: imageUrl || null,
-        vendor: vendor || null,
-        receipt_date: receiptDate || null,
-        total,
-        line_items: items,
-        purchase_order_id: selectedPOId || null,
-        notes: notes || null,
-      }),
+    const { error: saveErr } = await axiom.from("receipts").insert({
+      image_url: imageUrl || null,
+      vendor: vendor || null,
+      receipt_date: receiptDate || null,
+      total,
+      line_items: items,
+      purchase_order_id: selectedPOId || null,
+      notes: notes || null,
+      submitted_by: memberName, // the signed-in person
     });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(body.error || "Couldn't save the receipt. Try again.");
+    if (saveErr) {
+      setError(saveErr.message || "Couldn't save the receipt. Try again.");
       setStep("review");
       return;
     }
@@ -331,14 +262,13 @@ function ReceiptsMain({ session, onSignOut }: { session: Session; onSignOut: () 
   }
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-6">
-      <div className="mb-6 flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-heading font-bold">RELIC Receipts</h1>
-          <p className="text-muted text-sm">Logged in as <span className="text-foreground font-medium">{memberName}</span></p>
+    <div className="min-h-screen bg-background">
+      <ReceiptsHeader />
+      <div className="max-w-lg mx-auto px-4 py-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-heading font-bold">Receipts</h1>
+          <p className="text-muted text-sm">Saving as <span className="text-foreground font-medium">{memberName}</span></p>
         </div>
-        <button onClick={onSignOut} className="text-xs text-muted hover:text-foreground transition-colors mt-1">Switch user</button>
-      </div>
 
       {step === "capture" && (
         <div>
@@ -360,6 +290,7 @@ function ReceiptsMain({ session, onSignOut }: { session: Session; onSignOut: () 
         <div className="flex flex-col items-center gap-5 py-16">
           {imagePreview && (
             <div className="relative w-36 h-36">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={imagePreview} alt="Receipt" className="w-full h-full object-cover rounded border border-border" />
               <div className="absolute inset-0 bg-background/70 rounded flex items-center justify-center">
                 <Loader2 size={28} className="animate-spin text-accent" />
@@ -373,6 +304,7 @@ function ReceiptsMain({ session, onSignOut }: { session: Session; onSignOut: () 
       {(step === "review" || step === "saving") && (
         <div className="space-y-5">
           {imagePreview && (
+            /* eslint-disable-next-line @next/next/no-img-element */
             <img src={imagePreview} alt="Receipt" className="w-full max-h-52 object-contain border border-border bg-card rounded" />
           )}
           {error && (
@@ -491,6 +423,7 @@ function ReceiptsMain({ session, onSignOut }: { session: Session; onSignOut: () 
               return (
                 <div key={r.id} className="bg-card border border-border p-3 flex gap-3 items-start">
                   {r.image_url ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img src={r.image_url} alt="" className="w-12 h-12 object-cover rounded border border-border shrink-0" />
                   ) : (
                     <div className="w-12 h-12 bg-border/30 rounded border border-border shrink-0 flex items-center justify-center">
@@ -525,8 +458,8 @@ function ReceiptsMain({ session, onSignOut }: { session: Session; onSignOut: () 
                           onChange={(e) => {
                             if (!e.target.value) return;
                             const poId = e.target.value;
-                            api(`/api/receipts/${r.id}`, { method: "PATCH", ...json({ purchase_order_id: poId }) }).then((res) => {
-                              if (res.ok) setReceipts((prev) => prev.map((x) => x.id === r.id ? { ...x, purchase_order_id: poId } : x));
+                            axiom.from("receipts").update({ purchase_order_id: poId }).eq("id", r.id).then(({ error: linkErr }) => {
+                              if (!linkErr) setReceipts((prev) => prev.map((x) => x.id === r.id ? { ...x, purchase_order_id: poId } : x));
                             });
                           }}>
                           <option value="">Link to P.O.…</option>
@@ -539,8 +472,8 @@ function ReceiptsMain({ session, onSignOut }: { session: Session; onSignOut: () 
                     <p className="text-sm font-mono">{money(r.total || 0)}</p>
                     <button onClick={async () => {
                       if (!confirm("Delete this receipt?")) return;
-                      const res = await api(`/api/receipts/${r.id}`, { method: "DELETE" });
-                      if (res.ok) setReceipts((prev) => prev.filter((x) => x.id !== r.id));
+                      const { error: delErr } = await axiom.from("receipts").delete().eq("id", r.id);
+                      if (!delErr) setReceipts((prev) => prev.filter((x) => x.id !== r.id));
                     }} className="text-muted hover:text-red-500 transition-colors">
                       <Trash2 size={14} />
                     </button>
@@ -552,7 +485,8 @@ function ReceiptsMain({ session, onSignOut }: { session: Session; onSignOut: () 
         </div>
       )}
 
-      {poItem && <AddToPOModal item={poItem} source={poSource} onClose={() => setPoItem(null)} onAdded={() => setPoItem(null)} />}
+      {poItem && <AddToPOModal item={poItem} entity={entity} onClose={() => setPoItem(null)} onAdded={() => { setPoItem(null); loadData(); }} />}
+      </div>
     </div>
   );
 }

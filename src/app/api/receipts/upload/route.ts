@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireReceiptsSession } from "@/lib/receipts-session";
+import { requireTeamMember } from "@/lib/api-auth";
 
 // POST /api/receipts/upload (multipart "file") → { url } of the stored photo.
+// Gated on the signed-in Axiom team member; storage write uses the service role.
 
 const MAX_BYTES = 15 * 1024 * 1024;
 
 export async function POST(req: NextRequest) {
-  const s = await requireReceiptsSession(req);
-  if (s instanceof NextResponse) return s;
+  const caller = await requireTeamMember(req);
+  if (caller instanceof NextResponse) return caller;
+  const db = caller.admin;
   const file = (await req.formData().catch(() => null))?.get("file");
   if (!(file instanceof File)) return NextResponse.json({ error: "No photo was sent." }, { status: 400 });
   if (!file.type.startsWith("image/") && file.type !== "application/pdf") {
@@ -17,8 +19,8 @@ export async function POST(req: NextRequest) {
 
   const ext = (file.name.split(".").pop() || "jpg").replace(/[^a-z0-9]/gi, "").slice(0, 5) || "jpg";
   const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-  const { error } = await s.db.storage.from("receipts").upload(path, file, { contentType: file.type });
+  const { error } = await db.storage.from("receipts").upload(path, file, { contentType: file.type });
   if (error) return NextResponse.json({ error: "Upload failed: " + error.message }, { status: 500 });
-  const { data } = s.db.storage.from("receipts").getPublicUrl(path);
+  const { data } = db.storage.from("receipts").getPublicUrl(path);
   return NextResponse.json({ url: data.publicUrl });
 }
