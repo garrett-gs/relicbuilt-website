@@ -27,18 +27,25 @@ export default function EstimateDrawer({
   const { userEmail } = useAuth();
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
+    // The drawer mounts fresh per estimate (the host unmounts it on close), so
+    // initial state already starts in the loading state — no sync reset needed.
     let active = true;
-    setLoading(true);
     axiom
       .from("estimates")
       .select("*")
       .eq("id", estimateId)
-      .single()
-      .then(({ data }) => {
+      .maybeSingle()
+      .then(({ data, error }) => {
         if (!active) return;
-        setEstimate(data as Estimate);
+        // No row (or an error) most often means the estimate belongs to a
+        // different workspace than the one you're signed into — RLS hides it,
+        // so the fetch comes back empty. Surface that instead of spinning
+        // forever on "Loading estimate…".
+        setLoadError(error ? error.message : data ? null : "not-visible");
+        setEstimate((data as Estimate) || null);
         setLoading(false);
       });
     return () => {
@@ -80,8 +87,18 @@ export default function EstimateDrawer({
           </button>
         </div>
         <div className="p-5">
-          {loading || !estimate ? (
+          {loading ? (
             <div className="text-muted text-sm animate-pulse">Loading estimate…</div>
+          ) : !estimate ? (
+            <div className="text-sm text-muted space-y-2">
+              <p className="text-foreground font-medium">This estimate couldn&apos;t be loaded.</p>
+              <p>
+                It isn&apos;t visible in this workspace — usually because the estimate is still
+                tagged to a different workspace than the one you&apos;re signed into. The linked
+                work order is here, but the estimate needs to be re-homed to this workspace.
+              </p>
+              <p className="text-[11px] text-muted/60 font-mono">id: {estimateId}{loadError && loadError !== "not-visible" ? ` · ${loadError}` : ""}</p>
+            </div>
           ) : (
             <EstimateDetail
               key={estimate.id}
