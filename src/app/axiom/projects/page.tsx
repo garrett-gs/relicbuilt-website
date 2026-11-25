@@ -28,6 +28,7 @@ import { generateProposalHtml } from "@/lib/proposal-html";
 import { resolveEntityProfile, proposalBiz } from "@/lib/entity-profile";
 import { generateProjectRecapHtml } from "@/lib/project-recap-html";
 import RecordNotesPanel from "@/components/axiom/RecordNotesPanel";
+import EstimateDrawer from "@/components/axiom/EstimateDrawer";
 import { notifyPortal } from "@/lib/notify-portal";
 import { Settings } from "@/types/axiom";
 import { authedFetch } from "@/lib/authed-fetch";
@@ -397,8 +398,15 @@ export default function ProjectsPage() {
   }, [projects]);
 
   async function createProject(form: Record<string, string>) {
+    // Mint the next REL-#### number (best-effort — a Relic without one still works).
+    let relic_number: string | undefined;
+    try {
+      const res = await authedFetch("/api/next-relic-number");
+      if (res.ok) { const j = await res.json(); relic_number = j?.relic_number || undefined; }
+    } catch { /* number is best-effort */ }
     const { data } = await axiom.from("custom_work").insert({
       entity,
+      relic_number,
       project_name: form.project_name,
       client_name: form.client_name,
       client_email: form.client_email,
@@ -408,13 +416,15 @@ export default function ProjectsPage() {
       customer_id: form.customer_id || null,
       company_id: form.company_id || null,
       company_name: form.company_name || null,
-      // Projects now start in the Pipeline (accepted), ready to be pulled active.
-      status: "accepted",
+      // A Relic starts as a Lead — the estimate comes once the details are
+      // figured out. Accepting that estimate later moves it to Active.
+      status: "new",
     }).select().single();
     if (data) {
-      await logActivity({ action: "created", entity: "project", entity_id: data.id, label: `Created project: ${data.project_name}`, user_name: userEmail });
+      await logActivity({ action: "created", entity: "project", entity_id: data.id, label: `Started Relic: ${data.relic_number || data.project_name}`, user_name: userEmail });
       load();
       setShowCreate(false);
+      setSelected(data as CustomWork);
     }
   }
 
@@ -519,6 +529,10 @@ export default function ProjectsPage() {
   const archivedProjects = visibleProjects.filter((p) => p.status === "complete");
   const inProgressProjects = visibleProjects.filter((p) => p.status === "in_progress");
   const pipelineProjects = visibleProjects.filter((p) => p.status === "accepted");
+  // Relic lifecycle: Lead (new/in_review) → Quoting (quoted) → Active
+  // (accepted = pipeline, in_progress = underway) → Complete.
+  const leadProjects = visibleProjects.filter((p) => p.status === "new" || p.status === "in_review");
+  const quotingProjects = visibleProjects.filter((p) => p.status === "quoted");
 
   // Payment badge for a project row (null = show nothing):
   //  • RELIC — from Axiom invoices: a deposit invoice → "Deposit paid/due";
@@ -567,6 +581,7 @@ export default function ProjectsPage() {
       >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
+            {p.relic_number && <p className="text-[10px] font-heading tracking-[0.12em] text-accent/80 mb-0.5">{p.relic_number}</p>}
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ background: dotColor }} />
               <p className="font-medium text-sm truncate">{p.project_name}</p>
@@ -610,11 +625,11 @@ export default function ProjectsPage() {
         >
           <ChevronRight size={16} />
         </button>
-        <Button size="sm" onClick={() => setShowCreate(true)} className="!px-0 !w-8 !h-8" title="New project">
+        <Button size="sm" onClick={() => setShowCreate(true)} className="!px-0 !w-8 !h-8" title="Start a Relic">
           <Plus size={14} />
         </Button>
         <span className="[writing-mode:vertical-rl] text-[11px] uppercase tracking-[0.2em] text-muted mt-1 select-none">
-          Projects · {activeProjects.length}
+          Relics · {activeProjects.length}
         </span>
       </div>
 
@@ -624,12 +639,12 @@ export default function ProjectsPage() {
       <div className={cn("w-full md:w-80 flex-shrink-0 flex-col", selected ? "hidden" : "flex", panelCollapsed ? "md:hidden" : "md:flex")}>
         <div className="flex items-center justify-between mb-4 gap-2">
           <div>
-            <h1 className="text-2xl font-heading font-bold">Projects</h1>
+            <h1 className="text-2xl font-heading font-bold">Relics</h1>
             <p className="text-muted text-sm mt-0.5">{activeProjects.length} active</p>
           </div>
           <div className="flex items-center gap-1.5">
             <Button onClick={() => setShowCreate(true)} size="sm">
-              <Plus size={14} className="mr-1" /> New
+              <Plus size={14} className="mr-1" /> Start a Relic
             </Button>
             <button
               onClick={() => setPanelCollapsed(true)}
@@ -682,6 +697,32 @@ export default function ProjectsPage() {
         <div className="flex-1 md:overflow-y-auto space-y-6 pb-4">
           {projectsTab === "active" && (
             <>
+              <section className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full" style={{ background: "#a3a3a3" }} />
+                  <h2 className="text-xs uppercase tracking-wider text-foreground font-semibold">Leads</h2>
+                  <span className="text-xs text-muted">{leadProjects.length}</span>
+                </div>
+                {leadProjects.length === 0 ? (
+                  <p className="text-muted text-xs px-1">No open leads. <span className="text-foreground font-medium">Start a Relic</span> to begin one.</p>
+                ) : (
+                  sortByDue(leadProjects).map((p) => renderCard(p, "#a3a3a3"))
+                )}
+              </section>
+
+              <section className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full" style={{ background: "#c98b4b" }} />
+                  <h2 className="text-xs uppercase tracking-wider text-foreground font-semibold">Quoting</h2>
+                  <span className="text-xs text-muted">{quotingProjects.length}</span>
+                </div>
+                {quotingProjects.length === 0 ? (
+                  <p className="text-muted text-xs px-1">Nothing being quoted right now.</p>
+                ) : (
+                  sortByDue(quotingProjects).map((p) => renderCard(p, "#c98b4b"))
+                )}
+              </section>
+
               <section className="space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full" style={{ background: "#3b82f6" }} />
@@ -1029,7 +1070,7 @@ function CreateProjectForm({ onSubmit, onCancel }: { onSubmit: (form: Record<str
         <textarea value={form.project_description} onChange={(e) => set("project_description", e.target.value)} className="w-full bg-card border border-border px-4 py-3 text-foreground focus:outline-none focus:border-accent min-h-[100px] resize-y" />
       </div>
       <div className="flex gap-3">
-        <Button onClick={() => onSubmit(form)} disabled={!form.project_name}>Create Project</Button>
+        <Button onClick={() => onSubmit(form)} disabled={!form.project_name}>Start Relic</Button>
         <Button variant="outline" onClick={onCancel}>Cancel</Button>
       </div>
     </div>
@@ -1037,6 +1078,19 @@ function CreateProjectForm({ onSubmit, onCancel }: { onSubmit: (form: Record<str
 }
 
 // ── Detail view ──────────────────────────────────────────────
+
+// Relic lifecycle label for a custom_work status (UI-labels-first).
+function relicStageLabel(status?: string): string {
+  switch (status) {
+    case "new":
+    case "in_review": return "Lead";
+    case "quoted": return "Quoting";
+    case "accepted":
+    case "in_progress": return "Active";
+    case "complete": return "Complete";
+    default: return status || "";
+  }
+}
 
 function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerateInvoice, onGenerateProposal, onGenerateRecap, onComplete, onMakeActive, userEmail }: {
   project: CustomWork;
@@ -1099,21 +1153,73 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
   // inspiration_images in the proposal image picker so they're available
   // without copying data. Read live from the original estimate.
   const [estimateImages, setEstimateImages] = useState<string[]>([]);
+  // The estimate that lives inside this Relic (first non-change-order one).
+  const [linkedEstimateId, setLinkedEstimateId] = useState<string | null>(null);
+  const [estimateDrawerOpen, setEstimateDrawerOpen] = useState(false);
+  const [buildingEstimate, setBuildingEstimate] = useState(false);
   useEffect(() => {
     if (!project.id) return;
     axiom.from("estimates")
-      .select("labor_items, images, change_order_for_id, created_at")
+      .select("id, labor_items, images, change_order_for_id, created_at")
       .eq("custom_work_id", project.id)
       .is("change_order_for_id", null)
       .order("created_at", { ascending: true })
       .limit(1)
       .then(({ data }) => {
-        const row = data?.[0] as { labor_items?: { hours?: number }[]; images?: string[] } | undefined;
+        const row = data?.[0] as { id?: string; labor_items?: { hours?: number }[]; images?: string[] } | undefined;
         const hours = (row?.labor_items || []).reduce((s, it) => s + (Number(it?.hours) || 0), 0);
         setEstimateLaborHours(hours);
         setEstimateImages(Array.isArray(row?.images) ? row.images : []);
+        setLinkedEstimateId(row?.id || null);
       });
   }, [project.id]);
+
+  // Build (or re-open) the estimate that lives inside this Relic. Creating one
+  // links it to this project up front (custom_work_id) and moves a Lead to
+  // Quoting, so the estimate is born in the folder rather than floating on the
+  // Estimator page.
+  async function buildEstimate() {
+    setBuildingEstimate(true);
+    try {
+      const year = new Date().getFullYear();
+      let estimate_number = "";
+      try {
+        const res = await authedFetch(`/api/next-estimate-number?prefix=EST&year=${year}`);
+        if (res.ok) { const j = await res.json(); estimate_number = j?.estimate_number || ""; }
+      } catch { /* fall through to a tenant-scoped guess */ }
+      if (!estimate_number) {
+        const { data: latest } = await axiom.from("estimates").select("estimate_number")
+          .like("estimate_number", `EST-${year}-%`).order("estimate_number", { ascending: false }).limit(1).maybeSingle();
+        const n = latest?.estimate_number ? parseInt(latest.estimate_number.split("-").pop() || "0", 10) : 0;
+        estimate_number = `EST-${year}-${String(n + 1).padStart(4, "0")}`;
+      }
+      const { data, error } = await axiom.from("estimates").insert({
+        entity: project.entity,
+        estimate_number,
+        project_name: project.project_name,
+        client_name: project.client_name,
+        client_email: project.client_email,
+        client_phone: project.client_phone,
+        customer_id: project.customer_id || null,
+        custom_work_id: project.id,
+        status: "draft",
+        line_items: [],
+        labor_items: [],
+        markup_percent: 0,
+      }).select().single();
+      if (error || !data) {
+        alert(error?.message || "Couldn't start the estimate — nothing was saved. Try again.");
+        return;
+      }
+      await logActivity({ action: "created", entity: "estimate", entity_id: data.id, label: `Built estimate ${data.estimate_number} in ${project.relic_number || project.project_name}`, user_name: userEmail });
+      // Lead → Quoting the moment an estimate exists inside the Relic.
+      if (project.status === "new" || project.status === "in_review") onUpdate({ status: "quoted" });
+      setLinkedEstimateId(data.id);
+      setEstimateDrawerOpen(true);
+    } finally {
+      setBuildingEstimate(false);
+    }
+  }
 
   // The project's image pool for the proposal picker: its own inspiration
   // images plus any estimate images that aren't already there (deduped).
@@ -1782,6 +1888,33 @@ function ProjectDetail({ project, onUpdate, onDelete, onTogglePortal, onGenerate
           {payAmt > 0 && <span className="font-mono ml-1">{money(payAmt)}</span>}
           {paySub && <span className="text-xs opacity-70 ml-auto">{paySub}</span>}
         </div>
+      )}
+
+      {/* Relic identity + the estimate that lives inside this Relic. For a Lead
+          with no estimate yet, this is the "start": build the estimate here and
+          the Relic moves to Quoting. Once one exists, edit it in place. */}
+      <div className="bg-card border border-border border-t-2 border-t-accent/30 p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          {project.relic_number && <p className="text-[11px] font-heading tracking-[0.14em] text-accent">{project.relic_number}</p>}
+          <p className="text-xs text-muted mt-0.5">{relicStageLabel(project.status)}{linkedEstimateId ? "" : " · no estimate yet"}</p>
+        </div>
+        {linkedEstimateId ? (
+          <Button size="sm" variant="outline" onClick={() => setEstimateDrawerOpen(true)}>
+            <FileText size={14} className="mr-1.5" /> Edit estimate
+          </Button>
+        ) : (
+          <Button size="sm" onClick={buildEstimate} disabled={buildingEstimate}>
+            <Plus size={14} className="mr-1.5" /> {buildingEstimate ? "Creating…" : "Build the estimate"}
+          </Button>
+        )}
+      </div>
+
+      {estimateDrawerOpen && linkedEstimateId && (
+        <EstimateDrawer
+          estimateId={linkedEstimateId}
+          onClose={() => setEstimateDrawerOpen(false)}
+          onChange={() => { onUpdate({}); }}
+        />
       )}
 
       {/* Project Details */}

@@ -2235,8 +2235,19 @@ export function EstimateDetail({ estimate, onUpdate, onDelete, section }: {
   async function handleStatusChange(newStatus: Estimate["status"]) {
     setStatus(newStatus);
     markDirty();
-    if (newStatus === "accepted" && !estimate.custom_work_id && !createdProjectId) {
-      await createProject();
+    if (newStatus === "accepted") {
+      if (!estimate.custom_work_id && !createdProjectId) {
+        // Standalone estimate — accepting it spawns the Relic (legacy path).
+        await createProject();
+      } else if (estimate.custom_work_id) {
+        // Estimate was built inside an existing Relic — accepting it just moves
+        // that Relic from Lead/Quoting to Active, never a second project. The
+        // status guard avoids knocking an already in-progress build backward.
+        await axiom.from("custom_work")
+          .update({ status: "accepted", updated_at: new Date().toISOString() })
+          .eq("id", estimate.custom_work_id)
+          .in("status", ["new", "in_review", "quoted"]);
+      }
     }
   }
 

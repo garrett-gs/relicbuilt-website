@@ -55,16 +55,16 @@ const navSections = [
   {
     label: "Clients",
     items: [
-      { href: "/axiom/customers", icon: Users, label: "Customers" },
+      { href: "/axiom/customers", icon: Users, label: "Accounts" },
       { href: "/axiom/catalog", icon: Package, label: "Catalog" },
       { href: "/axiom/wallflower", icon: ClipboardList, label: "Wallflower Hub", wallflowerOnly: true },
     ],
   },
   {
-    label: "Projects",
+    label: "Relics",
     items: [
+      { href: "/axiom/projects", icon: Hammer, label: "Relics" },
       { href: "/axiom/estimator", icon: Calculator, label: "Estimator" },
-      { href: "/axiom/projects", icon: Hammer, label: "Projects" },
       { href: "/axiom/project-library", icon: Library, label: "Project Library" },
       { href: "/axiom/timeclock", icon: Clock, label: "Time Clock" },
       { href: "/axiom/calendar", icon: CalendarDays, label: "Build Calendar" },

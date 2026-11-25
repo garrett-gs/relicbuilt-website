@@ -79,6 +79,10 @@ export type BusinessEntity = "wallflower_relic" | "relic";
 export interface CustomWork {
   id: string;
   entity?: BusinessEntity;
+  // Human-facing Relic identifier, REL-#### (e.g. REL-1042). Assigned at
+  // creation. The record is surfaced in the UI as a "Relic"; the table name
+  // stays custom_work (UI-labels-first).
+  relic_number?: string;
   project_name: string;
   client_name: string;
   client_email: string;

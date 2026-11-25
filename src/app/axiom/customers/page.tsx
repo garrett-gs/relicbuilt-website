@@ -285,7 +285,7 @@ export default function CustomersPage() {
       {/* ── Left: List ── */}
       <div className="w-72 flex-shrink-0 flex flex-col">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-heading font-bold">Customers</h1>
+          <h1 className="text-2xl font-heading font-bold">Accounts</h1>
           {nexusConnected && (
           <button
             onClick={syncFromWallflower}
@@ -468,7 +468,7 @@ export default function CustomersPage() {
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-muted gap-2">
             <Building2 size={28} className="opacity-20" />
-            <p className="text-sm">Select a company or customer to view details</p>
+            <p className="text-sm">Select a company or account to view details</p>
           </div>
         )}
       </div>
