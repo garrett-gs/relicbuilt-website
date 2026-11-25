@@ -65,20 +65,24 @@ export default function RecordNotesPanel({
     if (!body.trim()) return;
     setAdding(true);
     try {
-      const { data } = await axiom
+      const { data, error } = await axiom
         .from("notes")
         .insert({ entity, body: body.trim(), [column]: recordId, created_by: userEmail || null })
         .select()
         .single();
-      if (data) {
-        await logActivity({
-          action: "created",
-          entity: "note",
-          entity_id: data.id,
-          label: `Added note on ${RECORD_LABEL[recordType]}`,
-          user_name: userEmail,
-        });
+      if (error || !data) {
+        // Surface a failed write instead of silently dropping the note, and
+        // keep the typed text so nothing is lost.
+        alert(error?.message || "Couldn't add that note — nothing was saved. Your text is still here.");
+        return;
       }
+      await logActivity({
+        action: "created",
+        entity: "note",
+        entity_id: data.id,
+        label: `Added note on ${RECORD_LABEL[recordType]}`,
+        user_name: userEmail,
+      });
       setBody("");
       load();
     } finally {

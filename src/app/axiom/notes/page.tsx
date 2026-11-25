@@ -148,14 +148,18 @@ export default function NotesPage() {
     try {
       const recordCols: Record<string, string | null> = { custom_work_id: null, estimate_id: null, work_order_id: null };
       if (tag) recordCols[NOTE_RECORD_COLUMN[tag.type]] = tag.id;
-      const { data } = await axiom
+      const { data, error } = await axiom
         .from("notes")
         .insert({ entity, body, shared, created_by: userEmail || null, ...recordCols })
         .select()
         .single();
-      if (data) {
-        await logActivity({ action: "created", entity: "note", entity_id: data.id, label: tag ? `Added note on ${TYPE_META[tag.type].label.toLowerCase()}` : "Added note", user_name: userEmail });
+      if (error || !data) {
+        // Surface a failed write instead of silently dropping the note, and
+        // keep the draft + tag so nothing the user typed is lost.
+        alert(error?.message || "Couldn't post that note — nothing was saved. Your text is still here.");
+        return;
       }
+      await logActivity({ action: "created", entity: "note", entity_id: data.id, label: tag ? `Added note on ${TYPE_META[tag.type].label.toLowerCase()}` : "Added note", user_name: userEmail });
       setDraft("");
       if (!viewRecord) { setTag(null); setShared(false); }
       await load();
