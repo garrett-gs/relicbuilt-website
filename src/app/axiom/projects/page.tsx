@@ -404,7 +404,7 @@ export default function ProjectsPage() {
       const res = await authedFetch("/api/next-relic-number");
       if (res.ok) { const j = await res.json(); relic_number = j?.relic_number || undefined; }
     } catch { /* number is best-effort */ }
-    const { data } = await axiom.from("custom_work").insert({
+    const { data, error } = await axiom.from("custom_work").insert({
       entity,
       relic_number,
       project_name: form.project_name,
@@ -420,12 +420,20 @@ export default function ProjectsPage() {
       // figured out. Accepting that estimate later moves it to Active.
       status: "new",
     }).select().single();
-    if (data) {
-      await logActivity({ action: "created", entity: "project", entity_id: data.id, label: `Started Relic: ${data.relic_number || data.project_name}`, user_name: userEmail });
-      load();
-      setShowCreate(false);
-      setSelected(data as CustomWork);
+    if (error || !data) {
+      console.error("Start a Relic failed:", error?.message, error?.details, error?.hint);
+      const missingCol = /relic_number/.test(error?.message || "") || error?.code === "PGRST204";
+      alert(
+        missingCol
+          ? "Couldn't start the Relic — the database is missing the relic_number column. Run migration v53, then try again. Your entries are still here."
+          : `Couldn't start the Relic — ${error?.message || "nothing was saved"}. Your entries are still here.`
+      );
+      return;
     }
+    await logActivity({ action: "created", entity: "project", entity_id: data.id, label: `Started Relic: ${data.relic_number || data.project_name}`, user_name: userEmail });
+    load();
+    setShowCreate(false);
+    setSelected(data as CustomWork);
   }
 
   async function updateProject(id: string, updates: Partial<CustomWork>) {
